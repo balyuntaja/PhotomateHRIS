@@ -28,10 +28,18 @@ class GalleryResource extends Resource
                 Forms\Components\TextInput::make('title')
                     ->maxLength(255)
                     ->default(null),
+                Forms\Components\Select::make('category')
+                    ->options([
+                        'Wedding' => 'Wedding',
+                        'Event' => 'Event',
+                        'Brand' => 'Brand',
+                        'High School Collaboration' => 'High School Collaboration',
+                    ])
+                    ->required()
+                    ->default('Event'),
                 Forms\Components\FileUpload::make('image')
                     ->image()
-                    ->required(),
-                Forms\Components\Toggle::make('is_active')
+                    ->multiple(fn (string $context) => $context === 'create')
                     ->required(),
             ]);
     }
@@ -42,9 +50,11 @@ class GalleryResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('title')
                     ->searchable(),
+                Tables\Columns\TextColumn::make('category')
+                    ->badge()
+                    ->sortable()
+                    ->searchable(),
                 Tables\Columns\ImageColumn::make('image'),
-                Tables\Columns\IconColumn::make('is_active')
-                    ->boolean(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

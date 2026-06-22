@@ -82,7 +82,7 @@ const Gallery: React.FC = () => {
       
       const cmsGalleries = (window as any).CMS_DATA?.galleries?.map((g: any, i: number) => ({
         id: 1000 + i,
-        category: "Event" as ItemCategory,
+        category: (g.category || "Event") as ItemCategory,
         image: g.image,
         alt: g.title || "Gallery Photomate"
       })) || [];

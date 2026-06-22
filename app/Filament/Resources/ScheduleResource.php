@@ -29,8 +29,10 @@ class ScheduleResource extends Resource
                     ->required()
                     ->maxLength(255),
                 Forms\Components\DatePicker::make('start_date')
+                    ->minDate(now()->startOfDay())
                     ->required(),
                 Forms\Components\DatePicker::make('end_date')
+                    ->minDate(fn (Forms\Get $get) => $get('start_date') ? \Carbon\Carbon::parse($get('start_date')) : now()->startOfDay())
                     ->required(),
                 Forms\Components\TextInput::make('used')
                     ->required()

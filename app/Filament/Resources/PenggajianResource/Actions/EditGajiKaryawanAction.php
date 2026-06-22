@@ -67,6 +67,7 @@ class EditGajiKaryawanAction
           ])
           ->columns(2),
 
+        /*
         Forms\Components\Section::make('Potongan')
           ->schema([
             Forms\Components\TextInput::make('potongan_alfa')
@@ -114,6 +115,7 @@ class EditGajiKaryawanAction
               ]),
           ])
           ->columns(2),
+        */
 
         Forms\Components\Section::make('Penyesuaian')
           ->schema([

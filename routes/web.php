@@ -24,6 +24,7 @@ Route::get('/{any?}', function () {
             return [
                 'id' => $g->id,
                 'title' => $g->title,
+                'category' => $g->category,
                 'image' => '/storage/' . $g->image,
             ];
         }),

@@ -37,19 +37,24 @@ class HitungGajiService
     // Penghasilan bruto
     $penghasilanBruto = $gajiPokok + $tunjanganTotal + $lemburPay;
 
-    // Potongan
-    $alfaData = $this->penaltyService->calculateAlfaDeduction($karyawan, $attendanceData['total_alfa']);
-    $keterlambatanData = $this->penaltyService->calculateKeterlambatanDeduction($karyawan, $attendanceData['total_tidak_tepat']);
-    $bpjsData = $this->bpjsService->calculateBpjsDeductions($karyawan);
-    $potonganPph21 = $this->pph21Service->calculateMonthlyPph21Deduction($karyawan, $penghasilanBruto);
+    // Potongan (Commented out: company has no deductions yet)
+    // $alfaData = $this->penaltyService->calculateAlfaDeduction($karyawan, $attendanceData['total_alfa']);
+    // $keterlambatanData = $this->penaltyService->calculateKeterlambatanDeduction($karyawan, $attendanceData['total_tidak_tepat']);
+    // $bpjsData = $this->bpjsService->calculateBpjsDeductions($karyawan);
+    // $potonganPph21 = $this->pph21Service->calculateMonthlyPph21Deduction($karyawan, $penghasilanBruto);
+
+    $alfaData = ['total_potongan' => 0];
+    $keterlambatanData = ['total_potongan' => 0];
+    $bpjsData = ['total_bpjs' => 0];
+    $potonganPph21 = 0;
 
     // Safety check PPh21
-    if ($potonganPph21 > ($penghasilanBruto * 0.3)) {
-      Log::warning("PPh21 too high for karyawan {$karyawan->karyawan_id}");
-      $potonganPph21 = min($potonganPph21, $penghasilanBruto * 0.15);
-    }
+    // if ($potonganPph21 > ($penghasilanBruto * 0.3)) {
+    //   Log::warning("PPh21 too high for karyawan {$karyawan->karyawan_id}");
+    //   $potonganPph21 = min($potonganPph21, $penghasilanBruto * 0.15);
+    // }
 
-    $potonganTotal = $alfaData['total_potongan'] + $keterlambatanData['total_potongan'] + $bpjsData['total_bpjs'] + $potonganPph21;
+    $potonganTotal = 0; // $alfaData['total_potongan'] + $keterlambatanData['total_potongan'] + $bpjsData['total_bpjs'] + $potonganPph21;
     $totalGaji = $penghasilanBruto - $potonganTotal;
 
     return [
