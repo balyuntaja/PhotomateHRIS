@@ -2,6 +2,10 @@
 
 Quanta HRIS is a complete system for managing employees. It helps companies track attendance and calculate salaries easily. This system handles Indonesian tax rules (PPh 21 TER) automatically.
 
+> [!NOTE]
+> **Dokumentasi Lengkap (Bahasa Indonesia):**
+> Untuk panduan penggunaan lengkap mengenai instalasi, konfigurasi, master data, penggajian, dan integrasi mobile API, silakan baca [USER_GUIDE.md](file:///Users/balyuntaja/DevelopmentEnv/PhotomateHRIS/USER_GUIDE.md).
+
 ### About This Repository
 
 This repository contains the **Backend API** and the **Web CMS (Admin Panel)**.
@@ -135,3 +139,4 @@ APP_URL=https://your-domain.com
 ASSET_URL=https://your-domain.com
 FILESYSTEM_DISK=public
 ```
+# PhotomateHRIS
