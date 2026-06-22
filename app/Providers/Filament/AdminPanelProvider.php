@@ -34,7 +34,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login(CustomLogin::class)
-            ->brandName('Quanta HRIS')
+            ->brandName('Photomate')
             ->font('Poppins')
             ->authGuard('web')
             ->databaseNotifications(true, false)

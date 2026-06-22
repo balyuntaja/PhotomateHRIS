@@ -15,7 +15,13 @@ return new class extends Migration
             return;
         }
 
-        DB::statement('ALTER TABLE personal_access_tokens MODIFY tokenable_id VARCHAR(255) NOT NULL');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE personal_access_tokens MODIFY tokenable_id VARCHAR(255) NOT NULL');
+        } else {
+            Schema::table('personal_access_tokens', function ($table) {
+                $table->string('tokenable_id', 255)->change();
+            });
+        }
     }
 
     /**
@@ -27,6 +33,12 @@ return new class extends Migration
             return;
         }
 
-        DB::statement('ALTER TABLE personal_access_tokens MODIFY tokenable_id BIGINT UNSIGNED NOT NULL');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('ALTER TABLE personal_access_tokens MODIFY tokenable_id BIGINT UNSIGNED NOT NULL');
+        } else {
+            Schema::table('personal_access_tokens', function ($table) {
+                $table->unsignedBigInteger('tokenable_id')->change();
+            });
+        }
     }
 };

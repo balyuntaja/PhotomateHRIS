@@ -7,10 +7,24 @@
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
+        "@types/react": "^19.2.17",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^4.7.0",
         "axios": "^1.8.2",
+        "clsx": "^2.1.1",
         "concurrently": "^9.0.1",
+        "date-fns": "^4.4.0",
+        "framer-motion": "^12.40.0",
         "laravel-vite-plugin": "^1.2.0",
+        "react": "^19.2.7",
+        "react-day-picker": "^10.0.1",
+        "react-dom": "^19.2.7",
+        "react-icons": "^5.6.0",
+        "react-router-dom": "^7.18.0",
+        "tailwind-merge": "^3.6.0",
+        "tailwind-scrollbar-hide": "^4.0.0",
         "tailwindcss": "^4.0.0",
+        "typescript": "^6.0.3",
         "vite": "^6.2.4"
     }
 }

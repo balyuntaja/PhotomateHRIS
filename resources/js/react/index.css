@@ -1,0 +1,136 @@
+@import "tailwindcss";
+@import "tailwind-scrollbar-hide/v4";
+
+/* =========================
+   THEME VARIABLES (Tailwind v4 @theme)
+   ========================= */
+@theme {
+  --color-primary: #364e71;
+  --color-primary-dark: #2a3d58;
+  --color-primary-light: #4a6a94;
+}
+
+/* =========================
+   GLOBAL RESET
+   ========================= */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Open Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  background-color: #ffffff;
+  overflow-x: hidden;
+}
+
+/* =========================
+   CUSTOM SCROLLBAR
+   ========================= */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #364e71;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2a3d58;
+}
+
+/* Hero marquee: scroll dari bawah ke atas */
+@keyframes hero-marquee-up {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+.hero-marquee-inner {
+  animation: hero-marquee-up 25s linear infinite;
+}
+
+/* Client marquee: scroll horizontal (infinite loop) */
+@keyframes client-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.client-marquee-track {
+  animation: client-marquee 30s linear infinite;
+}
+
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+/* Event Availability calendar – full width (override library max-width: fit-content) */
+.event-availability-calendar .rdp-root,
+.event-availability-calendar .rdp-months {
+  width: 100%;
+  max-width: 100%;
+}
+.event-availability-calendar .rdp-month,
+.event-availability-calendar .rdp-month_grid {
+  width: 100%;
+}
+.event-availability-calendar .rdp-month_grid {
+  table-layout: fixed;
+}
+
+/* Event Availability calendar – modifier colors (purple = penuh, sky = terbatas) */
+.rdp-availability .rdp-day.rdp-fully-booked .rdp-day_button,
+.event-availability-calendar .rdp-day.rdp-fully-booked .rdp-day_button {
+  background-color: #9333ea;
+  color: white;
+  border-color: #7e22ce;
+}
+.rdp-availability .rdp-day.rdp-fully-booked .rdp-day_button:hover,
+.event-availability-calendar .rdp-day.rdp-fully-booked .rdp-day_button:hover {
+  background-color: #7e22ce;
+  color: white;
+}
+.rdp-availability .rdp-day.rdp-limited .rdp-day_button,
+.event-availability-calendar .rdp-day.rdp-limited .rdp-day_button {
+  background-color: #38bdf8;
+  color: #0c4a6e;
+  border-color: #0ea5e9;
+}
+.rdp-availability .rdp-day.rdp-limited .rdp-day_button:hover,
+.event-availability-calendar .rdp-day.rdp-limited .rdp-day_button:hover {
+  background-color: #0ea5e9;
+  color: white;
+}
+
+/* Hide scrollbar (Chrome, Safari) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar (Firefox) */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

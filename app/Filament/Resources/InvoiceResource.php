@@ -1,0 +1,304 @@
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Filament\Resources\InvoiceResource\Pages;
+use App\Models\Invoice;
+use Filament\Forms;
+use Filament\Forms\Form;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Select;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Actions\ActionGroup;
+use Filament\Tables\Actions\ViewAction;
+use Filament\Tables\Actions\EditAction;
+use Filament\Tables\Actions\DeleteAction;
+use Filament\Tables\Actions\Action;
+
+class InvoiceResource extends Resource
+{
+    protected static ?string $model = Invoice::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-document-text';
+    
+    protected static ?string $navigationGroup = 'Invoice';
+
+    public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\Section::make('Informasi Invoice')
+                    ->schema([
+                        TextInput::make('invoice_number')
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->placeholder('Auto Generated')
+                            ->columnSpan(1),
+                        TextInput::make('client_name')
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('event_name')
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('event_location')
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('person_in_charge')
+                            ->required()
+                            ->maxLength(255),
+                        DatePicker::make('event_date')
+                            ->minDate(now()->startOfDay())
+                            ->required(),
+                        DatePicker::make('invoice_date')
+                            ->default(now())
+                            ->required(),
+                        DatePicker::make('due_date')
+                            ->minDate(now()->startOfDay())
+                            ->required(),
+                    ])->columns(2),
+
+                Forms\Components\Section::make('Detail Layanan')
+                    ->schema([
+                        Repeater::make('invoiceItems')
+                            ->relationship()
+                            ->schema([
+                                TextInput::make('service_description')
+                                    ->datalist([
+                                        'Sewa Photobooth Paket Platinum',
+                                        'Sewa Photobooth Paket Gold',
+                                        'Sewa Photobooth Paket Silver',
+                                    ])
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(function (?string $state, Set $set) {
+                                        $prices = [
+                                            'Sewa Photobooth Paket Platinum' => 2699000,
+                                            'Sewa Photobooth Paket Gold' => 2199000,
+                                            'Sewa Photobooth Paket Silver' => 1599000,
+                                        ];
+                                        if ($state && array_key_exists($state, $prices)) {
+                                            $set('amount', $prices[$state]);
+                                        }
+                                    })
+                                    ->required(),
+                                TextInput::make('duration')
+                                    ->required()
+                                    ->readOnly(),
+                                TextInput::make('start_time')
+                                    ->label('Waktu Mulai')
+                                    ->type('time')
+                                    ->required()
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set)),
+                                TextInput::make('end_time')
+                                    ->label('Waktu Selesai')
+                                    ->type('time')
+                                    ->required()
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set)),
+                                TextInput::make('amount')
+                                    ->prefix('Rp')
+                                    ->numeric()
+                                    ->required()
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(fn (Get $get, Set $set) => self::updateTotals($get, $set)),
+                            ])
+                            ->live()
+                            ->afterStateUpdated(fn (Get $get, Set $set) => self::updateTotals($get, $set))
+                            ->columns(5)
+                            ->defaultItems(1)
+                    ]),
+
+                Forms\Components\Section::make('Perhitungan')
+                    ->schema([
+                        TextInput::make('subtotal')
+                            ->prefix('Rp')
+                            ->required()
+                            ->numeric()
+                            ->readOnly()
+                            ->default(0.00),
+                        TextInput::make('discount')
+                            ->prefix('Rp')
+                            ->required()
+                            ->numeric()
+                            ->default(0.00)
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(fn (Get $get, Set $set) => self::updateTotals($get, $set)),
+                        TextInput::make('total')
+                            ->prefix('Rp')
+                            ->required()
+                            ->numeric()
+                            ->readOnly()
+                            ->default(0.00),
+                    ])->columns(3),
+
+                Forms\Components\Section::make('Metode Pembayaran')
+                    ->schema([
+                        TextInput::make('payment_bank')
+                            ->maxLength(255)
+                            ->default('Bank Jago'),
+                        TextInput::make('payment_account_name')
+                            ->maxLength(255)
+                            ->default('Billy Aldo Yudha Perwira'),
+                        TextInput::make('payment_account_number')
+                            ->maxLength(255)
+                            ->default('104332064900'),
+                    ])->columns(3),
+
+                Forms\Components\Section::make('Status & Catatan')
+                    ->schema([
+                        Select::make('status')
+                            ->options([
+                                'Draft' => 'Draft',
+                                'Belum Dibayar' => 'Belum Dibayar',
+                                'Sebagian Dibayar' => 'Sebagian Dibayar',
+                                'Lunas' => 'Lunas',
+                                'Dibatalkan' => 'Dibatalkan',
+                            ])
+                            ->default('Draft')
+                            ->required(),
+                        Textarea::make('notes')
+                            ->default("Invoice ini merupakan tagihan resmi layanan Photomate.\nMohon melakukan pembayaran sebelum tanggal jatuh tempo.\nKonfirmasi pembayaran melalui WhatsApp admin.\nBiaya tambahan di luar paket akan ditagihkan terpisah.")
+                            ->columnSpanFull(),
+                    ])->columns(1),
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('invoice_number')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('client_name')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('event_date')
+                    ->label('Tanggal Acara')
+                    ->date()
+                    ->sortable(),
+                TextColumn::make('total')
+                    ->money('IDR', locale: 'id')
+                    ->sortable(),
+                TextColumn::make('status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'Draft' => 'gray',
+                        'Belum Dibayar' => 'warning',
+                        'Sebagian Dibayar' => 'info',
+                        'Lunas' => 'success',
+                        'Dibatalkan' => 'danger',
+                        default => 'gray',
+                    })
+                    ->searchable(),
+            ])
+            ->filters([
+                SelectFilter::make('status')
+                    ->options([
+                        'Draft' => 'Draft',
+                        'Belum Dibayar' => 'Belum Dibayar',
+                        'Sebagian Dibayar' => 'Sebagian Dibayar',
+                        'Lunas' => 'Lunas',
+                        'Dibatalkan' => 'Dibatalkan',
+                    ]),
+            ])
+            ->actions([
+                ActionGroup::make([
+                    ViewAction::make(),
+                    EditAction::make(),
+                    Action::make('pdf')
+                        ->label('Download PDF')
+                        ->icon('heroicon-o-document-arrow-down')
+                        ->url(fn (Invoice $record) => route('invoice.pdf', $record))
+                        ->openUrlInNewTab(),
+                    Action::make('markAsPaid')
+                        ->label('Mark as Paid')
+                        ->icon('heroicon-o-check-circle')
+                        ->color('success')
+                        ->requiresConfirmation()
+                        ->action(fn (Invoice $record) => $record->update(['status' => 'Lunas']))
+                        ->visible(fn (Invoice $record) => $record->status !== 'Lunas'),
+                    DeleteAction::make(),
+                ]),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [];
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListInvoices::route('/'),
+            'create' => Pages\CreateInvoice::route('/create'),
+            'edit' => Pages\EditInvoice::route('/{record}/edit'),
+        ];
+    }
+
+    public static function updateTotals(Get $get, Set $set): void
+    {
+        $items = $get('invoiceItems');
+        $subtotal = 0;
+        
+        if (is_array($items)) {
+            foreach ($items as $item) {
+                $subtotal += floatval($item['amount'] ?? 0);
+            }
+        }
+        
+        $discount = floatval($get('discount') ?? 0);
+        $total = max(0, $subtotal - $discount);
+        
+        $set('subtotal', $subtotal);
+        $set('total', $total);
+    }
+
+    public static function calculateDuration(Get $get, Set $set): void
+    {
+        $start = $get('start_time');
+        $end = $get('end_time');
+        
+        if ($start && $end) {
+            try {
+                $startTime = \Carbon\Carbon::parse($start);
+                $endTime = \Carbon\Carbon::parse($end);
+                
+                if ($endTime->lt($startTime)) {
+                    $endTime->addDay();
+                }
+                
+                $diffInMinutes = $startTime->diffInMinutes($endTime);
+                $hours = floor($diffInMinutes / 60);
+                $minutes = $diffInMinutes % 60;
+                
+                $durationStr = '';
+                if ($hours > 0) {
+                    $durationStr .= $hours . ' Jam';
+                }
+                if ($minutes > 0) {
+                    $durationStr .= ($hours > 0 ? ' ' : '') . $minutes . ' Menit';
+                }
+                
+                $set('duration', $durationStr ?: '0 Jam');
+            } catch (\Exception $e) {
+                // ignore
+            }
+        }
+    }
+}

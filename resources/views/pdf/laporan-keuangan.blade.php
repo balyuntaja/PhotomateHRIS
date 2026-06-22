@@ -183,7 +183,7 @@
         </table>
 
         <div class="note">
-            Catatan: Laporan ini dikompilasi otomatis dari sistem Quanta HRIS berdasarkan data penggajian yang tercatat.
+            Catatan: Laporan ini dikompilasi otomatis dari sistem Photomate HRIS berdasarkan data penggajian yang tercatat.
         </div>
     </d
 iv>
