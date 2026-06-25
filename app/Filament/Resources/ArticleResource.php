@@ -21,6 +21,17 @@ class ArticleResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
 
+    public static function canAccess(): bool
+    {
+        /** @var \App\Models\Karyawan $user */
+        $user = auth()->user();
+        return $user && (
+            $user->role_id === 'R01' || 
+            $user->role_id === 'R06' || 
+            $user->hasRole(['Admin', 'admin', 'CEO', 'ceo'])
+        );
+    }
+
     public static function form(Form $form): Form
     {
         return $form

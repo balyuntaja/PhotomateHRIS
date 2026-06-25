@@ -39,7 +39,7 @@ class AdminPanelProvider extends PanelProvider
             ->authGuard('web')
             ->databaseNotifications(true, false)
             ->colors([
-                'primary' => Color::Cyan,
+                'primary' => Color::hex('#364e71'),
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
@@ -49,7 +49,7 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 StatsOverview::class,
-                ActivityOverview::class,
+                // ActivityOverview::class,
                 CutiTodayOverview::class,
                 IzinTodayOverview::class,
             ])

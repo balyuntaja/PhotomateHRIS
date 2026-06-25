@@ -10,6 +10,11 @@ use Filament\Widgets\Widget;
 
 class ActivityOverview extends Widget
 {
+    public static function canView(): bool
+    {
+        return false;
+    }
+
     protected static string $view = 'filament.widgets.activity-overview';
 
     protected static ?string $pollingInterval = '30s';

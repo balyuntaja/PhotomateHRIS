@@ -18,6 +18,36 @@ class Permission extends SpatiePermission
         'guard_name',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->permission_id)) {
+                // Generate a unique permission_id
+                // Format: P0001, P0002, etc.
+                $maxId = static::where('permission_id', 'like', 'P%')
+                    ->orderByRaw('CAST(SUBSTRING(permission_id, 2) AS UNSIGNED) DESC')
+                    ->first()?->permission_id;
+
+                $number = 0;
+                if ($maxId) {
+                    $number = (int) substr($maxId, 1);
+                }
+                
+                $nextId = 'P' . str_pad($number + 1, 4, '0', STR_PAD_LEFT);
+
+                // Double check if nextId exists to avoid collisions
+                while (static::where('permission_id', $nextId)->exists()) {
+                    $number++;
+                    $nextId = 'P' . str_pad($number + 1, 4, '0', STR_PAD_LEFT);
+                }
+
+                $model->permission_id = $nextId;
+            }
+        });
+    }
+
     public function getKeyName()
     {
         return 'permission_id';

@@ -38,7 +38,7 @@ class AppServiceProvider extends ServiceProvider
             'danger' => Color::Red,
             'gray' => Color::Zinc,
             'info' => Color::Blue,
-            'primary' => Color::Cyan,
+            'primary' => Color::hex('#364e71'),
             'success' => Color::Green,
             'warning' => Color::Amber,
 
@@ -73,7 +73,7 @@ class AppServiceProvider extends ServiceProvider
             'blueGray' => Color::Slate,
 
             // Custom semantic colors
-            'brand' => Color::Cyan,
+            'brand' => Color::hex('#364e71'),
             'secondary' => Color::Slate,
             'accent' => Color::Purple,
             'muted' => Color::Gray,

@@ -19,6 +19,36 @@ class Role extends SpatieRole
         'guard_name',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            if (empty($model->role_id)) {
+                // Generate a unique role_id
+                // Format: R01, R02, etc.
+                $maxId = static::where('role_id', 'like', 'R%')
+                    ->orderByRaw('CAST(SUBSTRING(role_id, 2) AS UNSIGNED) DESC')
+                    ->first()?->role_id;
+
+                $number = 0;
+                if ($maxId) {
+                    $number = (int) substr($maxId, 1);
+                }
+                
+                $nextId = 'R' . str_pad($number + 1, 2, '0', STR_PAD_LEFT);
+
+                // Double check if nextId exists to avoid collisions
+                while (static::where('role_id', $nextId)->exists()) {
+                    $number++;
+                    $nextId = 'R' . str_pad($number + 1, 2, '0', STR_PAD_LEFT);
+                }
+
+                $model->role_id = $nextId;
+            }
+        });
+    }
+
     public function getKeyName()
     {
         return 'role_id';

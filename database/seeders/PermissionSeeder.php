@@ -153,16 +153,49 @@ class PermissionSeeder extends Seeder
       'menu_laporan_kinerja',
       'view_any_laporan_kinerja',
       'view_laporan_kinerja',
+
+      // Article permissions
+      'view_any_article', 'view_article', 'create_article', 'update_article', 'delete_article', 'delete_any_article', 'force_delete_article', 'force_delete_any_article', 'restore_article', 'restore_any_article', 'replicate_article', 'reorder_article',
+
+      // BioPhotostrip permissions
+      'view_any_bio_photostrip', 'view_bio_photostrip', 'create_bio_photostrip', 'update_bio_photostrip', 'delete_bio_photostrip', 'delete_any_bio_photostrip', 'force_delete_bio_photostrip', 'force_delete_any_bio_photostrip', 'restore_bio_photostrip', 'restore_any_bio_photostrip', 'replicate_bio_photostrip', 'reorder_bio_photostrip',
+
+      // BioSetting permissions
+      'view_any_bio_setting', 'view_bio_setting', 'create_bio_setting', 'update_bio_setting', 'delete_bio_setting', 'delete_any_bio_setting', 'force_delete_bio_setting', 'force_delete_any_bio_setting', 'restore_bio_setting', 'restore_any_bio_setting', 'replicate_bio_setting', 'reorder_bio_setting',
+
+      // Client permissions
+      'view_any_client', 'view_client', 'create_client', 'update_client', 'delete_client', 'delete_any_client', 'force_delete_client', 'force_delete_any_client', 'restore_client', 'restore_any_client', 'replicate_client', 'reorder_client',
+
+      // Faq permissions
+      'view_any_faq', 'view_faq', 'create_faq', 'update_faq', 'delete_faq', 'delete_any_faq', 'force_delete_faq', 'force_delete_any_faq', 'restore_faq', 'restore_any_faq', 'replicate_faq', 'reorder_faq',
+
+      // Gallery permissions
+      'view_any_gallery', 'view_gallery', 'create_gallery', 'update_gallery', 'delete_gallery', 'delete_any_gallery', 'force_delete_gallery', 'force_delete_any_gallery', 'restore_gallery', 'restore_any_gallery', 'replicate_gallery', 'reorder_gallery',
+
+      // Schedule permissions
+      'view_any_schedule', 'view_schedule', 'create_schedule', 'update_schedule', 'delete_schedule', 'delete_any_schedule', 'force_delete_schedule', 'force_delete_any_schedule', 'restore_schedule', 'restore_any_schedule', 'replicate_schedule', 'reorder_schedule',
+
+      // EmployeeSchedule permissions
+      'view_any_employee_schedule', 'view_employee_schedule', 'create_employee_schedule', 'update_employee_schedule', 'delete_employee_schedule', 'delete_any_employee_schedule', 'force_delete_employee_schedule', 'force_delete_any_employee_schedule', 'restore_employee_schedule', 'restore_any_employee_schedule', 'replicate_employee_schedule', 'reorder_employee_schedule',
+
+      // Invoice permissions
+      'view_any_invoice', 'view_invoice', 'create_invoice', 'update_invoice', 'delete_invoice', 'delete_any_invoice', 'force_delete_invoice', 'force_delete_any_invoice', 'restore_invoice', 'restore_any_invoice', 'replicate_invoice', 'reorder_invoice',
     ];
 
     // Create permissions with custom ID format
-    foreach ($permissions as $index => $permission) {
+    foreach ($permissions as $index => $permissionName) {
       $permissionId = 'P' . str_pad($index + 1, 4, '0', STR_PAD_LEFT);
 
-      Permission::updateOrCreate(
-        ['name' => $permission, 'guard_name' => 'web'],
-        ['permission_id' => $permissionId]
-      );
+      $existing = Permission::where('name', $permissionName)->where('guard_name', 'web')->first();
+      if ($existing) {
+          continue;
+      }
+
+      Permission::create([
+        'permission_id' => $permissionId,
+        'name' => $permissionName,
+        'guard_name' => 'web',
+      ]);
     }
 
     $this->command->info('Permissions created successfully!');
