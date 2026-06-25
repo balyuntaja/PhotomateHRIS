@@ -30,7 +30,7 @@ class LaporanKinerjaResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::user()?->can('menu_laporan_kinerja');
+        return false;
     }
 
     public static function canViewAny(): bool
