@@ -67,8 +67,20 @@ class InvoiceResource extends Resource
                             ->required()
                             ->maxLength(255),
                         DatePicker::make('event_date')
+                            ->label('Tanggal Acara (Mulai)')
                             ->minDate(now()->startOfDay())
-                            ->required(),
+                            ->required()
+                            ->live()
+                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
+                                $endDate = $get('event_end_date');
+                                if (!$endDate || \Carbon\Carbon::parse($endDate)->lt(\Carbon\Carbon::parse($state))) {
+                                    $set('event_end_date', $state);
+                                }
+                            }),
+                        DatePicker::make('event_end_date')
+                            ->label('Tanggal Acara (Selesai)')
+                            ->minDate(fn (Get $get) => $get('event_date') ?: now()->startOfDay())
+                            ->nullable(),
                         DatePicker::make('invoice_date')
                             ->default(now())
                             ->required(),
@@ -195,7 +207,15 @@ class InvoiceResource extends Resource
                     ->sortable(),
                 TextColumn::make('event_date')
                     ->label('Tanggal Acara')
-                    ->date()
+                    ->formatStateUsing(function ($record) {
+                        if (!$record->event_date) {
+                            return '-';
+                        }
+                        if ($record->event_end_date && $record->event_end_date->ne($record->event_date)) {
+                            return $record->event_date->format('d M Y') . ' - ' . $record->event_end_date->format('d M Y');
+                        }
+                        return $record->event_date->format('d M Y');
+                    })
                     ->sortable(),
                 TextColumn::make('total')
                     ->money('IDR', locale: 'id')

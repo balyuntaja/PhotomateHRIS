@@ -10,6 +10,7 @@ class Invoice extends Model
 
     protected $casts = [
         'event_date' => 'date',
+        'event_end_date' => 'date',
         'invoice_date' => 'date',
         'due_date' => 'date',
     ];

@@ -146,7 +146,15 @@
                 <div style="margin-top: 10px;">
                     <strong>Acara:</strong> {{ $invoice->event_name }}<br>
                     <strong>Lokasi:</strong> {{ $invoice->event_location }}<br>
-                    <strong>Tanggal Acara:</strong> {{ $invoice->event_date ? $invoice->event_date->format('d F Y') : '-' }}
+                    <strong>Tanggal Acara:</strong>
+                    @if($invoice->event_date)
+                        {{ $invoice->event_date->format('d F Y') }}
+                        @if($invoice->event_end_date && $invoice->event_end_date->ne($invoice->event_date))
+                            s/d {{ $invoice->event_end_date->format('d F Y') }}
+                        @endif
+                    @else
+                        -
+                    @endif
                 </div>
             </td>
             <td>
