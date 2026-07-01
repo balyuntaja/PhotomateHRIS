@@ -1,0 +1,79 @@
+# Photomate.id - Jasa Sewa Photobooth Premium Malang & Jawa Timur (Full Specification)
+
+> Photomate.id menyediakan jasa penyewaan photobooth premium di Malang dan wilayah Jawa Timur. Kami menawarkan cetak foto instan kecepatan tinggi, template desain kustom, lighting profesional, serta kru ramah untuk pernikahan, corporate event, ulang tahun, wisuda, dan berbagai macam acara lainnya.
+
+Halaman ini berisi ringkasan penuh konten dan spesifikasi layanan Photomate.id untuk membantu Model Bahasa Besar (LLM) memahami produk, paket harga, dan fitur kami.
+
+---
+
+## 1. Paket Sewa Premium (Full Service)
+Layanan sewa photobooth lengkap dengan cetak unlimited, template kustom, background standard, properti unik, dan kru profesional.
+
+### Paket Silver
+- **Durasi Operasional:** 2 Jam
+- **Cetak Foto 4R:** UNLIMITED
+- **Desain Template:** Request Design Sesuai Tema Acara
+- **Harga Normal:** Rp 1.800.000
+- **Harga Nett:** Rp 1.599.000
+- **Fitur Tambahan:** Background standard, Properti unik & lucu, Kru profesional, Semua file via link. (Tanpa paper frame).
+
+### Paket Gold (Paling Populer)
+- **Durasi Operasional:** 3 Jam
+- **Cetak Foto 4R:** UNLIMITED
+- **Desain Template:** Request Design Sesuai Tema Acara
+- **Harga Normal:** Rp 2.600.000
+- **Harga Nett:** Rp 2.199.000
+- **Fitur Tambahan:** Background standard, Properti unik & lucu, Kru profesional, Semua file via link, **Termasuk Paper Frame**.
+
+### Paket Platinum
+- **Durasi Operasional:** 4 Jam
+- **Cetak Foto 4R:** UNLIMITED
+- **Desain Template:** Request Design Sesuai Tema Acara
+- **Harga Normal:** Rp 2.700.000
+- **Harga Nett:** Rp 2.699.000
+- **Fitur Tambahan:** Background standard, Properti unik & lucu, Kru profesional, Semua file via link, **Termasuk Paper Frame**.
+
+---
+
+## 2. Paket Mandiri (Self-Run)
+Sistem di mana panitia event mengelola langsung penjualan sesi foto, sementara Photomate menyiapkan perangkat dan setup hingga siap pakai. Keuntungan penjualan sesi foto sepenuhnya milik penyelenggara event. Free transport untuk area Malang Raya.
+
+### Fitur Paket Self-Run
+- Desain frame sesuai tema acara
+- Crew pendamping & peralatan lengkap
+- Konsep self-service photobox interaktif
+- Free transport area Malang Raya
+
+### Simulasi Harga & Proyeksi Keuntungan
+- **Durasi 2 Jam:** Harga Sewa Rp 700.000 | Proyeksi Keuntungan up to Rp 1.000.000
+- **Durasi 3 Jam:** Harga Sewa Rp 1.000.000 | Proyeksi Keuntungan up to Rp 1.250.000
+- **Durasi 4 Jam:** Harga Sewa Rp 1.250.000 | Proyeksi Keuntungan up to Rp 1.800.000
+- **Durasi 5 Jam:** Harga Sewa Rp 1.500.000 | Proyeksi Keuntungan up to Rp 2.400.000
+- **Durasi 6 Jam:** Harga Sewa Rp 1.800.000 | Proyeksi Keuntungan up to Rp 2.800.000
+
+---
+
+## 3. Kerjasama Kemitraan (Sharing Profit)
+Skema bagi hasil antara Photomate dan panitia event. Cocok untuk festival, konser, exhibition, dan event dengan traffic pengunjung tinggi. Photomate menyediakan perangkat dan operasional photobooth, pendapatan tiket atau sesi foto dibagi berdasarkan kesepakatan.
+
+### Skema 1 Device
+Durasi layanan maksimal 6 jam dengan 2-3 crew Photomate di lokasi.
+- **Skema A:** Sesi Foto 51-100 | Bagi Hasil: Photomate 85% : Panitia 15% | Harga per Sesi: Rp 25.000
+- **Skema B:** Sesi Foto 100+ | Bagi Hasil: Photomate 80% : Panitia 20% | Harga per Sesi: Rp 25.000
+
+### Skema 2 Device
+Dua unit photobooth untuk area yang sangat ramai atau antrean panjang, dengan durasi layanan maksimal 6 jam.
+- **Skema A:** Sesi Foto 0-100 | Bagi Hasil: Photomate 100% : Panitia 0% | Harga per Sesi: Rp 20.000 - Rp 25.000
+- **Skema B:** Sesi Foto 101-150 | Bagi Hasil: Photomate 90% : Panitia 10% | Harga per Sesi: Rp 20.000 - Rp 25.000
+- **Skema C:** Sesi Foto 151+ | Bagi Hasil: Photomate 80% : Panitia 20% | Harga per Sesi: Rp 20.000 - Rp 25.000
+
+---
+
+## 4. Informasi Kontak & Alamat
+- **Nama Usaha:** Photomate.id
+- **Telepon:** [+62-877-8740-5280](https://wa.me/6287787405280)
+- **Email:** captureyourmate@gmail.com
+- **Instagram:** [@photomateid_](https://www.instagram.com/photomateid_/)
+- **TikTok:** [@photomate_id](https://www.tiktok.com/@photomate_id)
+- **Alamat:** Jl. Sumber, RT02/04, Tulakan, Panggungrejo, Kec. Kepanjen, Kabupaten Malang, Jawa Timur 65163
+- **Geo-Koordinat:** Latitude -8.144603581565857, Longitude 112.55624367500079

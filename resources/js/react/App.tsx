@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import React, { lazy, Suspense, useState, useEffect, useRef } from "react";
 import { Routes, Route } from "react-router-dom";
 import {
   Navbar,
@@ -36,6 +36,40 @@ function SectionSkeleton() {
   return <div className="h-24" aria-hidden />;
 }
 
+interface LazySectionProps {
+  children: React.ReactNode;
+  height?: string;
+}
+
+function LazySection({ children, height = "200px" }: LazySectionProps) {
+  const [isIntersecting, setIsIntersecting] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsIntersecting(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px" } // Load section 300px before it enters the viewport
+    );
+
+    if (ref.current) {
+      observer.observe(ref.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} style={{ minHeight: isIntersecting ? undefined : height }}>
+      {isIntersecting ? children : null}
+    </div>
+  );
+}
+
 function HomePage() {
   return (
     <>
@@ -45,16 +79,36 @@ function HomePage() {
         <FindUsSection />
         <OfflineBoothsSection />
         <Suspense fallback={<SectionSkeleton />}>
-          <Client />
-          <Pricing />
-          <CallToAction />
-          <Services />
-          <WhySection />
-          <ClientFeedback />
-          <Subscribe />
-          <Gallery />
-          <BlogSection />
-          <Faq />
+          <LazySection height="150px">
+            <Client />
+          </LazySection>
+          <LazySection height="450px">
+            <Pricing />
+          </LazySection>
+          <LazySection height="250px">
+            <CallToAction />
+          </LazySection>
+          <LazySection height="400px">
+            <Services />
+          </LazySection>
+          <LazySection height="400px">
+            <WhySection />
+          </LazySection>
+          <LazySection height="350px">
+            <ClientFeedback />
+          </LazySection>
+          <LazySection height="200px">
+            <Subscribe />
+          </LazySection>
+          <LazySection height="500px">
+            <Gallery />
+          </LazySection>
+          <LazySection height="450px">
+            <BlogSection />
+          </LazySection>
+          <LazySection height="400px">
+            <Faq />
+          </LazySection>
         </Suspense>
       </main>
       <Footer />

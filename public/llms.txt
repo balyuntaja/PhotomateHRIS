@@ -1,0 +1,19 @@
+# Photomate.id - Jasa Sewa Photobooth Premium Malang & Jawa Timur
+
+> Photomate.id menyediakan jasa penyewaan photobooth premium di Malang dan wilayah Jawa Timur. Kami menawarkan cetak foto instan kecepatan tinggi, template desain kustom, lighting profesional, serta kru ramah untuk pernikahan, corporate event, ulang tahun, wisuda, dan berbagai macam acara lainnya.
+
+Untuk detail selengkapnya tentang spesifikasi teknis, harga detail, serta FAQ lengkap, silakan kunjungi [Full LLMs Specification](https://photomate.id/llms-full.txt).
+
+## Halaman Utama & Informasi Umum
+- [Halaman Utama](https://photomate.id/) - Informasi umum mengenai layanan, kelebihan, galeri foto, testimoni klien, dan FAQ Photomate.id.
+- [Ketersediaan Jadwal Event](https://photomate.id/availability) - Cek ketersediaan slot tanggal dan waktu untuk pemesanan photobooth secara real-time.
+- [Link Bio & Kontak Resmi](https://photomate.id/bio) - Halaman portal informasi, tautan sosial media, dan kontak WhatsApp resmi admin Photomate.id.
+
+## Paket Layanan & Harga (Pricing)
+Kami menawarkan beberapa opsi paket yang dapat disesuaikan dengan kebutuhan event Anda:
+- [Paket Sewa Premium](https://photomate.id/pricing/sewa) - Layanan sewa photobooth lengkap dengan cetak unlimited, template custom, properti foto, dan kru profesional.
+- [Paket Mandiri (Self-Run)](https://photomate.id/pricing/self-run) - Paket penyewaan alat dan software photobooth untuk dijalankan secara mandiri, cocok untuk bisnis atau EO.
+- [Kerjasama Kemitraan (Sharing Profit)](https://photomate.id/pricing/sharing-profit) - Skema bagi hasil penempatan unit photobooth di lokasi wisata, kafe, mall, atau area komersial.
+
+## Edukasi & Artikel Blog
+- [Blog & Inspirasi Event](https://photomate.id/blog) - Kumpulan artikel seputar tips persiapan event, inspirasi souvenir pernikahan, dan tren photobooth terbaru.

@@ -27,6 +27,7 @@
     <meta name="twitter:image" content="{{ $seo['image'] ?? asset('logophotomateblue.png') }}">
 
     <link rel="icon" type="image/svg+xml" href="/logophotomateblue.png" />
+    <link rel="alternate" type="text/markdown" href="/llms.txt" title="Photomate.id LLM Version" />
     
     <!-- Structured Data (JSON-LD) -->
     @if(isset($seo['schema']))
