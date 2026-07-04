@@ -112,8 +112,8 @@ const Hero: React.FC = () => {
                 <OptimizedImage
                   src={heroCollage}
                   alt="Photomate photobooth gallery"
-                  width={1080}
-                  height={1620}
+                  width={600}
+                  height={1625}
                   className="w-full h-auto shrink-0 block"
                   critical
                   withSkeleton

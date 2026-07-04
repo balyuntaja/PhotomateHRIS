@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/style.css";
 import { Link } from "react-router-dom";
-import { Navbar } from "../components";
+import Navbar from "../components/Navbar";
 
 /* ================= TYPES ================= */
 

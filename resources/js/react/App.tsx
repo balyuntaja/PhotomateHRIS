@@ -1,15 +1,13 @@
 import React, { lazy, Suspense, useState, useEffect, useRef } from "react";
 import { Routes, Route } from "react-router-dom";
-import {
-  Navbar,
-  Hero,
-  Footer,
-  BackToTop,
-  WhatsAppFAB,
-  FindUsSection,
-  OfflineBoothsSection,
-  ScrollToTop,
-} from "./components";
+import Navbar from "./components/Navbar";
+import Hero from "./components/Hero";
+import Footer from "./components/Footer";
+import BackToTop from "./components/BackToTop";
+import WhatsAppFAB from "./components/WhatsAppFAB";
+import FindUsSection from "./components/FindUsSection";
+import OfflineBoothsSection from "./components/OfflineBoothsSection";
+import ScrollToTop from "./components/ScrollToTop";
 
 const Client = lazy(() => import("./components/Client"));
 const Pricing = lazy(() => import("./components/Pricing"));

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Navbar, Footer } from "../components";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 import { selfRunRows } from "../data/pricing";
 
 const WA_NUMBER = "6287787405280";

@@ -94,6 +94,33 @@ class InvoiceResource extends Resource
                         Repeater::make('invoiceItems')
                             ->relationship()
                             ->schema([
+                                Select::make('item_type')
+                                    ->label('Tipe')
+                                    ->options([
+                                        'service' => 'Jasa / Layanan',
+                                        'product' => 'Barang / Item',
+                                    ])
+                                    ->default('service')
+                                    ->afterStateHydrated(function (Get $get, Set $set) {
+                                        $duration = $get('duration');
+                                        if ($duration === '-' || (empty($get('start_time')) && empty($get('end_time')))) {
+                                            $set('item_type', 'product');
+                                        } else {
+                                            $set('item_type', 'service');
+                                        }
+                                    })
+                                    ->live()
+                                    ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
+                                        if ($state === 'product') {
+                                            $set('start_time', null);
+                                            $set('end_time', null);
+                                            $set('duration', '-');
+                                        } else {
+                                            $set('duration', '0 Jam');
+                                            self::calculateDuration($get, $set);
+                                        }
+                                    })
+                                    ->required(),
                                 TextInput::make('service_description')
                                     ->datalist([
                                         'Sewa Photobooth Paket Platinum',
@@ -113,18 +140,23 @@ class InvoiceResource extends Resource
                                     })
                                     ->required(),
                                 TextInput::make('duration')
+                                    ->default('-')
                                     ->required()
+                                    ->dehydrated(true)
+                                    ->visible(fn (Get $get) => $get('item_type') === 'service')
                                     ->readOnly(),
                                 TextInput::make('start_time')
                                     ->label('Waktu Mulai')
                                     ->type('time')
-                                    ->required()
+                                    ->visible(fn (Get $get) => $get('item_type') === 'service')
+                                    ->required(fn (Get $get) => $get('item_type') === 'service')
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set)),
                                 TextInput::make('end_time')
                                     ->label('Waktu Selesai')
                                     ->type('time')
-                                    ->required()
+                                    ->visible(fn (Get $get) => $get('item_type') === 'service')
+                                    ->required(fn (Get $get) => $get('item_type') === 'service')
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set)),
                                 TextInput::make('amount')
@@ -136,7 +168,7 @@ class InvoiceResource extends Resource
                             ])
                             ->live()
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::updateTotals($get, $set))
-                            ->columns(5)
+                            ->columns(6)
                             ->defaultItems(1)
                     ]),
 
@@ -187,7 +219,24 @@ class InvoiceResource extends Resource
                                 'Dibatalkan' => 'Dibatalkan',
                             ])
                             ->default('Draft')
-                            ->required(),
+                            ->required()
+                            ->live()
+                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
+                                if ($state !== 'Sebagian Dibayar') {
+                                    $set('down_payment', 0);
+                                }
+                            }),
+                        TextInput::make('down_payment')
+                            ->label('Down Payment (DP) yang Dibayar')
+                            ->prefix('Rp')
+                            ->numeric()
+                            ->default(0.00)
+                            ->visible(fn (Get $get) => $get('status') === 'Sebagian Dibayar')
+                            ->required(fn (Get $get) => $get('status') === 'Sebagian Dibayar')
+                            ->live(onBlur: true)
+                            ->helperText(fn (Get $get) => 'Sisa Pembayaran: Rp ' . number_format(max(0, floatval($get('total') ?? 0) - floatval($get('down_payment') ?? 0)), 0, ',', '.'))
+                            ->maxValue(fn (Get $get) => floatval($get('total') ?? 0))
+                            ->minValue(0),
                         Textarea::make('notes')
                             ->default("Invoice ini merupakan tagihan resmi layanan Photomate.\nMohon melakukan pembayaran sebelum tanggal jatuh tempo.\nKonfirmasi pembayaran melalui WhatsApp admin.\nBiaya tambahan di luar paket akan ditagihkan terpisah.")
                             ->columnSpanFull(),
@@ -219,6 +268,11 @@ class InvoiceResource extends Resource
                     ->sortable(),
                 TextColumn::make('total')
                     ->money('IDR', locale: 'id')
+                    ->description(fn (Invoice $record): ?string => 
+                        $record->status === 'Sebagian Dibayar' 
+                            ? 'DP: Rp ' . number_format($record->down_payment, 0, ',', '.') . ' (Sisa: Rp ' . number_format($record->total - $record->down_payment, 0, ',', '.') . ')' 
+                            : null
+                    )
                     ->sortable(),
                 TextColumn::make('status')
                     ->badge()
@@ -305,6 +359,11 @@ class InvoiceResource extends Resource
         $start = $get('start_time');
         $end = $get('end_time');
         
+        if ($get('item_type') === 'product') {
+            $set('duration', '-');
+            return;
+        }
+        
         if ($start && $end) {
             try {
                 $startTime = \Carbon\Carbon::parse($start);
@@ -330,6 +389,8 @@ class InvoiceResource extends Resource
             } catch (\Exception $e) {
                 // ignore
             }
+        } else {
+            $set('duration', '0 Jam');
         }
     }
 }

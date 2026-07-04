@@ -209,6 +209,16 @@
             <td class="label">Grand Total:</td>
             <td class="amount">Rp {{ number_format($invoice->total, 0, ',', '.') }}</td>
         </tr>
+        @if($invoice->status == 'Sebagian Dibayar' && $invoice->down_payment > 0)
+        <tr>
+            <td class="label">Down Payment:</td>
+            <td class="amount">Rp {{ number_format($invoice->down_payment, 0, ',', '.') }}</td>
+        </tr>
+        <tr style="border-top: 1px solid #cbd5e0;">
+            <td class="label">Sisa Pembayaran:</td>
+            <td class="amount" style="font-weight: bold; color: #dd6b20;">Rp {{ number_format($invoice->total - $invoice->down_payment, 0, ',', '.') }}</td>
+        </tr>
+        @endif
     </table>
 
     <div class="footer-info">

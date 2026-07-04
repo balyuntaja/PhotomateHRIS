@@ -1,6 +1,10 @@
 import React from "react";
+import golioBooth from "../assets/img/golio_booth.webp";
+import newspaperBooth from "../assets/img/newspaper_booth.webp";
+import OptimizedImage from "./OptimizedImage";
 
 type BoothCardProps = {
+  image: string;
   emoji: string;
   hubName: string;
   title: string;
@@ -28,6 +32,7 @@ function LocationPinIcon({ className }: { className?: string }) {
 }
 
 function BoothCard({
+  image,
   emoji,
   hubName,
   title,
@@ -48,25 +53,25 @@ function BoothCard({
       "
     >
       <div className="p-6 md:p-7">
-        {/* Placeholder "image" */}
+        {/* Booth Image */}
         <div
           className="
             relative overflow-hidden
             rounded-3xl
             border border-white/50
-            bg-linear-to-br from-primary/15 via-white to-yellow-100/40
             transition-transform duration-500
             group-hover:scale-[1.04]
+            aspect-16/10
           "
         >
-          <div className="aspect-16/10 w-full" />
-          <div className="absolute inset-0 bg-white/20 backdrop-blur-sm" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
-            <div className="text-4xl leading-none">{emoji}</div>
-            <p className="mt-3 text-sm font-semibold text-gray-900/80">
-              {hubName}
-            </p>
-          </div>
+          <OptimizedImage
+            src={image}
+            alt={title}
+            width={640}
+            height={400}
+            className="w-full h-full object-cover"
+            withSkeleton
+          />
         </div>
 
         <div className="mt-5 flex items-start justify-between gap-4">
@@ -166,6 +171,7 @@ const OfflineBoothsSection: React.FC = () => {
 
         <div className="mt-10 md:mt-14 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
           <BoothCard
+            image={golioBooth}
             emoji="📸"
             hubName="Golio Hub"
             title="Photobox Experience"
@@ -174,6 +180,7 @@ const OfflineBoothsSection: React.FC = () => {
             directionsUrl="https://www.google.com/maps/search/?api=1&query=Golio+Hub%2C+Kepanjen%2C+Malang"
           />
           <BoothCard
+            image={newspaperBooth}
             emoji="📰"
             hubName="Janus Coffee"
             title="Newspaper Photobooth"

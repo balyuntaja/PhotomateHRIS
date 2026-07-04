@@ -18,12 +18,20 @@ class InvoiceItem extends Model
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
             get: function ($value, $attributes) {
                 $parts = explode(' - ', $attributes['time_range'] ?? '');
-                return $parts[0] ?? null;
+                $val = $parts[0] ?? null;
+                return $val === '-' ? null : $val;
             },
             set: function ($value, $attributes) {
                 $parts = explode(' - ', $attributes['time_range'] ?? '');
-                $end = $parts[1] ?? '';
-                return ['time_range' => trim($value . ' - ' . $end, ' -')];
+                $end = !empty($parts[1]) && $parts[1] !== '-' ? $parts[1] : null;
+                $start = $value ?: null;
+                
+                if ($start === null && $end === null) {
+                    $range = '-';
+                } else {
+                    $range = ($start ?: '-') . ' - ' . ($end ?: '-');
+                }
+                return ['time_range' => $range];
             }
         );
     }
@@ -33,12 +41,20 @@ class InvoiceItem extends Model
         return \Illuminate\Database\Eloquent\Casts\Attribute::make(
             get: function ($value, $attributes) {
                 $parts = explode(' - ', $attributes['time_range'] ?? '');
-                return $parts[1] ?? null;
+                $val = $parts[1] ?? null;
+                return $val === '-' ? null : $val;
             },
             set: function ($value, $attributes) {
                 $parts = explode(' - ', $attributes['time_range'] ?? '');
-                $start = $parts[0] ?? '';
-                return ['time_range' => trim($start . ' - ' . $value, ' -')];
+                $start = !empty($parts[0]) && $parts[0] !== '-' ? $parts[0] : null;
+                $end = $value ?: null;
+                
+                if ($start === null && $end === null) {
+                    $range = '-';
+                } else {
+                    $range = ($start ?: '-') . ' - ' . ($end ?: '-');
+                }
+                return ['time_range' => $range];
             }
         );
     }

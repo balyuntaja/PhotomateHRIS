@@ -1,5 +1,6 @@
 import { Link, useParams } from "react-router-dom";
-import { Footer, Navbar } from "../components";
+import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
 import OptimizedImage from "../components/OptimizedImage";
 import { getArticleById, blogArticles } from "../data/blogArticles";
 
