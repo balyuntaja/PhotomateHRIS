@@ -252,6 +252,10 @@ class InvoiceResource extends Resource
                 TextColumn::make('invoice_number')
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('invoice_date')
+                    ->label('Tanggal Invoice')
+                    ->date('d M Y')
+                    ->sortable(),
                 TextColumn::make('client_name')
                     ->searchable()
                     ->sortable(),
