@@ -101,6 +101,7 @@ class InvoiceResource extends Resource
                                         'product' => 'Barang / Item',
                                     ])
                                     ->default('service')
+                                    ->dehydrated(false)
                                     ->afterStateHydrated(function (Get $get, Set $set) {
                                         $duration = $get('duration');
                                         if ($duration === '-' || (empty($get('start_time')) && empty($get('end_time')))) {
