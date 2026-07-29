@@ -122,7 +122,7 @@
                 <div class="logo-text">PHOTOMATE</div>
                 <div style="color: #718096; margin-top: 5px; font-size: 13px;">
                     Jasa Layanan Photobooth Profesional<br>
-                    Jakarta, Indonesia
+                    Malang, Indonesia
                 </div>
             </td>
             <td class="title">
@@ -170,7 +170,7 @@
                     </tr>
                     @if($invoice->dp_date)
                     <tr>
-                        <td style="padding: 4px 0; color: #718096;">Tanggal DP:</td>
+                        <td style="padding: 4px 0; color: #718096;">Jatuh Tempo DP:</td>
                         <td style="padding: 4px 0; text-align: right;">{{ $invoice->dp_date->format('d F Y') }}</td>
                     </tr>
                     @endif
