@@ -134,14 +134,16 @@ class InvoiceResource extends Resource
                                         'Sewa Photobooth Paket Silver',
                                     ])
                                     ->live(onBlur: true)
-                                    ->afterStateUpdated(function (?string $state, Set $set) {
+                                    ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
                                         $prices = [
                                             'Sewa Photobooth Paket Platinum' => 2699000,
                                             'Sewa Photobooth Paket Gold' => 2199000,
                                             'Sewa Photobooth Paket Silver' => 1599000,
                                         ];
                                         if ($state && array_key_exists($state, $prices)) {
-                                            $set('amount', $prices[$state]);
+                                            $set('price', $prices[$state]);
+                                            $deviceCount = intval($get('device_count') ?? 1);
+                                            $set('amount', $prices[$state] * $deviceCount);
                                         }
                                     })
                                     ->required(),
@@ -181,16 +183,41 @@ class InvoiceResource extends Resource
                                     ->required(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set)),
-                                TextInput::make('amount')
+                                TextInput::make('price')
+                                    ->label('Harga')
                                     ->prefix('Rp')
                                     ->numeric()
                                     ->required()
+                                    ->default(0.00)
                                     ->live(onBlur: true)
-                                    ->afterStateUpdated(fn (Get $get, Set $set) => self::updateTotals($get, $set)),
+                                    ->afterStateUpdated(function (Get $get, Set $set) {
+                                        $price = floatval($get('price') ?? 0);
+                                        $deviceCount = intval($get('device_count') ?? 1);
+                                        $set('amount', $price * $deviceCount);
+                                    }),
+                                TextInput::make('device_count')
+                                    ->label('Jumlah (Device)')
+                                    ->numeric()
+                                    ->integer()
+                                    ->required()
+                                    ->default(1)
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(function (Get $get, Set $set) {
+                                        $price = floatval($get('price') ?? 0);
+                                        $deviceCount = intval($get('device_count') ?? 1);
+                                        $set('amount', $price * $deviceCount);
+                                    }),
+                                TextInput::make('amount')
+                                    ->label('Total')
+                                    ->prefix('Rp')
+                                    ->numeric()
+                                    ->required()
+                                    ->readOnly()
+                                    ->default(0.00),
                             ])
                             ->live()
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::updateTotals($get, $set))
-                            ->columns(7)
+                            ->columns(9)
                             ->defaultItems(1)
                     ]),
 
@@ -246,6 +273,7 @@ class InvoiceResource extends Resource
                             ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
                                 if ($state !== 'Sebagian Dibayar') {
                                     $set('down_payment', 0);
+                                    $set('dp_date', null);
                                 }
                             }),
                         TextInput::make('down_payment')
@@ -259,6 +287,10 @@ class InvoiceResource extends Resource
                             ->helperText(fn (Get $get) => 'Sisa Pembayaran: Rp ' . number_format(max(0, floatval($get('total') ?? 0) - floatval($get('down_payment') ?? 0)), 0, ',', '.'))
                             ->maxValue(fn (Get $get) => floatval($get('total') ?? 0))
                             ->minValue(0),
+                        DatePicker::make('dp_date')
+                            ->label('Tanggal DP')
+                            ->visible(fn (Get $get) => $get('status') === 'Sebagian Dibayar')
+                            ->required(fn (Get $get) => $get('status') === 'Sebagian Dibayar'),
                         Textarea::make('notes')
                             ->default("Invoice ini merupakan tagihan resmi layanan Photomate.\nMohon melakukan pembayaran sebelum tanggal jatuh tempo.\nKonfirmasi pembayaran melalui WhatsApp admin.\nBiaya tambahan di luar paket akan ditagihkan terpisah.")
                             ->columnSpanFull(),

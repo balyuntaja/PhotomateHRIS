@@ -165,9 +165,15 @@
                         <td style="padding: 4px 0; text-align: right;">{{ $invoice->invoice_date->format('d F Y') }}</td>
                     </tr>
                     <tr>
-                        <td style="padding: 4px 0; color: #718096;">Jatuh Tempo:</td>
+                        <td style="padding: 4px 0; color: #718096;">Jatuh Tempo Pelunasan:</td>
                         <td style="padding: 4px 0; text-align: right;">{{ $invoice->due_date->format('d F Y') }}</td>
                     </tr>
+                    @if($invoice->dp_date)
+                    <tr>
+                        <td style="padding: 4px 0; color: #718096;">Tanggal DP:</td>
+                        <td style="padding: 4px 0; text-align: right;">{{ $invoice->dp_date->format('d F Y') }}</td>
+                    </tr>
+                    @endif
                 </table>
             </td>
         </tr>
@@ -179,7 +185,9 @@
                 <th>Deskripsi Layanan</th>
                 <th>Durasi</th>
                 <th>Pukul</th>
-                <th class="right">Jumlah (Rp)</th>
+                <th class="right">Harga (Rp)</th>
+                <th class="right">Device</th>
+                <th class="right">Total (Rp)</th>
             </tr>
         </thead>
         <tbody>
@@ -188,6 +196,8 @@
                 <td>{{ $item->service_description }}</td>
                 <td>{{ $item->duration }}</td>
                 <td>{{ $item->time_range }}</td>
+                <td class="right">{{ number_format($item->price, 0, ',', '.') }}</td>
+                <td class="right">{{ $item->device_count }}</td>
                 <td class="right">{{ number_format($item->amount, 0, ',', '.') }}</td>
             </tr>
             @endforeach

@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property \Illuminate\Support\Carbon|null $invoice_date
  * @property \Illuminate\Support\Carbon|null $due_date
  * @property float|null $down_payment
+ * @property \Illuminate\Support\Carbon|null $dp_date
  * @property \Illuminate\Support\Carbon|null $created_at
  * @property \Illuminate\Support\Carbon|null $updated_at
  */
@@ -24,6 +25,7 @@ class Invoice extends Model
         'invoice_date' => 'date',
         'due_date' => 'date',
         'down_payment' => 'float',
+        'dp_date' => 'date',
     ];
 
     public function invoiceItems()
