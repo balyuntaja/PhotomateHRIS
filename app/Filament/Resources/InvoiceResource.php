@@ -102,7 +102,11 @@ class InvoiceResource extends Resource
                                     ])
                                     ->default('service')
                                     ->dehydrated(false)
-                                    ->afterStateHydrated(function (Get $get, Set $set) {
+                                    ->afterStateHydrated(function (Get $get, Set $set, $record) {
+                                        if ($record && $record->time_range === 'TBA') {
+                                            $set('item_type', 'service');
+                                            return;
+                                        }
                                         $duration = $get('duration');
                                         if ($duration === '-' || (empty($get('start_time')) && empty($get('end_time')))) {
                                             $set('item_type', 'product');
@@ -113,6 +117,7 @@ class InvoiceResource extends Resource
                                     ->live()
                                     ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
                                         if ($state === 'product') {
+                                            $set('is_tba', false);
                                             $set('start_time', null);
                                             $set('end_time', null);
                                             $set('duration', '-');
@@ -140,24 +145,40 @@ class InvoiceResource extends Resource
                                         }
                                     })
                                     ->required(),
+                                Forms\Components\Toggle::make('is_tba')
+                                    ->label('Waktu TBA')
+                                    ->default(false)
+                                    ->live()
+                                    ->visible(fn (Get $get) => $get('item_type') === 'service')
+                                    ->afterStateUpdated(function (Get $get, Set $set, $state) {
+                                        if ($state) {
+                                            $set('start_time', null);
+                                            $set('end_time', null);
+                                            $set('duration', '');
+                                        } else {
+                                            $set('duration', '0 Jam');
+                                            self::calculateDuration($get, $set);
+                                        }
+                                    }),
                                 TextInput::make('duration')
                                     ->default('-')
                                     ->required()
                                     ->dehydrated(true)
                                     ->visible(fn (Get $get) => $get('item_type') === 'service')
-                                    ->readOnly(),
+                                    ->placeholder(fn (Get $get) => $get('is_tba') ? 'Contoh: 3 Jam' : '-')
+                                    ->readOnly(fn (Get $get) => !$get('is_tba')),
                                 TextInput::make('start_time')
                                     ->label('Waktu Mulai')
                                     ->type('time')
-                                    ->visible(fn (Get $get) => $get('item_type') === 'service')
-                                    ->required(fn (Get $get) => $get('item_type') === 'service')
+                                    ->visible(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
+                                    ->required(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set)),
                                 TextInput::make('end_time')
                                     ->label('Waktu Selesai')
                                     ->type('time')
-                                    ->visible(fn (Get $get) => $get('item_type') === 'service')
-                                    ->required(fn (Get $get) => $get('item_type') === 'service')
+                                    ->visible(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
+                                    ->required(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set)),
                                 TextInput::make('amount')
@@ -169,7 +190,7 @@ class InvoiceResource extends Resource
                             ])
                             ->live()
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::updateTotals($get, $set))
-                            ->columns(6)
+                            ->columns(7)
                             ->defaultItems(1)
                     ]),
 
@@ -361,6 +382,10 @@ class InvoiceResource extends Resource
 
     public static function calculateDuration(Get $get, Set $set): void
     {
+        if ($get('is_tba')) {
+            return;
+        }
+
         $start = $get('start_time');
         $end = $get('end_time');
         
