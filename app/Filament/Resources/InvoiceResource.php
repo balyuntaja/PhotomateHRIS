@@ -126,7 +126,8 @@ class InvoiceResource extends Resource
                                             self::calculateDuration($get, $set);
                                         }
                                     })
-                                    ->required(),
+                                    ->required()
+                                    ->columnSpan(1),
                                 TextInput::make('service_description')
                                     ->datalist([
                                         'Sewa Photobooth Paket Platinum',
@@ -144,9 +145,11 @@ class InvoiceResource extends Resource
                                             $set('price', $prices[$state]);
                                             $deviceCount = intval($get('device_count') ?? 1);
                                             $set('amount', $prices[$state] * $deviceCount);
+                                            self::updateTotals($get, $set);
                                         }
                                     })
-                                    ->required(),
+                                    ->required()
+                                    ->columnSpan(3),
                                 Forms\Components\Toggle::make('is_tba')
                                     ->label('Waktu TBA')
                                     ->default(false)
@@ -161,28 +164,32 @@ class InvoiceResource extends Resource
                                             $set('duration', '0 Jam');
                                             self::calculateDuration($get, $set);
                                         }
-                                    }),
+                                    })
+                                    ->columnSpan(1),
                                 TextInput::make('duration')
                                     ->default('-')
                                     ->required()
                                     ->dehydrated(true)
                                     ->visible(fn (Get $get) => $get('item_type') === 'service')
                                     ->placeholder(fn (Get $get) => $get('is_tba') ? 'Contoh: 3 Jam' : '-')
-                                    ->readOnly(fn (Get $get) => !$get('is_tba')),
+                                    ->readOnly(fn (Get $get) => !$get('is_tba'))
+                                    ->columnSpan(1),
                                 TextInput::make('start_time')
                                     ->label('Waktu Mulai')
                                     ->type('time')
                                     ->visible(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
                                     ->required(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
                                     ->live(onBlur: true)
-                                    ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set)),
+                                    ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set))
+                                    ->columnSpan(1),
                                 TextInput::make('end_time')
                                     ->label('Waktu Selesai')
                                     ->type('time')
                                     ->visible(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
                                     ->required(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
                                     ->live(onBlur: true)
-                                    ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set)),
+                                    ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set))
+                                    ->columnSpan(1),
                                 TextInput::make('price')
                                     ->label('Harga')
                                     ->prefix('Rp')
@@ -194,7 +201,9 @@ class InvoiceResource extends Resource
                                         $price = floatval($get('price') ?? 0);
                                         $deviceCount = intval($get('device_count') ?? 1);
                                         $set('amount', $price * $deviceCount);
-                                    }),
+                                        self::updateTotals($get, $set);
+                                    })
+                                    ->columnSpan(2),
                                 TextInput::make('device_count')
                                     ->label('Jumlah (Device)')
                                     ->numeric()
@@ -206,18 +215,21 @@ class InvoiceResource extends Resource
                                         $price = floatval($get('price') ?? 0);
                                         $deviceCount = intval($get('device_count') ?? 1);
                                         $set('amount', $price * $deviceCount);
-                                    }),
+                                        self::updateTotals($get, $set);
+                                    })
+                                    ->columnSpan(1),
                                 TextInput::make('amount')
                                     ->label('Total')
                                     ->prefix('Rp')
                                     ->numeric()
                                     ->required()
                                     ->readOnly()
-                                    ->default(0.00),
+                                    ->default(0.00)
+                                    ->columnSpan(1),
                             ])
                             ->live()
                             ->afterStateUpdated(fn (Get $get, Set $set) => self::updateTotals($get, $set))
-                            ->columns(9)
+                            ->columns(4)
                             ->defaultItems(1)
                     ]),
 
@@ -401,7 +413,16 @@ class InvoiceResource extends Resource
         
         if (is_array($items)) {
             foreach ($items as $item) {
-                $subtotal += floatval($item['amount'] ?? 0);
+                $price = floatval($item['price'] ?? 0);
+                $deviceCount = intval($item['device_count'] ?? 1);
+                
+                // If price is 0 but amount is set (legacy safeguard), use amount,
+                // otherwise calculate on-the-fly using price * deviceCount.
+                if ($price == 0 && floatval($item['amount'] ?? 0) > 0) {
+                    $subtotal += floatval($item['amount'] ?? 0);
+                } else {
+                    $subtotal += ($price * $deviceCount);
+                }
             }
         }
         
