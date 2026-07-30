@@ -92,7 +92,7 @@
         }
         .footer-info {
             clear: both;
-            margin-top: 40px;
+            margin-top: 20px;
         }
         .payment-box, .notes-box {
             margin-bottom: 20px;
