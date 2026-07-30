@@ -92,12 +92,12 @@
         }
         .footer-info {
             clear: both;
-            margin-top: 20px;
+            margin-top: 10px;
         }
         .payment-box, .notes-box {
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             background-color: #f7fafc;
-            padding: 15px;
+            padding: 10px;
             border-radius: 5px;
             border: 1px solid #e2e8f0;
         }
