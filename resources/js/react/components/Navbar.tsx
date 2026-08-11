@@ -7,13 +7,13 @@ const PRICING_SUBLINKS = [
   { label: "Pricelist Sewa", to: "/pricing/sewa" },
   { label: "Paket Self Run", to: "/pricing/self-run" },
   { label: "Sharing Profit", to: "/pricing/sharing-profit" },
+  { label: "Kalkulator Rekomendasi", to: "/rekomendasi-paket" },
 ];
 
 const MENU_ITEMS = [
   { label: "Home", to: "/", hash: "home" },
-  { label: "Clients", to: "/", hash: "clients" },
-  { label: "Gallery", to: "/", hash: "gallery" },
   { label: "Cek Jadwal", to: "/availability", hash: null },
+  { label: "Gallery", to: "/", hash: "gallery" },
   { label: "Blog", to: "/blog", hash: null },
 ];
 
@@ -88,30 +88,28 @@ const Navbar: React.FC = () => {
             {/* Desktop MENU */}
             <div
               className={`
-                hidden md:flex items-center gap-3 lg:gap-5 font-medium text-sm lg:text-base transition-colors duration-500 mr-3
+                hidden md:flex items-center gap-4 lg:gap-6 font-medium text-sm lg:text-base transition-colors duration-500 mr-3
                 ${isScrolled ? "text-gray-800" : "text-primary"}
               `}
             >
-              {MENU_ITEMS.map((item) => (
-                <span key={item.label} className="flex items-center gap-0">
-                  <Link
-                    to={item.hash ? `${item.to}#${item.hash}` : item.to}
-                    onClick={closeMenu}
-                    className="
-                      relative py-2
-                      after:absolute after:left-0 after:-bottom-1
-                      after:h-[2px] after:w-0 after:bg-current
-                      after:transition-all after:duration-300
-                      hover:after:w-full
-                    "
-                  >
-                    {item.label}
-                  </Link>
-                  {item.label === "Clients" && (
-                    <>
-                      {/* Pricing dropdown */}
+              {/* Home */}
+              <Link
+                to="/#home"
+                onClick={closeMenu}
+                className="
+                  relative py-2
+                  after:absolute after:left-0 after:-bottom-1
+                  after:h-[2px] after:w-0 after:bg-current
+                  after:transition-all after:duration-300
+                  hover:after:w-full
+                "
+              >
+                Home
+              </Link>
+
+              {/* Pricing Dropdown */}
               <div
-                className="relative ml-4"
+                className="relative"
                 onMouseEnter={() => setPricingOpen(true)}
                 onMouseLeave={() => setPricingOpen(false)}
               >
@@ -119,7 +117,7 @@ const Navbar: React.FC = () => {
                   type="button"
                   onClick={() => setPricingOpen((v) => !v)}
                   className="
-                    relative py-2 flex items-center gap-0.5
+                    relative py-2 flex items-center gap-1 cursor-pointer
                     after:absolute after:left-0 after:-bottom-1
                     after:h-[2px] after:w-0 after:bg-current
                     after:transition-all after:duration-300
@@ -139,23 +137,37 @@ const Navbar: React.FC = () => {
                   </svg>
                 </button>
                 <div
-                  className={`absolute top-full left-0 mt-1 py-2 min-w-[200px] rounded-xl bg-white border border-gray-200 shadow-lg transition-opacity duration-200 ${pricingOpen ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"}`}
+                  className={`absolute top-full left-0 mt-1 py-2 min-w-[220px] rounded-xl bg-white border border-gray-100 shadow-xl transition-all duration-200 ${pricingOpen ? "opacity-100 translate-y-0 visible" : "opacity-0 -translate-y-2 invisible pointer-events-none"}`}
                 >
                   {PRICING_SUBLINKS.map((sub) => (
                     <Link
                       key={sub.to}
                       to={sub.to}
                       onClick={() => { closeMenu(); setPricingOpen(false); }}
-                      className="block px-4 py-2.5 text-sm hover:bg-primary/10 rounded-lg mx-1"
+                      className="block px-4 py-2.5 text-sm text-gray-700 hover:bg-primary/10 hover:text-primary rounded-lg mx-1 font-medium transition-colors"
                     >
                       {sub.label}
                     </Link>
                   ))}
                 </div>
               </div>
-                    </>
-                  )}
-                </span>
+
+              {/* Other Menu Items */}
+              {MENU_ITEMS.slice(1).map((item) => (
+                <Link
+                  key={item.label}
+                  to={item.hash ? `${item.to}#${item.hash}` : item.to}
+                  onClick={closeMenu}
+                  className="
+                    relative py-2
+                    after:absolute after:left-0 after:-bottom-1
+                    after:h-[2px] after:w-0 after:bg-current
+                    after:transition-all after:duration-300
+                    hover:after:w-full
+                  "
+                >
+                  {item.label}
+                </Link>
               ))}
             </div>
 
@@ -228,16 +240,15 @@ const Navbar: React.FC = () => {
           `}
         >
           <div className="py-2 px-2">
-            {MENU_ITEMS.map((item) => (
-              <Link
-                key={item.label}
-                to={item.hash ? `${item.to}#${item.hash}` : item.to}
-                onClick={closeMenu}
-                className="flex py-3 px-4 rounded-xl text-primary font-medium hover:bg-primary/10 active:bg-primary/15 transition-colors"
-              >
-                {item.label}
-              </Link>
-            ))}
+            {/* Mobile Home Link */}
+            <Link
+              to="/#home"
+              onClick={closeMenu}
+              className="flex py-3 px-4 rounded-xl text-primary font-medium hover:bg-primary/10 active:bg-primary/15 transition-colors"
+            >
+              Home
+            </Link>
+
             {/* Mobile Pricing submenu */}
             <div className="border-t border-gray-100 mt-1 pt-1">
               <button
@@ -256,19 +267,31 @@ const Navbar: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-              <div className={`overflow-hidden transition-all duration-200 ${pricingOpen ? "max-h-44" : "max-h-0"}`}>
+              <div className={`overflow-hidden transition-all duration-300 ${pricingOpen ? "max-h-60" : "max-h-0"}`}>
                 {PRICING_SUBLINKS.map((sub) => (
                   <Link
                     key={sub.to}
                     to={sub.to}
                     onClick={() => { closeMenu(); setPricingOpen(false); }}
-                    className="flex py-2.5 pl-6 pr-4 rounded-xl text-primary/90 text-sm font-medium hover:bg-primary/10 active:bg-primary/15"
+                    className="flex py-2.5 pl-6 pr-4 rounded-xl text-primary/90 text-sm font-medium hover:bg-primary/10 active:bg-primary/15 transition-colors"
                   >
                     {sub.label}
                   </Link>
                 ))}
               </div>
             </div>
+
+            {/* Mobile: Other Menu Items */}
+            {MENU_ITEMS.slice(1).map((item) => (
+              <Link
+                key={item.label}
+                to={item.hash ? `${item.to}#${item.hash}` : item.to}
+                onClick={closeMenu}
+                className="flex py-3 px-4 rounded-xl text-primary font-medium hover:bg-primary/10 active:bg-primary/15 transition-colors border-t border-gray-50"
+              >
+                {item.label}
+              </Link>
+            ))}
 
             {/* Mobile Contact Us button → WhatsApp */}
             <a

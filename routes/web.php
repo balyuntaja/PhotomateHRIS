@@ -95,6 +95,10 @@ Route::get('/{any?}', function () {
         $seo['title'] = 'Cek Jadwal & Ketersediaan Event - Photomate.id';
         $seo['description'] = 'Periksa ketersediaan jadwal kosong untuk tanggal dan slot acara Anda dengan sistem booking kalender online Photomate.id.';
         $seo['keywords'] = 'cek ketersediaan photobooth, kalender booking photobooth, sewa photobooth online';
+    } elseif (str_starts_with($path, 'rekomendasi-paket')) {
+        $seo['title'] = 'Rekomendasi Paket & Kalkulator Photobooth - Photomate.id';
+        $seo['description'] = 'Hitung kebutuhan photobooth untuk event Anda berdasarkan jumlah tamu, hari, dan estimasi durasi. Dapatkan rekomendasi paket terbaik dari Photomate.id.';
+        $seo['keywords'] = 'kalkulator photobooth, rekomendasi paket photobooth, estimasi photobooth, sewa photobooth malang, durasi photobooth';
     } elseif (str_starts_with($path, 'blog/')) {
         $segments = explode('/', $path);
         $blogId = end($segments);

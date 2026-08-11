@@ -30,6 +30,7 @@ const PricingSharingProfitPage = lazy(
 );
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const PhotomateBio = lazy(() => import("./components/PhotomateBio"));
+const RecommendationPage = lazy(() => import("./pages/RecommendationPage"));
 
 
 function SectionSkeleton() {
@@ -76,6 +77,7 @@ function App() {
             element={<PricingSharingProfitPage />}
           />
           <Route path="/availability" element={<EventAvailability />} />
+          <Route path="/rekomendasi-paket" element={<RecommendationPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/blog/:id" element={<BlogDetailPage />} />
           <Route path="/bio" element={<PhotomateBio />} />
