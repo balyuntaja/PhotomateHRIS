@@ -194,8 +194,8 @@
             @foreach($invoice->invoiceItems as $item)
             <tr>
                 <td>{{ $item->service_description }}</td>
-                <td>{{ $item->duration }}</td>
-                <td>{{ $item->time_range }}</td>
+                <td>{{ $item->duration ?: '-' }}</td>
+                <td>{{ $item->time_range ?: '-' }}</td>
                 <td class="right">{{ number_format($item->price, 0, ',', '.') }}</td>
                 <td class="right">{{ $item->device_count }}</td>
                 <td class="right">{{ number_format($item->amount, 0, ',', '.') }}</td>
