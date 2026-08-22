@@ -5,6 +5,7 @@ import Hero from "./components/Hero";
 import Footer from "./components/Footer";
 import BackToTop from "./components/BackToTop";
 import WhatsAppFAB from "./components/WhatsAppFAB";
+import ChatbotFAB from "./components/ChatbotFAB";
 import FindUsSection from "./components/FindUsSection";
 import OfflineBoothsSection from "./components/OfflineBoothsSection";
 import ScrollToTop from "./components/ScrollToTop";
@@ -57,8 +58,6 @@ function HomePage() {
         <Faq />
       </main>
       <Footer />
-      <WhatsAppFAB />
-      <BackToTop />
     </>
   );
 }
@@ -84,6 +83,11 @@ function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
+
+      {/* Global Floating Action Buttons */}
+      <WhatsAppFAB />
+      <ChatbotFAB />
+      <BackToTop />
     </div>
   );
 }

@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\LemburController;
 use App\Http\Controllers\Api\SlipGajiApiController;
 use App\Http\Controllers\Api\SiteController;
 use App\Http\Controllers\Api\NotificationController;
+use App\Http\Controllers\Api\ChatbotController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -19,7 +20,9 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 Route::post('login', [AuthController::class, 'login']);
+Route::post('chatbot/chat', [ChatbotController::class, 'chat'])->middleware('throttle:60,1');
 Route::post('logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+
 
 
 Route::middleware('auth:sanctum')->group(function () {
