@@ -167,6 +167,7 @@ export interface EventDisplayItem {
   used: number;
   capacity: number;
   status: AvailabilityStatus;
+  sortDate: string;
 }
 
 function buildEventDisplayList(
@@ -202,6 +203,7 @@ function buildEventDisplayList(
         used: def.used,
         capacity: def.capacity,
         status: worst,
+        sortDate: def.startDate,
       });
     } else {
       for (const date of def.dates) {
@@ -213,6 +215,7 @@ function buildEventDisplayList(
           used: e.used,
           capacity: e.capacity,
           status: getStatus(e),
+          sortDate: date,
         });
       }
     }
@@ -281,10 +284,10 @@ export default function EventAvailability() {
 
   /* ---------- sidebar: satu baris per event (range atau satu tanggal) ---------- */
 
-  const eventDisplayList = useMemo(
-    () => buildEventDisplayList(EVENT_DEFINITIONS, dateMap),
-    [dateMap]
-  );
+  const eventDisplayList = useMemo(() => {
+    const list = buildEventDisplayList(EVENT_DEFINITIONS, dateMap);
+    return list.sort((a, b) => a.sortDate.localeCompare(b.sortDate));
+  }, [dateMap]);
 
   const paginatedEvents = useMemo(() => {
     const start = (page - 1) * ITEMS_PER_PAGE;
