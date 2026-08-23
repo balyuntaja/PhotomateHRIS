@@ -29,18 +29,18 @@ class InvoiceResource extends Resource
     protected static ?string $model = Invoice::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
-    
+
     public static function canAccess(): bool
     {
         /** @var \App\Models\Karyawan $user */
         $user = auth()->user();
         return $user && (
-            $user->role_id === 'R01' || 
-            $user->role_id === 'R06' || 
+            $user->role_id === 'R01' ||
+            $user->role_id === 'R06' ||
             $user->hasRole(['Admin', 'admin', 'CEO', 'ceo'])
         );
     }
-    
+
     protected static ?string $navigationGroup = 'Invoice';
 
     public static function form(Form $form): Form
@@ -79,7 +79,7 @@ class InvoiceResource extends Resource
                             }),
                         DatePicker::make('event_end_date')
                             ->label('Tanggal Acara (Selesai)')
-                            ->minDate(fn (Get $get) => $get('event_date') ?: now()->startOfDay())
+                            ->minDate(fn(Get $get) => $get('event_date') ?: now()->startOfDay())
                             ->nullable(),
                         DatePicker::make('invoice_date')
                             ->default(now())
@@ -154,7 +154,7 @@ class InvoiceResource extends Resource
                                     ->label('Waktu TBA')
                                     ->default(false)
                                     ->live()
-                                    ->visible(fn (Get $get) => $get('item_type') === 'service')
+                                    ->visible(fn(Get $get) => $get('item_type') === 'service')
                                     ->afterStateUpdated(function (Get $get, Set $set, $state) {
                                         if ($state) {
                                             $set('start_time', null);
@@ -170,25 +170,25 @@ class InvoiceResource extends Resource
                                     ->default('-')
                                     ->required()
                                     ->dehydrated(true)
-                                    ->visible(fn (Get $get) => $get('item_type') === 'service')
-                                    ->placeholder(fn (Get $get) => $get('is_tba') ? 'Contoh: 3 Jam' : '-')
-                                    ->readOnly(fn (Get $get) => !$get('is_tba'))
+                                    ->visible(fn(Get $get) => $get('item_type') === 'service')
+                                    ->placeholder(fn(Get $get) => $get('is_tba') ? 'Contoh: 3 Jam' : '-')
+                                    ->readOnly(fn(Get $get) => !$get('is_tba'))
                                     ->columnSpan(1),
                                 TextInput::make('start_time')
                                     ->label('Waktu Mulai')
                                     ->type('time')
-                                    ->visible(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
-                                    ->required(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
+                                    ->visible(fn(Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
+                                    ->required(fn(Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
                                     ->live(onBlur: true)
-                                    ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set))
+                                    ->afterStateUpdated(fn(Get $get, Set $set) => self::calculateDuration($get, $set))
                                     ->columnSpan(1),
                                 TextInput::make('end_time')
                                     ->label('Waktu Selesai')
                                     ->type('time')
-                                    ->visible(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
-                                    ->required(fn (Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
+                                    ->visible(fn(Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
+                                    ->required(fn(Get $get) => $get('item_type') === 'service' && !$get('is_tba'))
                                     ->live(onBlur: true)
-                                    ->afterStateUpdated(fn (Get $get, Set $set) => self::calculateDuration($get, $set))
+                                    ->afterStateUpdated(fn(Get $get, Set $set) => self::calculateDuration($get, $set))
                                     ->columnSpan(1),
                                 TextInput::make('price')
                                     ->label('Harga')
@@ -228,7 +228,7 @@ class InvoiceResource extends Resource
                                     ->columnSpan(1),
                             ])
                             ->live()
-                            ->afterStateUpdated(fn (Get $get, Set $set) => self::updateTotals($get, $set))
+                            ->afterStateUpdated(fn(Get $get, Set $set) => self::updateTotals($get, $set))
                             ->columns(4)
                             ->defaultItems(1)
                     ]),
@@ -247,7 +247,7 @@ class InvoiceResource extends Resource
                             ->numeric()
                             ->default(0.00)
                             ->live(onBlur: true)
-                            ->afterStateUpdated(fn (Get $get, Set $set) => self::updateTotals($get, $set)),
+                            ->afterStateUpdated(fn(Get $get, Set $set) => self::updateTotals($get, $set)),
                         TextInput::make('total')
                             ->prefix('Rp')
                             ->required()
@@ -293,18 +293,24 @@ class InvoiceResource extends Resource
                             ->prefix('Rp')
                             ->numeric()
                             ->default(0.00)
-                            ->visible(fn (Get $get) => $get('status') === 'Sebagian Dibayar')
-                            ->required(fn (Get $get) => $get('status') === 'Sebagian Dibayar')
+                            ->visible(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
+                            ->required(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
                             ->live(onBlur: true)
-                            ->helperText(fn (Get $get) => 'Sisa Pembayaran: Rp ' . number_format(max(0, floatval($get('total') ?? 0) - floatval($get('down_payment') ?? 0)), 0, ',', '.'))
-                            ->maxValue(fn (Get $get) => floatval($get('total') ?? 0))
+                            ->helperText(fn(Get $get) => 'Sisa Pembayaran: Rp ' . number_format(max(0, floatval($get('total') ?? 0) - floatval($get('down_payment') ?? 0)), 0, ',', '.'))
+                            ->maxValue(fn(Get $get) => floatval($get('total') ?? 0))
                             ->minValue(0),
                         DatePicker::make('dp_date')
                             ->label('Tanggal DP')
-                            ->visible(fn (Get $get) => $get('status') === 'Sebagian Dibayar')
-                            ->required(fn (Get $get) => $get('status') === 'Sebagian Dibayar'),
+                            ->visible(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
+                            ->required(fn(Get $get) => $get('status') === 'Sebagian Dibayar'),
                         Textarea::make('notes')
-                            ->default("Invoice ini merupakan tagihan resmi layanan Photomate.\nMohon melakukan pembayaran sebelum tanggal jatuh tempo.\nKonfirmasi pembayaran melalui WhatsApp admin.\nBiaya tambahan di luar paket akan ditagihkan terpisah.")
+                            ->default(<<<'TEXT'
+                                • Pembayaran DP dilaksanakan pada hari H dan maksimal H+1 dari invoice terbit.
+                                • Pelunasan maksimal H-7 dari tanggal acara.
+                                • Outdoor diwajibkan bagi penyelenggara acara untuk menyediakan tenda atau tempat beratap. Apabila tidak terpenuhi, Photomate berhak memindahkan posisi atau bahkan membatalkan kerja sama dan DP hangus.
+                                • DP yang telah dibayarkan tidak dapat dikembalikan atau dikurangi.
+                                • Perubahan tanggal setelah DP perlu pengecekan availability jadwal Photomate dan berhak membatalkan apabila jadwal penuh serta DP akan hangus.
+                                TEXT)
                             ->columnSpanFull(),
                     ])->columns(1),
             ]);
@@ -338,15 +344,16 @@ class InvoiceResource extends Resource
                     ->sortable(),
                 TextColumn::make('total')
                     ->money('IDR', locale: 'id')
-                    ->description(fn (Invoice $record): ?string => 
-                        $record->status === 'Sebagian Dibayar' 
-                            ? 'DP: Rp ' . number_format($record->down_payment, 0, ',', '.') . ' (Sisa: Rp ' . number_format($record->total - $record->down_payment, 0, ',', '.') . ')' 
-                            : null
+                    ->description(
+                        fn(Invoice $record): ?string =>
+                        $record->status === 'Sebagian Dibayar'
+                        ? 'DP: Rp ' . number_format($record->down_payment, 0, ',', '.') . ' (Sisa: Rp ' . number_format($record->total - $record->down_payment, 0, ',', '.') . ')'
+                        : null
                     )
                     ->sortable(),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'Draft' => 'gray',
                         'Belum Dibayar' => 'warning',
                         'Sebagian Dibayar' => 'info',
@@ -373,15 +380,15 @@ class InvoiceResource extends Resource
                     Action::make('pdf')
                         ->label('Download PDF')
                         ->icon('heroicon-o-document-arrow-down')
-                        ->url(fn (Invoice $record) => route('invoice.pdf', $record))
+                        ->url(fn(Invoice $record) => route('invoice.pdf', $record))
                         ->openUrlInNewTab(),
                     Action::make('markAsPaid')
                         ->label('Mark as Paid')
                         ->icon('heroicon-o-check-circle')
                         ->color('success')
                         ->requiresConfirmation()
-                        ->action(fn (Invoice $record) => $record->update(['status' => 'Lunas']))
-                        ->visible(fn (Invoice $record) => $record->status !== 'Lunas'),
+                        ->action(fn(Invoice $record) => $record->update(['status' => 'Lunas']))
+                        ->visible(fn(Invoice $record) => $record->status !== 'Lunas'),
                     DeleteAction::make(),
                 ]),
             ])
@@ -410,12 +417,12 @@ class InvoiceResource extends Resource
     {
         $items = $get('invoiceItems');
         $subtotal = 0;
-        
+
         if (is_array($items)) {
             foreach ($items as $item) {
                 $price = floatval($item['price'] ?? 0);
                 $deviceCount = intval($item['device_count'] ?? 1);
-                
+
                 // If price is 0 but amount is set (legacy safeguard), use amount,
                 // otherwise calculate on-the-fly using price * deviceCount.
                 if ($price == 0 && floatval($item['amount'] ?? 0) > 0) {
@@ -425,10 +432,10 @@ class InvoiceResource extends Resource
                 }
             }
         }
-        
+
         $discount = floatval($get('discount') ?? 0);
         $total = max(0, $subtotal - $discount);
-        
+
         $set('subtotal', $subtotal);
         $set('total', $total);
     }
@@ -441,25 +448,25 @@ class InvoiceResource extends Resource
 
         $start = $get('start_time');
         $end = $get('end_time');
-        
+
         if ($get('item_type') === 'product') {
             $set('duration', '-');
             return;
         }
-        
+
         if ($start && $end) {
             try {
                 $startTime = \Carbon\Carbon::parse($start);
                 $endTime = \Carbon\Carbon::parse($end);
-                
+
                 if ($endTime->lt($startTime)) {
                     $endTime->addDay();
                 }
-                
+
                 $diffInMinutes = $startTime->diffInMinutes($endTime);
                 $hours = floor($diffInMinutes / 60);
                 $minutes = $diffInMinutes % 60;
-                
+
                 $durationStr = '';
                 if ($hours > 0) {
                     $durationStr .= $hours . ' Jam';
@@ -467,7 +474,7 @@ class InvoiceResource extends Resource
                 if ($minutes > 0) {
                     $durationStr .= ($hours > 0 ? ' ' : '') . $minutes . ' Menit';
                 }
-                
+
                 $set('duration', $durationStr ?: '0 Jam');
             } catch (\Exception $e) {
                 // ignore
