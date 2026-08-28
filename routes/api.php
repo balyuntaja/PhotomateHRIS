@@ -21,6 +21,15 @@ Route::get('/user', function (Request $request) {
 
 Route::post('login', [AuthController::class, 'login']);
 Route::post('chatbot/chat', [ChatbotController::class, 'chat'])->middleware('throttle:60,1');
+
+// Public Digital Queue API
+Route::prefix('queue')->group(function () {
+    Route::get('{event_code}', [\App\Http\Controllers\Api\QueueApiController::class, 'getQueueStatus']);
+    Route::post('{event_code}/join', [\App\Http\Controllers\Api\QueueApiController::class, 'joinQueue'])->middleware('throttle:15,1');
+    Route::post('entry/{secure_token}/cancel', [\App\Http\Controllers\Api\QueueApiController::class, 'cancelQueue']);
+    Route::get('{event_code}/display', [\App\Http\Controllers\Api\QueueApiController::class, 'getDisplayStatus']);
+});
+
 Route::post('logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
 
 

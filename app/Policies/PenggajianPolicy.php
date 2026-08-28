@@ -15,7 +15,7 @@ class PenggajianPolicy
      */
     public function viewAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('view_any_penggajian');
+        return $karyawan->can('view_any_slip::gaji');
     }
 
     /**
@@ -23,11 +23,7 @@ class PenggajianPolicy
      */
     public function view(Karyawan $karyawan, Penggajian $penggajian): bool
     {
-        if (request()->is('admin/laporan-keuangan-penggajian*')) {
-            return $karyawan->can('view_laporan_keuangan') || $karyawan->hasRole('ceo');
-        }
-
-        return $karyawan->can('view_penggajian');
+        return $karyawan->can('view_slip::gaji');
     }
 
     /**
@@ -35,7 +31,7 @@ class PenggajianPolicy
      */
     public function create(Karyawan $karyawan): bool
     {
-        return $karyawan->can('create_penggajian');
+        return $karyawan->can('create_slip::gaji');
     }
 
     /**
@@ -43,7 +39,7 @@ class PenggajianPolicy
      */
     public function update(Karyawan $karyawan, Penggajian $penggajian): bool
     {
-        return $karyawan->can('update_penggajian');
+        return $karyawan->can('update_slip::gaji');
     }
 
     /**
@@ -51,7 +47,7 @@ class PenggajianPolicy
      */
     public function delete(Karyawan $karyawan, Penggajian $penggajian): bool
     {
-        return $karyawan->can('delete_penggajian');
+        return $karyawan->can('delete_slip::gaji');
     }
 
     /**
@@ -59,7 +55,7 @@ class PenggajianPolicy
      */
     public function deleteAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('delete_any_penggajian');
+        return $karyawan->can('delete_any_slip::gaji');
     }
 
     /**
@@ -67,7 +63,7 @@ class PenggajianPolicy
      */
     public function forceDelete(Karyawan $karyawan, Penggajian $penggajian): bool
     {
-        return $karyawan->can('force_delete_penggajian');
+        return $karyawan->can('force_delete_slip::gaji');
     }
 
     /**
@@ -75,7 +71,7 @@ class PenggajianPolicy
      */
     public function forceDeleteAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('force_delete_any_penggajian');
+        return $karyawan->can('force_delete_any_slip::gaji');
     }
 
     /**
@@ -83,7 +79,7 @@ class PenggajianPolicy
      */
     public function restore(Karyawan $karyawan, Penggajian $penggajian): bool
     {
-        return $karyawan->can('restore_penggajian');
+        return $karyawan->can('restore_slip::gaji');
     }
 
     /**
@@ -91,7 +87,7 @@ class PenggajianPolicy
      */
     public function restoreAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('restore_any_penggajian');
+        return $karyawan->can('restore_any_slip::gaji');
     }
 
     /**
@@ -99,7 +95,7 @@ class PenggajianPolicy
      */
     public function replicate(Karyawan $karyawan, Penggajian $penggajian): bool
     {
-        return $karyawan->can('replicate_penggajian');
+        return $karyawan->can('replicate_slip::gaji');
     }
 
     /**
@@ -107,6 +103,6 @@ class PenggajianPolicy
      */
     public function reorder(Karyawan $karyawan): bool
     {
-        return $karyawan->can('reorder_penggajian');
+        return $karyawan->can('reorder_slip::gaji');
     }
 }

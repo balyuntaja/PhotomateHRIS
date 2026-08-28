@@ -7,6 +7,22 @@ use App\Http\Controllers\SlipGajiController;
 use App\Http\Controllers\InvoiceController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/qr/{slug?}', function ($slug = null) {
+    if (empty($slug)) {
+        return redirect('/');
+    }
+    $link = \App\Models\QrLink::where('slug', $slug)->first();
+    if ($link && $link->original_url) {
+        $link->increment('clicks');
+        return redirect()->away($link->original_url);
+    }
+    return redirect('/');
+})->name('qr.redirect');
+
+Route::get('/q/{slug?}', function ($slug = null) {
+    return redirect('/qr' . ($slug ? '/' . $slug : ''));
+});
+
 Route::get('/{any?}', function () {
     $bioSetting = \App\Models\BioSetting::first();
 
@@ -173,7 +189,7 @@ Route::get('/{any?}', function () {
     }
 
     return view('react.app', compact('cmsData', 'seo'));
-})->where('any', '^(?!admin|livewire|api|slip-gaji|laporan|rekapitulasi|invoice|storage).*');
+})->where('any', '^(?!admin|livewire|api|slip-gaji|laporan|rekapitulasi|invoice|storage|qr(?:/|$)|q(?:/|$)).*');
 
 Route::get('/slip-gaji/cetak/{tahun}/{bulan}', [SlipGajiController::class, 'cetakSemuaSlipGaji'])
     ->name('slip-gaji.cetak');

@@ -82,6 +82,9 @@ class RoleSeeder extends Seeder
         // BioSetting permissions
         'view_any_bio_setting', 'view_bio_setting', 'create_bio_setting', 'update_bio_setting', 'delete_bio_setting', 'delete_any_bio_setting', 'force_delete_bio_setting', 'force_delete_any_bio_setting', 'restore_bio_setting', 'restore_any_bio_setting', 'replicate_bio_setting', 'reorder_bio_setting',
 
+        // QrLink permissions
+        'view_any_qr::link', 'view_qr::link', 'create_qr::link', 'update_qr::link', 'delete_qr::link', 'delete_any_qr::link', 'force_delete_qr::link', 'force_delete_any_qr::link', 'restore_qr::link', 'restore_any_qr::link', 'replicate_qr::link', 'reorder_qr::link',
+
         // Client permissions
         'view_any_client', 'view_client', 'create_client', 'update_client', 'delete_client', 'delete_any_client', 'force_delete_client', 'force_delete_any_client', 'restore_client', 'restore_any_client', 'replicate_client', 'reorder_client',
 

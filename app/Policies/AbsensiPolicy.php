@@ -15,7 +15,7 @@ class AbsensiPolicy
      */
     public function viewAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('view_any_absensi');
+        return $karyawan->can('view_any_rekapitulasi::absensi');
     }
 
     /**
@@ -23,12 +23,7 @@ class AbsensiPolicy
      */
     public function view(Karyawan $karyawan, Absensi $absensi): bool
     {
-        // Special case untuk laporan kinerja
-        if (request()->is('admin/laporan-kinerja*')) {
-            return $karyawan->can('view_laporan_kinerja') || $karyawan->hasRole('ceo');
-        }
-
-        return $karyawan->can('view_absensi');
+        return $karyawan->can('view_rekapitulasi::absensi');
     }
 
     /**
@@ -36,7 +31,7 @@ class AbsensiPolicy
      */
     public function create(Karyawan $karyawan): bool
     {
-        return $karyawan->can('create_absensi');
+        return $karyawan->can('create_rekapitulasi::absensi');
     }
 
     /**
@@ -44,7 +39,7 @@ class AbsensiPolicy
      */
     public function update(Karyawan $karyawan, Absensi $absensi): bool
     {
-        return $karyawan->can('update_absensi');
+        return $karyawan->can('update_rekapitulasi::absensi');
     }
 
     /**
@@ -52,7 +47,7 @@ class AbsensiPolicy
      */
     public function delete(Karyawan $karyawan, Absensi $absensi): bool
     {
-        return $karyawan->can('delete_absensi');
+        return $karyawan->can('delete_rekapitulasi::absensi');
     }
 
     /**
@@ -60,7 +55,7 @@ class AbsensiPolicy
      */
     public function deleteAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('delete_any_absensi');
+        return $karyawan->can('delete_any_rekapitulasi::absensi');
     }
 
     /**
@@ -68,7 +63,7 @@ class AbsensiPolicy
      */
     public function forceDelete(Karyawan $karyawan, Absensi $absensi): bool
     {
-        return $karyawan->can('force_delete_absensi');
+        return $karyawan->can('force_delete_rekapitulasi::absensi');
     }
 
     /**
@@ -76,7 +71,7 @@ class AbsensiPolicy
      */
     public function forceDeleteAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('force_delete_any_absensi');
+        return $karyawan->can('force_delete_any_rekapitulasi::absensi');
     }
 
     /**
@@ -84,7 +79,7 @@ class AbsensiPolicy
      */
     public function restore(Karyawan $karyawan, Absensi $absensi): bool
     {
-        return $karyawan->can('restore_absensi');
+        return $karyawan->can('restore_rekapitulasi::absensi');
     }
 
     /**
@@ -92,7 +87,7 @@ class AbsensiPolicy
      */
     public function restoreAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('restore_any_absensi');
+        return $karyawan->can('restore_any_rekapitulasi::absensi');
     }
 
     /**
@@ -100,7 +95,7 @@ class AbsensiPolicy
      */
     public function replicate(Karyawan $karyawan, Absensi $absensi): bool
     {
-        return $karyawan->can('replicate_absensi');
+        return $karyawan->can('replicate_rekapitulasi::absensi');
     }
 
     /**
@@ -108,6 +103,6 @@ class AbsensiPolicy
      */
     public function reorder(Karyawan $karyawan): bool
     {
-        return $karyawan->can('reorder_absensi');
+        return $karyawan->can('reorder_rekapitulasi::absensi');
     }
 }
