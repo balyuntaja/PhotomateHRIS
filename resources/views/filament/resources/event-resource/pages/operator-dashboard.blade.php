@@ -58,66 +58,65 @@
         </div>
 
         <!-- Devices Section -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            @for ($d = 1; $d <= 2; $d++)
-                @php
-                    $deviceServing = $nowServing->firstWhere('device_id', $d);
-                    $deviceCalled = $nowCalled->firstWhere('device_id', $d);
-                    $activeEntry = $deviceServing ?? $deviceCalled;
-                @endphp
-                <x-filament::card class="relative flex flex-col justify-between min-h-[320px] p-6">
-                    <div class="absolute top-4 left-6 bg-primary-50 dark:bg-primary-950/20 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-800 text-xs font-bold py-1 px-3 rounded-full">
-                        DEVICE 0{{ $d }}
+        <div class="max-w-2xl mx-auto w-full">
+            @php
+                $d = 1;
+                $deviceServing = $nowServing->firstWhere('device_id', $d);
+                $deviceCalled = $nowCalled->firstWhere('device_id', $d);
+                $activeEntry = $deviceServing ?? $deviceCalled;
+            @endphp
+            <x-filament::card class="relative flex flex-col justify-between min-h-[320px] p-6">
+                <div class="absolute top-4 left-6 bg-primary-50 dark:bg-primary-950/20 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-800 text-xs font-bold py-1 px-3 rounded-full">
+                    Panggilan Utama (Device 01)
+                </div>
+
+                @if ($activeEntry)
+                    <div class="my-auto text-center py-6 space-y-4">
+                        <p class="text-xs uppercase font-extrabold tracking-widest text-gray-400 dark:text-gray-500">
+                            {{ $activeEntry->status === 'CALLED' ? 'Sedang Dipanggil' : 'Sedang Difoto' }}
+                        </p>
+                        <h2 class="text-6xl font-black text-gray-900 dark:text-white tracking-tight">{{ $activeEntry->formatted_number }}</h2>
+                        <div class="space-y-1">
+                            <p class="text-lg font-bold text-gray-800 dark:text-gray-200">{{ $activeEntry->customer->name }}</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 font-medium">{{ $activeEntry->customer->whatsapp }} &bull; {{ $activeEntry->customer->email }}</p>
+                        </div>
                     </div>
 
-                    @if ($activeEntry)
-                        <div class="my-auto text-center py-6 space-y-4">
-                            <p class="text-xs uppercase font-extrabold tracking-widest text-gray-400 dark:text-gray-500">
-                                {{ $activeEntry->status === 'CALLED' ? 'Sedang Dipanggil' : 'Sedang Difoto' }}
-                            </p>
-                            <h2 class="text-6xl font-black text-gray-900 dark:text-white tracking-tight">{{ $activeEntry->formatted_number }}</h2>
-                            <div class="space-y-1">
-                                <p class="text-lg font-bold text-gray-800 dark:text-gray-200">{{ $activeEntry->customer->name }}</p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 font-medium">{{ $activeEntry->customer->whatsapp }} &bull; {{ $activeEntry->customer->email }}</p>
-                            </div>
+                    <div class="grid grid-cols-2 gap-2 border-t border-gray-100 dark:border-gray-800 pt-4">
+                        @if ($activeEntry->status === 'CALLED')
+                            <x-filament::button color="success" size="md" class="col-span-2 flex items-center justify-center gap-1" wire:click="startServing({{ $activeEntry->id }})">
+                                Mulai Melayani (Mulai Foto)
+                            </x-filament::button>
+                        @else
+                            <x-filament::button color="success" size="md" class="col-span-2 flex items-center justify-center gap-1" wire:click="completeServing({{ $activeEntry->id }})">
+                                Selesai Berfoto
+                            </x-filament::button>
+                        @endif
+                        <x-filament::button color="danger" size="sm" outlined wire:click="skipEntry({{ $activeEntry->id }})">
+                            Lewati / Skip
+                        </x-filament::button>
+                        <x-filament::button color="gray" size="sm" outlined wire:click="cancelEntry({{ $activeEntry->id }})">
+                            Batalkan
+                        </x-filament::button>
+                    </div>
+                @else
+                    <div class="my-auto text-center py-10 space-y-4">
+                        <div class="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto text-gray-400 dark:text-gray-500">
+                            <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
                         </div>
+                        <div class="space-y-1">
+                            <h4 class="font-bold text-gray-600 dark:text-gray-400">Device Sedang Kosong</h4>
+                            <p class="text-xs text-gray-400 dark:text-gray-500">Silakan panggil antrean berikutnya untuk melayani.</p>
+                        </div>
+                    </div>
 
-                        <div class="grid grid-cols-2 gap-2 border-t border-gray-100 dark:border-gray-800 pt-4">
-                            @if ($activeEntry->status === 'CALLED')
-                                <x-filament::button color="success" size="md" class="col-span-2 flex items-center justify-center gap-1" wire:click="startServing({{ $activeEntry->id }})">
-                                    Mulai Melayani (Mulai Foto)
-                                </x-filament::button>
-                            @else
-                                <x-filament::button color="success" size="md" class="col-span-2 flex items-center justify-center gap-1" wire:click="completeServing({{ $activeEntry->id }})">
-                                    Selesai Berfoto
-                                </x-filament::button>
-                            @endif
-                            <x-filament::button color="danger" size="sm" outlined wire:click="skipEntry({{ $activeEntry->id }})">
-                                Lewati / Skip
-                            </x-filament::button>
-                            <x-filament::button color="gray" size="sm" outlined wire:click="cancelEntry({{ $activeEntry->id }})">
-                                Batalkan
-                            </x-filament::button>
-                        </div>
-                    @else
-                        <div class="my-auto text-center py-10 space-y-4">
-                            <div class="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto text-gray-400 dark:text-gray-500">
-                                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
-                            </div>
-                            <div class="space-y-1">
-                                <h4 class="font-bold text-gray-600 dark:text-gray-400">Device Sedang Kosong</h4>
-                                <p class="text-xs text-gray-400 dark:text-gray-500">Silakan panggil antrean berikutnya untuk melayani.</p>
-                            </div>
-                        </div>
-
-                        <div class="border-t border-gray-100 dark:border-gray-800 pt-4">
-                            <x-filament::button color="primary" class="w-full flex items-center justify-center gap-1.5" wire:click="callNext({{ $d }})">
-                                Panggil Antrean Berikutnya
-                            </x-filament::button>
-                        </div>
-                    @endif
-                </x-filament::card>
-            @endfor
+                    <div class="border-t border-gray-100 dark:border-gray-800 pt-4">
+                        <x-filament::button color="primary" class="w-full flex items-center justify-center gap-1.5" wire:click="callNext({{ $d }})">
+                            Panggil Antrean Berikutnya
+                        </x-filament::button>
+                    </div>
+                @endif
+            </x-filament::card>
         </div>
 
         <!-- Waiting Queue & History tabs -->
@@ -185,7 +184,7 @@
                             <div class="p-3 bg-gray-50 dark:bg-gray-950/50 border border-gray-100 dark:border-gray-800 rounded-xl flex justify-between items-center text-xs">
                                 <div>
                                     <div class="font-bold text-gray-900 dark:text-white">{{ $item->customer->name }}</div>
-                                    <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Device {{ $item->device_id }} &bull; Selesai {{ $item->completed_at ? $item->completed_at->diffForHumans() : '-' }}</div>
+                                    <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">Selesai {{ $item->completed_at ? $item->completed_at->diffForHumans() : '-' }}</div>
                                 </div>
                                 <div class="font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-lg px-2 py-1 text-xs">
                                     {{ $item->formatted_number }}

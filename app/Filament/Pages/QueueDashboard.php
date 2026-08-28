@@ -79,24 +79,10 @@ class QueueDashboard extends Page implements HasTable
                     ->color('warning')
                     ->alignCenter(),
 
-                TextColumn::make('device1_serving')
-                    ->label('Device 1')
+                TextColumn::make('active_serving')
+                    ->label('Nomor Aktif')
                     ->getStateUsing(function ($record) {
                         $entry = QueueEntry::where('event_id', $record->id)
-                            ->where('device_id', 1)
-                            ->whereIn('status', ['CALLED', 'SERVING'])
-                            ->first();
-                        return $entry ? $entry->formatted_number : '-';
-                    })
-                    ->badge()
-                    ->color(fn ($state) => $state !== '-' ? 'primary' : 'gray')
-                    ->alignCenter(),
-
-                TextColumn::make('device2_serving')
-                    ->label('Device 2')
-                    ->getStateUsing(function ($record) {
-                        $entry = QueueEntry::where('event_id', $record->id)
-                            ->where('device_id', 2)
                             ->whereIn('status', ['CALLED', 'SERVING'])
                             ->first();
                         return $entry ? $entry->formatted_number : '-';

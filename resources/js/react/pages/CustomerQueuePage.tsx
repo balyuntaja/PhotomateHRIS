@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import logoBlue from "../assets/img/logophotomateblue.png";
 
@@ -57,6 +57,79 @@ export default function CustomerQueuePage() {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [queueData, setQueueData] = useState<QueueState | null>(null);
+
+  const [audioPermissionGranted, setAudioPermissionGranted] = useState(false);
+  const lastMyStatusRef = useRef<string | null>(null);
+
+  // Interaction listener to enable audio/vibe capability
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      setAudioPermissionGranted(true);
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext) {
+          const ctx = new AudioContext();
+          if (ctx.state === "suspended") {
+            ctx.resume();
+          }
+        }
+      } catch (e) {}
+    };
+
+    window.addEventListener("click", handleUserInteraction);
+    window.addEventListener("touchstart", handleUserInteraction);
+    window.addEventListener("keydown", handleUserInteraction);
+    return () => {
+      window.removeEventListener("click", handleUserInteraction);
+      window.removeEventListener("touchstart", handleUserInteraction);
+      window.removeEventListener("keydown", handleUserInteraction);
+    };
+  }, []);
+
+  // Alert player (sound and vibration) when user is CALLED
+  useEffect(() => {
+    const myEntry = queueData?.my_entry;
+    if (!myEntry) return;
+
+    const currentStatus = myEntry.status;
+
+    if (currentStatus === "CALLED" && lastMyStatusRef.current !== "CALLED") {
+      // Play alert chime
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext && audioPermissionGranted) {
+          const ctx = new AudioContext();
+          const now = ctx.currentTime;
+          
+          const playNote = (freq: number, start: number, duration: number) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, start);
+            gain.gain.setValueAtTime(0.4, start);
+            gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(start);
+            osc.stop(start + duration);
+          };
+          
+          playNote(1046.50, now, 0.4); // C6
+          playNote(783.99, now + 0.2, 0.4); // G5
+          playNote(1046.50, now + 0.4, 0.6); // C6
+        }
+      } catch (err) {
+        console.error("Audio Context failed to play customer alert:", err);
+      }
+
+      // Vibrate phone
+      if ("vibrate" in navigator) {
+        navigator.vibrate([500, 250, 500]);
+      }
+    }
+
+    lastMyStatusRef.current = currentStatus;
+  }, [myEntry, audioPermissionGranted]);
 
   const tokenKey = `pm_queue_token_${eventCode}`;
   const localToken = localStorage.getItem(tokenKey);
@@ -229,6 +302,12 @@ export default function CustomerQueuePage() {
 
   return (
     <div className="min-h-screen bg-linear-to-b from-primary/5 to-white flex flex-col justify-between">
+      {!audioPermissionGranted && myEntry && (
+        <div className="bg-primary/10 text-primary-700 text-xs py-2.5 px-4 text-center font-bold animate-pulse border-b border-primary/20 flex items-center justify-center gap-1.5 cursor-pointer z-50">
+          <span>🔊 Ketuk layar untuk mengaktifkan notifikasi suara & getar panggilan</span>
+        </div>
+      )}
+
       {/* Decorative shapes */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-primary/10 blur-3xl" />
