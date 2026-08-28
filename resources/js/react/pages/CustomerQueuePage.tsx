@@ -129,7 +129,7 @@ export default function CustomerQueuePage() {
     }
 
     lastMyStatusRef.current = currentStatus;
-  }, [myEntry, audioPermissionGranted]);
+  }, [queueData, audioPermissionGranted]);
 
   const tokenKey = `pm_queue_token_${eventCode}`;
   const localToken = localStorage.getItem(tokenKey);
