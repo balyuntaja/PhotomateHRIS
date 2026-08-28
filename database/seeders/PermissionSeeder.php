@@ -187,15 +187,12 @@ class PermissionSeeder extends Seeder
 
     // Create permissions with custom ID format
     foreach ($permissions as $index => $permissionName) {
-      $permissionId = 'P' . str_pad($index + 1, 4, '0', STR_PAD_LEFT);
-
       $existing = Permission::where('name', $permissionName)->where('guard_name', 'web')->first();
       if ($existing) {
           continue;
       }
 
       Permission::create([
-        'permission_id' => $permissionId,
         'name' => $permissionName,
         'guard_name' => 'web',
       ]);
