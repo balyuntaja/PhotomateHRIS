@@ -60,6 +60,7 @@ export default function CustomerQueuePage() {
 
   const [audioPermissionGranted, setAudioPermissionGranted] = useState(false);
   const lastMyStatusRef = useRef<string | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // Interaction listener to enable audio/vibe capability
   useEffect(() => {
@@ -67,21 +68,36 @@ export default function CustomerQueuePage() {
       setAudioPermissionGranted(true);
       try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContext) {
+        if (AudioContext && !audioContextRef.current) {
           const ctx = new AudioContext();
-          if (ctx.state === "suspended") {
+          audioContextRef.current = ctx;
+
+          // Unlock AudioContext by playing a tiny silence buffer (vital for iOS/Safari)
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.start(0);
+
+          if (ctx.resume) {
             ctx.resume();
           }
+        } else if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+          audioContextRef.current.resume();
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error("Failed to unlock AudioContext:", e);
+      }
     };
 
     window.addEventListener("click", handleUserInteraction);
     window.addEventListener("touchstart", handleUserInteraction);
+    window.addEventListener("touchend", handleUserInteraction);
     window.addEventListener("keydown", handleUserInteraction);
     return () => {
       window.removeEventListener("click", handleUserInteraction);
       window.removeEventListener("touchstart", handleUserInteraction);
+      window.removeEventListener("touchend", handleUserInteraction);
       window.removeEventListener("keydown", handleUserInteraction);
     };
   }, []);
@@ -96,9 +112,12 @@ export default function CustomerQueuePage() {
     if (currentStatus === "CALLED" && lastMyStatusRef.current !== "CALLED") {
       // Play alert chime
       try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContext && audioPermissionGranted) {
-          const ctx = new AudioContext();
+        const ctx = audioContextRef.current;
+        if (ctx && audioPermissionGranted) {
+          if (ctx.state === "suspended") {
+            ctx.resume();
+          }
+
           const now = ctx.currentTime;
           
           const playNote = (freq: number, start: number, duration: number) => {
