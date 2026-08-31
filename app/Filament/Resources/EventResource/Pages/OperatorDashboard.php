@@ -55,7 +55,7 @@ class OperatorDashboard extends Page
             return;
         }
 
-        DB::transaction(function () use ($deviceId) {
+        $calledEntry = DB::transaction(function () use ($deviceId) {
             $next = QueueEntry::where('event_id', $this->record->id)
                 ->where('status', 'WAITING')
                 ->orderBy('queue_number', 'asc')
@@ -68,20 +68,35 @@ class OperatorDashboard extends Page
                     'device_id' => $deviceId,
                     'called_at' => now(),
                 ]);
-
-                $this->notification()
-                    ->title('Antrean Dipanggil')
-                    ->body("Nomor {$next->formatted_number} dipanggil ke Device {$deviceId}.")
-                    ->success()
-                    ->send();
-            } else {
-                $this->notification()
-                    ->title('Tidak Ada Antrean')
-                    ->body('Daftar tunggu kosong.')
-                    ->info()
-                    ->send();
+                return $next;
             }
+            return null;
         });
+
+        if ($calledEntry) {
+            $this->notification()
+                ->title('Antrean Dipanggil')
+                ->body("Nomor {$calledEntry->formatted_number} dipanggil ke Device {$deviceId}.")
+                ->success()
+                ->send();
+
+            // Trigger Web Push Notification
+            try {
+                \App\Services\WebPushService::sendNotificationToEntry(
+                    $calledEntry,
+                    'Giliran Anda Tiba! 🎉',
+                    "Nomor antrean Anda ({$calledEntry->formatted_number}) telah dipanggil. Silakan datang ke Device {$deviceId}."
+                );
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error("[Push] Failed trigger in OperatorDashboard: " . $e->getMessage());
+            }
+        } else {
+            $this->notification()
+                ->title('Tidak Ada Antrean')
+                ->body('Daftar tunggu kosong.')
+                ->info()
+                ->send();
+        }
     }
 
     public function startServing(int $entryId): void

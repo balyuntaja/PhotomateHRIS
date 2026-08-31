@@ -321,6 +321,59 @@ class QueueApiController extends Controller
 
         return ApiResponse::format(true, 200, 'Data display antrean berhasil diambil.', $data);
     }
+
+    /**
+     * Save/update a web push subscription.
+     */
+    public function savePushSubscription(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'queue_entry_id' => 'required|integer',
+            'secure_token' => 'required|string',
+            'subscription' => 'required|array',
+            'subscription.endpoint' => 'required|string|url',
+            'subscription.keys' => 'required|array',
+            'subscription.keys.p256dh' => 'required|string',
+            'subscription.keys.auth' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return ApiResponse::format(false, 422, 'Data input tidak valid.', $validator->errors());
+        }
+
+        // Validate queue entry ownership using secure_token
+        $entry = QueueEntry::where('id', $request->input('queue_entry_id'))
+            ->where('secure_token', $request->input('secure_token'))
+            ->first();
+
+        if (!$entry) {
+            return ApiResponse::format(false, 403, 'Akses tidak sah untuk entri antrean ini.');
+        }
+
+        $subscriptionData = $request->input('subscription');
+        $endpoint = $subscriptionData['endpoint'];
+        $endpointSha256 = hash('sha256', $endpoint);
+
+        try {
+            // Upsert subscription
+            $subscription = \App\Models\PushSubscription::updateOrCreate(
+                ['endpoint_sha256' => $endpointSha256],
+                [
+                    'queue_entry_id' => $entry->id,
+                    'event_id' => $entry->event_id,
+                    'endpoint' => $endpoint,
+                    'p256dh' => $subscriptionData['keys']['p256dh'],
+                    'auth' => $subscriptionData['keys']['auth'],
+                ]
+            );
+
+            return ApiResponse::format(true, 200, 'Berhasil mendaftarkan push notification.', [
+                'id' => $subscription->id
+            ]);
+        } catch (\Exception $e) {
+            return ApiResponse::format(false, 500, 'Gagal menyimpan push subscription: ' . $e->getMessage());
+        }
+    }
 }
 
 // Helper function for in_value (to handle PHP in_array checks)

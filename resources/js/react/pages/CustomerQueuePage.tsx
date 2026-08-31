@@ -42,6 +42,21 @@ interface QueueState {
   } | null;
 }
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 export default function CustomerQueuePage() {
   const { eventCode } = useParams<{ eventCode: string }>();
 
@@ -64,6 +79,56 @@ export default function CustomerQueuePage() {
   );
   const lastMyStatusRef = useRef<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+
+  const registerPushSubscription = async (entryId: number, secureToken: string) => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      console.log("[Push] Web push is not supported in this browser.");
+      return;
+    }
+
+    try {
+      console.log("[Push] Registering Service Worker...");
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      console.log("[Push] Service Worker registered:", registration);
+
+      await navigator.serviceWorker.ready;
+
+      const vapidPublicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+      if (!vapidPublicKey) {
+        console.warn("[Push] VITE_VAPID_PUBLIC_KEY not set in frontend env.");
+        return;
+      }
+
+      console.log("[Push] Subscribing to Push Manager...");
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+      });
+      console.log("[Push] Push subscription created:", subscription);
+
+      const response = await fetch("/api/queue/push-subscription", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          queue_entry_id: entryId,
+          secure_token: secureToken,
+          subscription: subscription.toJSON()
+        })
+      });
+
+      const result = await response.json();
+      if (response.ok && result.success) {
+        console.log("[Push] Push subscription saved to backend successfully.");
+      } else {
+        console.error("[Push] Failed to save push subscription to backend:", result.message);
+      }
+    } catch (err) {
+      console.error("[Push] Error during push subscription setup:", err);
+    }
+  };
 
   const handleEnableNotifications = () => {
     setAudioPermissionGranted(true);
@@ -98,10 +163,23 @@ export default function CustomerQueuePage() {
         Notification.requestPermission()
           .then((permission) => {
             setNotificationPermission(permission);
+            // If they granted it, and we have a valid queue entry, subscribe immediately!
+            if (permission === "granted" && queueData?.my_entry) {
+              const token = localStorage.getItem(`pm_queue_token_${eventCode}`);
+              if (token) {
+                registerPushSubscription(queueData.my_entry.id, token);
+              }
+            }
           })
           .catch((err) => {
             console.error("Failed to request notification permission:", err);
           });
+      } else if (Notification.permission === "granted" && queueData?.my_entry) {
+        // If already granted, run push registration to ensure we are subscribed
+        const token = localStorage.getItem(`pm_queue_token_${eventCode}`);
+        if (token) {
+          registerPushSubscription(queueData.my_entry.id, token);
+        }
       }
     }
   };
@@ -151,6 +229,16 @@ export default function CustomerQueuePage() {
       window.removeEventListener("keydown", handleUserInteraction);
     };
   }, []);
+
+  // Synchronize Push Subscription if user has already joined
+  useEffect(() => {
+    if (queueData?.my_entry) {
+      const token = localStorage.getItem(`pm_queue_token_${eventCode}`);
+      if (token && typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        registerPushSubscription(queueData.my_entry.id, token);
+      }
+    }
+  }, [queueData?.my_entry?.id]);
 
   // Alert player (sound and vibration) when user is CALLED
   useEffect(() => {
