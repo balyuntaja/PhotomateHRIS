@@ -59,13 +59,63 @@ export default function CustomerQueuePage() {
   const [queueData, setQueueData] = useState<QueueState | null>(null);
 
   const [audioPermissionGranted, setAudioPermissionGranted] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
+    typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
+  );
   const lastMyStatusRef = useRef<string | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+
+  const handleEnableNotifications = () => {
+    setAudioPermissionGranted(true);
+    
+    // Unlock AudioContext
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContext && !audioContextRef.current) {
+        const ctx = new AudioContext();
+        audioContextRef.current = ctx;
+
+        // Unlock AudioContext by playing a tiny silence buffer (vital for iOS/Safari)
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+
+        if (ctx.resume) {
+          ctx.resume();
+        }
+      } else if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+        audioContextRef.current.resume();
+      }
+    } catch (e) {
+      console.error("Failed to unlock AudioContext:", e);
+    }
+
+    // Request notification permission
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "default") {
+        Notification.requestPermission()
+          .then((permission) => {
+            setNotificationPermission(permission);
+          })
+          .catch((err) => {
+            console.error("Failed to request notification permission:", err);
+          });
+      }
+    }
+  };
 
   // Interaction listener to enable audio/vibe capability
   useEffect(() => {
     const handleUserInteraction = () => {
       setAudioPermissionGranted(true);
+      
+      // Update notification permission status if available
+      if (typeof window !== "undefined" && "Notification" in window) {
+        setNotificationPermission(Notification.permission);
+      }
+
       try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContext && !audioContextRef.current) {
@@ -145,6 +195,22 @@ export default function CustomerQueuePage() {
       if ("vibrate" in navigator) {
         navigator.vibrate([500, 250, 500]);
       }
+
+      // Show native browser notification if permitted
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        try {
+          const title = "Giliran Anda Tiba! 🎉";
+          const options = {
+            body: `Nomor antrean Anda (${myEntry.formatted_number}) telah dipanggil. Silakan datang ke booth Photomate.`,
+            icon: logoBlue,
+            tag: "queue-called",
+            requireInteraction: true,
+          };
+          new Notification(title, options);
+        } catch (err) {
+          console.error("Failed to show browser notification:", err);
+        }
+      }
     }
 
     lastMyStatusRef.current = currentStatus;
@@ -200,6 +266,9 @@ export default function CustomerQueuePage() {
       alert("Anda harus menyetujui pemrosesan data untuk antrean.");
       return;
     }
+
+    // Trigger permission requests (audio/notification) on submit gesture
+    handleEnableNotifications();
 
     setSubmitting(true);
     setErrorMsg(null);
@@ -321,9 +390,20 @@ export default function CustomerQueuePage() {
 
   return (
     <div className="min-h-screen bg-linear-to-b from-primary/5 to-white flex flex-col justify-between">
-      {!audioPermissionGranted && myEntry && (
-        <div className="bg-primary/10 text-primary-700 text-xs py-2.5 px-4 text-center font-bold animate-pulse border-b border-primary/20 flex items-center justify-center gap-1.5 cursor-pointer z-50">
-          <span>🔊 Ketuk layar untuk mengaktifkan notifikasi suara & getar panggilan</span>
+      {myEntry && (
+        (!audioPermissionGranted || (typeof window !== "undefined" && "Notification" in window && notificationPermission === "default"))
+      ) && (
+        <div 
+          onClick={handleEnableNotifications}
+          className="bg-primary/10 text-primary-700 text-xs py-2.5 px-4 text-center font-bold animate-pulse border-b border-primary/20 flex items-center justify-center gap-1.5 cursor-pointer z-50"
+        >
+          <span>🔔 Ketuk di sini untuk mengaktifkan notifikasi, getar, & suara panggilan</span>
+        </div>
+      )}
+
+      {myEntry && (typeof window !== "undefined" && "Notification" in window && notificationPermission === "denied") && (
+        <div className="bg-amber-50 text-amber-800 text-xs py-2.5 px-4 text-center font-medium border-b border-amber-200 z-50">
+          ⚠️ Izin notifikasi diblokir. Aktifkan izin notifikasi di pengaturan browser Anda agar HP bisa bergetar & memunculkan pemberitahuan saat antrean dipanggil.
         </div>
       )}
 
