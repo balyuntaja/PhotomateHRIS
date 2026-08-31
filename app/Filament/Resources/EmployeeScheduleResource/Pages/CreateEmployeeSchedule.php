@@ -10,6 +10,11 @@ class CreateEmployeeSchedule extends CreateRecord
 {
     protected static string $resource = EmployeeScheduleResource::class;
 
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         if (isset($data['shift_type_select'])) {

@@ -33,28 +33,30 @@
             </div>
         </x-filament::card>
 
+        @vite('resources/css/operator.css')
+
         <!-- Stats Cards Grid -->
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <x-filament::card class="p-4 text-center">
-                <p class="text-xs text-gray-400 dark:text-gray-500 font-extrabold uppercase">Daftar Tunggu</p>
-                <p class="text-3xl font-black text-primary-600 dark:text-primary-400 mt-1">{{ $stats['waiting'] }}</p>
-            </x-filament::card>
-            <x-filament::card class="p-4 text-center">
-                <p class="text-xs text-gray-400 dark:text-gray-500 font-extrabold uppercase">Dipanggil</p>
-                <p class="text-3xl font-black text-amber-600 mt-1">{{ $stats['called'] }}</p>
-            </x-filament::card>
-            <x-filament::card class="p-4 text-center">
-                <p class="text-xs text-gray-400 dark:text-gray-500 font-extrabold uppercase">Sedang Foto</p>
-                <p class="text-3xl font-black text-emerald-600 mt-1">{{ $stats['serving'] }}</p>
-            </x-filament::card>
-            <x-filament::card class="p-4 text-center">
-                <p class="text-xs text-gray-400 dark:text-gray-500 font-extrabold uppercase">Selesai</p>
-                <p class="text-3xl font-black text-gray-500 mt-1">{{ $stats['completed'] }}</p>
-            </x-filament::card>
-            <x-filament::card class="p-4 text-center col-span-2 md:col-span-1">
-                <p class="text-xs text-gray-400 dark:text-gray-500 font-extrabold uppercase">Terlewat</p>
-                <p class="text-3xl font-black text-red-500 mt-1">{{ $stats['skipped'] }}</p>
-            </x-filament::card>
+        <div class="operator-stats-grid">
+            <div class="operator-stat-card card-waiting">
+                <p class="operator-stat-title">Daftar Tunggu</p>
+                <p class="operator-stat-value text-primary-600 dark:text-primary-400">{{ $stats['waiting'] }}</p>
+            </div>
+            <div class="operator-stat-card card-called">
+                <p class="operator-stat-title">Dipanggil</p>
+                <p class="operator-stat-value text-amber-600 dark:text-amber-500">{{ $stats['called'] }}</p>
+            </div>
+            <div class="operator-stat-card card-serving">
+                <p class="operator-stat-title">Sedang Foto</p>
+                <p class="operator-stat-value text-emerald-600 dark:text-emerald-500">{{ $stats['serving'] }}</p>
+            </div>
+            <div class="operator-stat-card card-completed">
+                <p class="operator-stat-title">Selesai</p>
+                <p class="operator-stat-value text-gray-500 dark:text-gray-400">{{ $stats['completed'] }}</p>
+            </div>
+            <div class="operator-stat-card card-skipped">
+                <p class="operator-stat-title">Terlewat</p>
+                <p class="operator-stat-value text-red-500">{{ $stats['skipped'] }}</p>
+            </div>
         </div>
 
         <!-- Devices Section -->

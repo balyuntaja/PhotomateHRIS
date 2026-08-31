@@ -1,0 +1,99 @@
+.operator-stats-grid {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    width: 100% !important;
+}
+
+.operator-stat-card {
+    position: relative;
+    padding: 10px 4px !important;
+    text-align: center !important;
+    border-radius: 12px !important;
+    border: 1px solid transparent !important;
+    transition: all 0.2s ease-in-out;
+}
+
+/* Waiting / Daftar Tunggu (Soft Indigo/Blue) */
+.card-waiting {
+    background-color: rgba(54, 78, 113, 0.06) !important;
+    border-color: rgba(54, 78, 113, 0.12) !important;
+}
+.dark .card-waiting {
+    background-color: rgba(54, 78, 113, 0.15) !important;
+    border-color: rgba(54, 78, 113, 0.25) !important;
+}
+
+/* Called / Dipanggil (Soft Amber/Orange) */
+.card-called {
+    background-color: rgba(217, 119, 6, 0.06) !important;
+    border-color: rgba(217, 119, 6, 0.12) !important;
+}
+.dark .card-called {
+    background-color: rgba(217, 119, 6, 0.15) !important;
+    border-color: rgba(217, 119, 6, 0.25) !important;
+}
+
+/* Serving / Sedang Foto (Soft Emerald/Green) */
+.card-serving {
+    background-color: rgba(5, 150, 105, 0.06) !important;
+    border-color: rgba(5, 150, 105, 0.12) !important;
+}
+.dark .card-serving {
+    background-color: rgba(5, 150, 105, 0.15) !important;
+    border-color: rgba(5, 150, 105, 0.25) !important;
+}
+
+/* Completed / Selesai (Soft Gray) */
+.card-completed {
+    background-color: rgba(107, 114, 128, 0.06) !important;
+    border-color: rgba(107, 114, 128, 0.12) !important;
+}
+.dark .card-completed {
+    background-color: rgba(107, 114, 128, 0.15) !important;
+    border-color: rgba(107, 114, 128, 0.25) !important;
+}
+
+/* Skipped / Terlewat (Soft Red) */
+.card-skipped {
+    background-color: rgba(220, 38, 38, 0.06) !important;
+    border-color: rgba(220, 38, 38, 0.12) !important;
+}
+.dark .card-skipped {
+    background-color: rgba(220, 38, 38, 0.15) !important;
+    border-color: rgba(220, 38, 38, 0.25) !important;
+}
+
+.operator-stat-title {
+    font-size: 8px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    color: #6b7280 !important;
+}
+.dark .operator-stat-title {
+    color: #9ca3af !important;
+}
+
+.operator-stat-value {
+    font-size: 22px !important;
+    font-weight: 900 !important;
+    margin-top: 4px !important;
+    line-height: 1 !important;
+}
+
+@media (min-width: 768px) {
+    .operator-stats-grid {
+        gap: 16px !important;
+    }
+    .operator-stat-card {
+        padding: 16px 8px !important;
+        border-radius: 16px !important;
+    }
+    .operator-stat-title {
+        font-size: 11px !important;
+    }
+    .operator-stat-value {
+        font-size: 36px !important;
+    }
+}

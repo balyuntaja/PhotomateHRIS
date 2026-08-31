@@ -9,4 +9,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateBioPhotostrip extends CreateRecord
 {
     protected static string $resource = BioPhotostripResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

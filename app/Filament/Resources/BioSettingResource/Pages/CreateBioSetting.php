@@ -9,4 +9,9 @@ use Filament\Resources\Pages\CreateRecord;
 class CreateBioSetting extends CreateRecord
 {
     protected static string $resource = BioSettingResource::class;
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }
