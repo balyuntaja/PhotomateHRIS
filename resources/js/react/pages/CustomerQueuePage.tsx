@@ -778,7 +778,7 @@ export default function CustomerQueuePage() {
                     <p className="text-xs text-emerald-700 font-medium">Silakan datang ke booth Photomate dan tunjukkan nomor ini ke operator.</p>
                     {myEntry.device_id && (
                       <div className="mt-3 inline-block bg-emerald-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm">
-                        Silakan ke DEVICE {myEntry.device_id}
+                        Silakan ke Booth photomate
                       </div>
                     )}
                   </div>
