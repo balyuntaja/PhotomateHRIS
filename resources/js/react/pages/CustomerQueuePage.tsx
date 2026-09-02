@@ -75,6 +75,7 @@ export default function CustomerQueuePage() {
 
   const [audioPermissionGranted, setAudioPermissionGranted] = useState(false);
   const [permissionModalDismissed, setPermissionModalDismissed] = useState(false);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
   );
@@ -133,26 +134,32 @@ export default function CustomerQueuePage() {
 
   const handleEnableNotifications = () => {
     setAudioPermissionGranted(true);
+    setShowPermissionModal(false);
+    setPermissionModalDismissed(true);
+
+    // Haptic feedback vibration on permission activate
+    if ("vibrate" in navigator) {
+      try {
+        navigator.vibrate([150, 80, 150]);
+      } catch (e) {
+        console.warn("Vibration error:", e);
+      }
+    }
     
-    // Unlock AudioContext
+    // Unlock AudioContext and play a quick warm preview chime
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContext && !audioContextRef.current) {
-        const ctx = new AudioContext();
-        audioContextRef.current = ctx;
-
-        // Unlock AudioContext by playing a tiny silence buffer (vital for iOS/Safari)
-        const buffer = ctx.createBuffer(1, 1, 22050);
-        const source = ctx.createBufferSource();
-        source.buffer = buffer;
-        source.connect(ctx.destination);
-        source.start(0);
-
-        if (ctx.resume) {
+      if (AudioContext) {
+        if (!audioContextRef.current) {
+          audioContextRef.current = new AudioContext();
+        }
+        const ctx = audioContextRef.current;
+        if (ctx.state === "suspended") {
           ctx.resume();
         }
-      } else if (audioContextRef.current && audioContextRef.current.state === "suspended") {
-        audioContextRef.current.resume();
+        // Subtle preview chime
+        playChimeNote(ctx, 659.25, ctx.currentTime, 0.2, 0.3);
+        playChimeNote(ctx, 1318.51, ctx.currentTime + 0.12, 0.35, 0.4);
       }
     } catch (e) {
       console.error("Failed to unlock AudioContext:", e);
@@ -164,7 +171,7 @@ export default function CustomerQueuePage() {
         Notification.requestPermission()
           .then((permission) => {
             setNotificationPermission(permission);
-            // If they granted it, and we have a valid queue entry, subscribe immediately!
+            // If granted and we have valid queue entry, subscribe immediately!
             if (permission === "granted" && queueData?.my_entry) {
               const token = localStorage.getItem(`pm_queue_token_${eventCode}`);
               if (token) {
@@ -176,7 +183,6 @@ export default function CustomerQueuePage() {
             console.error("Failed to request notification permission:", err);
           });
       } else if (Notification.permission === "granted" && queueData?.my_entry) {
-        // If already granted, run push registration to ensure we are subscribed
         const token = localStorage.getItem(`pm_queue_token_${eventCode}`);
         if (token) {
           registerPushSubscription(queueData.my_entry.id, token);
@@ -240,6 +246,22 @@ export default function CustomerQueuePage() {
       }
     }
   }, [queueData?.my_entry?.id]);
+
+  // Auto prompt permission modal if user has active entry and not yet dismissed
+  useEffect(() => {
+    if (
+      queueData?.my_entry &&
+      (queueData.my_entry.status === "WAITING" || queueData.my_entry.status === "CALLED")
+    ) {
+      const isNotificationDefault =
+        typeof window !== "undefined" && "Notification" in window && Notification.permission === "default";
+      if (!audioPermissionGranted || isNotificationDefault) {
+        if (!permissionModalDismissed) {
+          setShowPermissionModal(true);
+        }
+      }
+    }
+  }, [queueData?.my_entry?.id, queueData?.my_entry?.status]);
 
   // Helper to play chime notes with harmonic overtone warmth using Web Audio API
   const playChimeNote = (ctx: AudioContext, freq: number, start: number, duration: number, volume = 0.45) => {
@@ -407,9 +429,6 @@ export default function CustomerQueuePage() {
       return;
     }
 
-    // Trigger permission requests (audio/notification) on submit gesture
-    handleEnableNotifications();
-
     setSubmitting(true);
     setErrorMsg(null);
 
@@ -432,11 +451,35 @@ export default function CustomerQueuePage() {
 
       if (response.ok && result.success) {
         localStorage.setItem(tokenKey, result.data.secure_token);
-        fetchQueueStatus(true);
+        await fetchQueueStatus(true);
+
+        // Haptic feedback vibration upon joining successfully
+        if ("vibrate" in navigator) {
+          try {
+            navigator.vibrate([200, 100, 200]);
+          } catch (vErr) {
+            console.warn("Vibration error:", vErr);
+          }
+        }
+
+        // Trigger permission pop-up modal immediately!
+        setShowPermissionModal(true);
+        setPermissionModalDismissed(false);
       } else if (response.status === 409 && result.data?.secure_token) {
         // Customer already has an active entry, save token and fetch
         localStorage.setItem(tokenKey, result.data.secure_token);
-        fetchQueueStatus(true);
+        await fetchQueueStatus(true);
+
+        if ("vibrate" in navigator) {
+          try {
+            navigator.vibrate([150, 100, 150]);
+          } catch (vErr) {
+            console.warn("Vibration error:", vErr);
+          }
+        }
+
+        setShowPermissionModal(true);
+        setPermissionModalDismissed(false);
       } else {
         setErrorMsg(result.message || "Gagal bergabung ke antrean.");
       }
@@ -531,15 +574,16 @@ export default function CustomerQueuePage() {
   return (
     <div className="min-h-screen bg-linear-to-b from-primary/5 to-white flex flex-col justify-between">
       {/* Pop-up Modal for Audio & Notification Permission */}
-      {myEntry && (myEntry.status === "WAITING" || myEntry.status === "CALLED") && 
-        (!audioPermissionGranted || (typeof window !== "undefined" && "Notification" in window && notificationPermission === "default")) && 
-        !permissionModalDismissed && (
+      {myEntry && (myEntry.status === "WAITING" || myEntry.status === "CALLED") && showPermissionModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl p-6 max-w-sm w-full text-center relative">
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl p-6 max-w-sm w-full text-center relative animate-in fade-in zoom-in duration-200">
               {/* Close button */}
               <button 
                 type="button"
-                onClick={() => setPermissionModalDismissed(true)}
+                onClick={() => {
+                  setShowPermissionModal(false);
+                  setPermissionModalDismissed(true);
+                }}
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 transition cursor-pointer"
                 aria-label="Tutup"
               >
@@ -583,10 +627,7 @@ export default function CustomerQueuePage() {
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    handleEnableNotifications();
-                    setPermissionModalDismissed(true);
-                  }}
+                  onClick={handleEnableNotifications}
                   className="w-full py-3.5 px-4 rounded-xl bg-primary text-white font-bold hover:bg-primary-dark transition shadow-md hover:shadow-lg cursor-pointer flex items-center justify-center gap-2"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -596,7 +637,10 @@ export default function CustomerQueuePage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPermissionModalDismissed(true)}
+                  onClick={() => {
+                    setShowPermissionModal(false);
+                    setPermissionModalDismissed(true);
+                  }}
                   className="w-full py-2.5 px-4 text-xs font-semibold text-gray-400 hover:text-gray-600 cursor-pointer transition"
                 >
                   Nanti Saja
@@ -672,7 +716,7 @@ export default function CustomerQueuePage() {
               {(!audioPermissionGranted || (typeof window !== "undefined" && "Notification" in window && notificationPermission === "default")) && (
                 <button
                   type="button"
-                  onClick={() => setPermissionModalDismissed(false)}
+                  onClick={() => setShowPermissionModal(true)}
                   className="w-full py-2.5 px-3 bg-primary/10 hover:bg-primary/15 text-primary-700 text-xs font-bold rounded-2xl border border-primary/20 flex items-center justify-center gap-1.5 transition cursor-pointer animate-pulse"
                 >
                   <span>🔔</span>
