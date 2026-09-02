@@ -30,6 +30,9 @@
                 <x-filament::button color="gray" size="sm" icon="heroicon-m-computer-desktop" href="{{ url('/queue/' . $record->event_code . '/display') }}" tag="a" target="_blank">
                     Layar TV
                 </x-filament::button>
+                <x-filament::button color="info" size="sm" icon="heroicon-m-qr-code" x-on:click="$dispatch('open-modal', { id: 'operator-qr-modal' })">
+                    QR Code Poster
+                </x-filament::button>
             </div>
         </x-filament::card>
 
@@ -225,4 +228,11 @@
             </x-filament::card>
         </div>
     </div>
+
+    <x-filament::modal id="operator-qr-modal" width="lg">
+        <x-slot name="heading">
+            QR Code & Poster Antrean: {{ $record->name }}
+        </x-slot>
+        @include('filament.resources.event-resource.actions.qr-modal', ['record' => $record])
+    </x-filament::modal>
 </x-filament::page>

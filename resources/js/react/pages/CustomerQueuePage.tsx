@@ -74,6 +74,7 @@ export default function CustomerQueuePage() {
   const [queueData, setQueueData] = useState<QueueState | null>(null);
 
   const [audioPermissionGranted, setAudioPermissionGranted] = useState(false);
+  const [permissionModalDismissed, setPermissionModalDismissed] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(
     typeof window !== "undefined" && "Notification" in window ? Notification.permission : "default"
   );
@@ -240,7 +241,61 @@ export default function CustomerQueuePage() {
     }
   }, [queueData?.my_entry?.id]);
 
-  // Alert player (sound and vibration) when user is CALLED
+  // Helper to play chime notes with harmonic overtone warmth using Web Audio API
+  const playChimeNote = (ctx: AudioContext, freq: number, start: number, duration: number, volume = 0.45) => {
+    try {
+      // 1. Primary sine oscillator (fundamental tone)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(freq, start);
+      gain1.gain.setValueAtTime(volume, start);
+      gain1.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(start);
+      osc1.stop(start + duration);
+
+      // 2. Harmonic overtone (2x freq triangle wave) for crisp bell presence on phone speakers
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "triangle";
+      osc2.frequency.setValueAtTime(freq * 2, start);
+      gain2.gain.setValueAtTime(volume * 0.25, start);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, start + duration * 0.7);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(start);
+      osc2.stop(start + duration);
+    } catch (e) {
+      console.warn("Failed to play chime note:", e);
+    }
+  };
+
+  // Extended melodic notification chime (~5 seconds duration)
+  const playLongNotificationChime = (ctx: AudioContext) => {
+    const now = ctx.currentTime;
+
+    // Motif 1 (0.0s - 1.5s): Ascending 4-tone chime (E5 -> G#5 -> B5 -> E6)
+    playChimeNote(ctx, 659.25, now + 0.00, 0.4, 0.45);  // E5
+    playChimeNote(ctx, 830.61, now + 0.25, 0.4, 0.45);  // G#5
+    playChimeNote(ctx, 987.77, now + 0.50, 0.4, 0.50);  // B5
+    playChimeNote(ctx, 1318.51, now + 0.75, 0.8, 0.60); // E6
+
+    // Motif 2 (1.6s - 3.0s): Second phrase repetition
+    playChimeNote(ctx, 659.25, now + 1.60, 0.4, 0.45);  // E5
+    playChimeNote(ctx, 830.61, now + 1.85, 0.4, 0.45);  // G#5
+    playChimeNote(ctx, 987.77, now + 2.10, 0.4, 0.50);  // B5
+    playChimeNote(ctx, 1318.51, now + 2.35, 0.8, 0.60); // E6
+
+    // Motif 3 (3.2s - 5.0s): Attention finale bell sequence
+    playChimeNote(ctx, 987.77, now + 3.20, 0.35, 0.45); // B5
+    playChimeNote(ctx, 1318.51, now + 3.45, 0.35, 0.50); // E6
+    playChimeNote(ctx, 987.77, now + 3.70, 0.35, 0.50); // B5
+    playChimeNote(ctx, 1318.51, now + 3.95, 1.3, 0.65);  // E6 sustained
+  };
+
+  // Alert player (sound, speech, and vibration) when user is CALLED
   useEffect(() => {
     const myEntry = queueData?.my_entry;
     if (!myEntry) return;
@@ -248,40 +303,37 @@ export default function CustomerQueuePage() {
     const currentStatus = myEntry.status;
 
     if (currentStatus === "CALLED" && lastMyStatusRef.current !== "CALLED") {
-      // Play alert chime
+      // Play extended alert chime
       try {
         const ctx = audioContextRef.current;
         if (ctx && audioPermissionGranted) {
           if (ctx.state === "suspended") {
             ctx.resume();
           }
-
-          const now = ctx.currentTime;
-          
-          const playNote = (freq: number, start: number, duration: number) => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(freq, start);
-            gain.gain.setValueAtTime(0.4, start);
-            gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(start);
-            osc.stop(start + duration);
-          };
-          
-          playNote(1046.50, now, 0.4); // C6
-          playNote(783.99, now + 0.2, 0.4); // G5
-          playNote(1046.50, now + 0.4, 0.6); // C6
+          playLongNotificationChime(ctx);
         }
       } catch (err) {
         console.error("Audio Context failed to play customer alert:", err);
       }
 
-      // Vibrate phone
+      // Voice announcement fallback/complement if supported
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        try {
+          const text = `Nomor antrean ${myEntry.formatted_number}, giliran Anda telah dipanggil.`;
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = "id-ID";
+          utterance.rate = 0.9;
+          setTimeout(() => {
+            window.speechSynthesis.speak(utterance);
+          }, 1200);
+        } catch (e) {
+          console.warn("Speech synthesis error:", e);
+        }
+      }
+
+      // Extended vibration pattern matching prolonged audio
       if ("vibrate" in navigator) {
-        navigator.vibrate([500, 250, 500]);
+        navigator.vibrate([500, 250, 500, 250, 500, 250, 800, 300, 800, 300, 1000]);
       }
 
       // Show native browser notification if permitted
@@ -478,22 +530,82 @@ export default function CustomerQueuePage() {
 
   return (
     <div className="min-h-screen bg-linear-to-b from-primary/5 to-white flex flex-col justify-between">
-      {myEntry && (
-        (!audioPermissionGranted || (typeof window !== "undefined" && "Notification" in window && notificationPermission === "default"))
-      ) && (
-        <div 
-          onClick={handleEnableNotifications}
-          className="bg-primary/10 text-primary-700 text-xs py-2.5 px-4 text-center font-bold animate-pulse border-b border-primary/20 flex items-center justify-center gap-1.5 cursor-pointer z-50"
-        >
-          <span>🔔 Ketuk di sini untuk mengaktifkan notifikasi, getar, & suara panggilan</span>
-        </div>
-      )}
+      {/* Pop-up Modal for Audio & Notification Permission */}
+      {myEntry && (myEntry.status === "WAITING" || myEntry.status === "CALLED") && 
+        (!audioPermissionGranted || (typeof window !== "undefined" && "Notification" in window && notificationPermission === "default")) && 
+        !permissionModalDismissed && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-2xl p-6 max-w-sm w-full text-center relative">
+              {/* Close button */}
+              <button 
+                type="button"
+                onClick={() => setPermissionModalDismissed(true)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1.5 rounded-full hover:bg-gray-100 transition cursor-pointer"
+                aria-label="Tutup"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
 
-      {myEntry && (typeof window !== "undefined" && "Notification" in window && notificationPermission === "denied") && (
-        <div className="bg-amber-50 text-amber-800 text-xs py-2.5 px-4 text-center font-medium border-b border-amber-200 z-50">
-          ⚠️ Izin notifikasi diblokir. Aktifkan izin notifikasi di pengaturan browser Anda agar HP bisa bergetar & memunculkan pemberitahuan saat antrean dipanggil.
-        </div>
-      )}
+              {/* Animated Bell Icon */}
+              <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mx-auto mb-4 border border-primary/20 shadow-sm">
+                <svg className="w-8 h-8 animate-bounce text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+              </div>
+
+              <h3 className="text-xl font-extrabold text-gray-900 mb-1.5">
+                Aktifkan Suara & Notifikasi
+              </h3>
+              
+              <p className="text-xs text-gray-500 leading-relaxed mb-4">
+                Agar Anda tidak ketinggalan saat nomor antrean dipanggil, aktifkan suara alarm dan izin notifikasi perangkat.
+              </p>
+
+              {/* Perks List */}
+              <div className="bg-gray-50 border border-gray-100 rounded-2xl p-3.5 text-left text-xs space-y-2.5 mb-5">
+                <div className="flex items-center gap-2.5 text-gray-700">
+                  <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 text-xs font-bold">🔊</span>
+                  <span className="font-medium">Suara alarm panggilan antrean</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-gray-700">
+                  <span className="w-6 h-6 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center shrink-0 text-xs font-bold">📳</span>
+                  <span className="font-medium">Getaran HP saat nomor dipanggil</span>
+                </div>
+                <div className="flex items-center gap-2.5 text-gray-700">
+                  <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0 text-xs font-bold">🔔</span>
+                  <span className="font-medium">Pemberitahuan layar kunci & web push</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleEnableNotifications();
+                    setPermissionModalDismissed(true);
+                  }}
+                  className="w-full py-3.5 px-4 rounded-xl bg-primary text-white font-bold hover:bg-primary-dark transition shadow-md hover:shadow-lg cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  <span>Aktifkan Sekarang</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPermissionModalDismissed(true)}
+                  className="w-full py-2.5 px-4 text-xs font-semibold text-gray-400 hover:text-gray-600 cursor-pointer transition"
+                >
+                  Nanti Saja
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
 
       {/* Decorative shapes */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -556,6 +668,30 @@ export default function CustomerQueuePage() {
 
             {/* Content Ticket */}
             <div className="p-6 space-y-6 flex-1 flex flex-col justify-center">
+              {/* Permission reminder if dismissed but still not granted */}
+              {(!audioPermissionGranted || (typeof window !== "undefined" && "Notification" in window && notificationPermission === "default")) && (
+                <button
+                  type="button"
+                  onClick={() => setPermissionModalDismissed(false)}
+                  className="w-full py-2.5 px-3 bg-primary/10 hover:bg-primary/15 text-primary-700 text-xs font-bold rounded-2xl border border-primary/20 flex items-center justify-center gap-1.5 transition cursor-pointer animate-pulse"
+                >
+                  <span>🔔</span>
+                  <span>Aktifkan Suara & Notifikasi Panggilan</span>
+                </button>
+              )}
+
+              {typeof window !== "undefined" && "Notification" in window && notificationPermission === "denied" && (
+                <div className="p-3.5 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-2xl text-center space-y-1">
+                  <p className="font-bold flex items-center justify-center gap-1">
+                    <span>⚠️</span>
+                    <span>Izin Notifikasi Diblokir</span>
+                  </p>
+                  <p className="text-[11px] text-amber-700 leading-snug">
+                    Aktifkan izin notifikasi di pengaturan browser Anda agar HP dapat bergetar & membunyikan alarm saat antrean dipanggil.
+                  </p>
+                </div>
+              )}
+
               {myEntry.status === 'WAITING' && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4 divide-x divide-gray-100">

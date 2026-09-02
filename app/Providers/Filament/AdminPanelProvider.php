@@ -80,6 +80,10 @@ class AdminPanelProvider extends PanelProvider
                 'Data Master',
                 'Keamanan',
             ])
+            ->renderHook(
+                \Filament\View\PanelsRenderHook::BODY_END,
+                fn (): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString('<script src="' . asset('js/queue-poster.js') . '"></script>')
+            )
         ;
     }
 }
