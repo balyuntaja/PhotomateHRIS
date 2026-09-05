@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property \Illuminate\Support\Carbon|null $event_date
  * @property \Illuminate\Support\Carbon|null $event_end_date
  * @property \Illuminate\Support\Carbon|null $invoice_date
+ * @property \Illuminate\Support\Carbon|null $max_dp_date
  * @property \Illuminate\Support\Carbon|null $due_date
  * @property float|null $down_payment
  * @property \Illuminate\Support\Carbon|null $dp_date
@@ -23,6 +24,7 @@ class Invoice extends Model
         'event_date' => 'date',
         'event_end_date' => 'date',
         'invoice_date' => 'date',
+        'max_dp_date' => 'date',
         'due_date' => 'date',
         'down_payment' => 'float',
         'dp_date' => 'date',

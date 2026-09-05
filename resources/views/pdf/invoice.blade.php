@@ -161,16 +161,25 @@
                 <div class="section-title">Detail Invoice</div>
                 <table style="width: 100%;">
                     <tr>
-                        <td style="padding: 4px 0; color: #718096; width: 40%;">Tanggal Invoice:</td>
-                        <td style="padding: 4px 0; text-align: right;">{{ $invoice->invoice_date->format('d F Y') }}</td>
+                        <td style="padding: 4px 0; color: #718096; width: 45%;">Tanggal Invoice:</td>
+                        <td style="padding: 4px 0; text-align: right;">{{ $invoice->invoice_date ? $invoice->invoice_date->format('d F Y') : '-' }}</td>
                     </tr>
+                    @php
+                        $maxDpDate = $invoice->max_dp_date ?? ($invoice->invoice_date ? $invoice->invoice_date->copy()->addDay() : null);
+                    @endphp
+                    @if($maxDpDate)
+                    <tr>
+                        <td style="padding: 4px 0; color: #718096;">Tanggal DP Maksimal:</td>
+                        <td style="padding: 4px 0; text-align: right;">{{ $maxDpDate->format('d F Y') }}</td>
+                    </tr>
+                    @endif
                     <tr>
                         <td style="padding: 4px 0; color: #718096;">Jatuh Tempo Pelunasan:</td>
-                        <td style="padding: 4px 0; text-align: right;">{{ $invoice->due_date->format('d F Y') }}</td>
+                        <td style="padding: 4px 0; text-align: right;">{{ $invoice->due_date ? $invoice->due_date->format('d F Y') : '-' }}</td>
                     </tr>
                     @if($invoice->dp_date)
                     <tr>
-                        <td style="padding: 4px 0; color: #718096;">Jatuh Tempo DP:</td>
+                        <td style="padding: 4px 0; color: #718096;">Tanggal Bayar DP:</td>
                         <td style="padding: 4px 0; text-align: right;">{{ $invoice->dp_date->format('d F Y') }}</td>
                     </tr>
                     @endif

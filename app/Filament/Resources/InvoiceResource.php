@@ -82,9 +82,22 @@ class InvoiceResource extends Resource
                             ->minDate(fn(Get $get) => $get('event_date') ?: now()->startOfDay())
                             ->nullable(),
                         DatePicker::make('invoice_date')
+                            ->label('Tanggal Invoice')
                             ->default(now())
-                            ->required(),
+                            ->required()
+                            ->live()
+                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
+                                if ($state) {
+                                    $set('max_dp_date', \Carbon\Carbon::parse($state)->addDay()->format('Y-m-d'));
+                                }
+                            }),
+                        DatePicker::make('max_dp_date')
+                            ->label('Tanggal DP Maksimal')
+                            ->default(fn(Get $get) => $get('invoice_date') ? \Carbon\Carbon::parse($get('invoice_date'))->addDay() : now()->addDay())
+                            ->minDate(fn(Get $get) => $get('invoice_date') ?: now()->startOfDay())
+                            ->nullable(),
                         DatePicker::make('due_date')
+                            ->label('Jatuh Tempo Pelunasan')
                             ->minDate(now()->startOfDay())
                             ->required(),
                     ])->columns(2),
@@ -300,7 +313,7 @@ class InvoiceResource extends Resource
                             ->maxValue(fn(Get $get) => floatval($get('total') ?? 0))
                             ->minValue(0),
                         DatePicker::make('dp_date')
-                            ->label('Tanggal DP')
+                            ->label('Tanggal Bayar DP')
                             ->visible(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
                             ->required(fn(Get $get) => $get('status') === 'Sebagian Dibayar'),
                         Textarea::make('notes')
@@ -327,6 +340,16 @@ class InvoiceResource extends Resource
                     ->label('Tanggal Invoice')
                     ->date('d M Y')
                     ->sortable(),
+                TextColumn::make('max_dp_date')
+                    ->label('Tanggal DP Maksimal')
+                    ->date('d M Y')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('due_date')
+                    ->label('Jatuh Tempo Pelunasan')
+                    ->date('d M Y')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('client_name')
                     ->searchable()
                     ->sortable(),
