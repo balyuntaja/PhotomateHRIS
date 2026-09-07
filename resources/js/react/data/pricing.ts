@@ -65,11 +65,11 @@ export const pricingPlans: PricingPlan[] = [
 ];
 
 export const selfRunRows = [
-  { duration: "2 Jam", price: "Rp700.000", profit: "Up to Rp1.000.000" },
-  { duration: "3 Jam", price: "Rp1.000.000", profit: "Up to Rp1.250.000" },
-  { duration: "4 Jam", price: "Rp1.250.000", profit: "Up to Rp1.800.000" },
-  { duration: "5 Jam", price: "Rp1.500.000", profit: "Up to Rp2.400.000" },
-  { duration: "6 Jam", price: "Rp1.800.000", profit: "Up to Rp2.800.000" },
+  { duration: "2 Jam", price: "Rp800.000", profit: "Up to Rp1.000.000" },
+  { duration: "3 Jam", price: "Rp1.100.000", profit: "Up to Rp1.250.000" },
+  { duration: "4 Jam", price: "Rp1.350.000", profit: "Up to Rp1.800.000" },
+  { duration: "5 Jam", price: "Rp1.600.000", profit: "Up to Rp2.400.000" },
+  { duration: "6 Jam", price: "Rp1.900.000", profit: "Up to Rp2.800.000" },
 ];
 
 export const sharingOneDevice = [
