@@ -164,13 +164,10 @@
                         <td style="padding: 4px 0; color: #718096; width: 45%;">Tanggal Invoice:</td>
                         <td style="padding: 4px 0; text-align: right;">{{ $invoice->invoice_date ? $invoice->invoice_date->format('d F Y') : '-' }}</td>
                     </tr>
-                    @php
-                        $maxDpDate = $invoice->max_dp_date ?? ($invoice->invoice_date ? $invoice->invoice_date->copy()->addDay() : null);
-                    @endphp
-                    @if($maxDpDate)
+                    @if($invoice->max_dp_date)
                     <tr>
                         <td style="padding: 4px 0; color: #718096;">Tanggal DP Maksimal:</td>
-                        <td style="padding: 4px 0; text-align: right;">{{ $maxDpDate->format('d F Y') }}</td>
+                        <td style="padding: 4px 0; text-align: right;">{{ $invoice->max_dp_date->format('d F Y') }}</td>
                     </tr>
                     @endif
                     <tr>

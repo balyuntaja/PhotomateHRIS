@@ -85,15 +85,9 @@ class InvoiceResource extends Resource
                             ->label('Tanggal Invoice')
                             ->default(now())
                             ->required()
-                            ->live()
-                            ->afterStateUpdated(function (Get $get, Set $set, ?string $state) {
-                                if ($state) {
-                                    $set('max_dp_date', \Carbon\Carbon::parse($state)->addDay()->format('Y-m-d'));
-                                }
-                            }),
+                            ->live(),
                         DatePicker::make('max_dp_date')
                             ->label('Tanggal DP Maksimal')
-                            ->default(fn(Get $get) => $get('invoice_date') ? \Carbon\Carbon::parse($get('invoice_date'))->addDay() : now()->addDay())
                             ->minDate(fn(Get $get) => $get('invoice_date') ?: now()->startOfDay())
                             ->nullable(),
                         DatePicker::make('due_date')
@@ -344,6 +338,7 @@ class InvoiceResource extends Resource
                     ->label('Tanggal DP Maksimal')
                     ->date('d M Y')
                     ->sortable()
+                    ->placeholder('-')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('due_date')
                     ->label('Jatuh Tempo Pelunasan')
