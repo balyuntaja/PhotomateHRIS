@@ -83,6 +83,7 @@ class ScheduleResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('start_date', 'asc')
             ->filters([
                 //
             ])

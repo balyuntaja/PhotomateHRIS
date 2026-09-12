@@ -70,7 +70,7 @@ Route::get('/{any?}', function () {
                 'logo' => '/storage/' . $c->logo,
             ];
         }),
-        'schedules' => \App\Models\Schedule::all()->map(function($s) {
+        'schedules' => \App\Models\Schedule::orderBy('start_date', 'asc')->get()->map(function($s) {
             return [
                 'id' => $s->id,
                 'title' => $s->title,
