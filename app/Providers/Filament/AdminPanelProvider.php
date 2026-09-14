@@ -7,6 +7,7 @@ use App\Filament\Resources\RoleResource;
 use App\Filament\Widgets\ActivityOverview;
 use App\Filament\Widgets\CutiTodayOverview;
 use App\Filament\Widgets\IzinTodayOverview;
+use App\Filament\Widgets\SessionOverviewWidget;
 use App\Filament\Widgets\StatsOverview;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
@@ -48,6 +49,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
+                SessionOverviewWidget::class,
                 StatsOverview::class,
                 // ActivityOverview::class,
                 CutiTodayOverview::class,
@@ -73,6 +75,7 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->navigationGroups([
+                'Session Management',
                 'Sistem Antrean',
                 'Manajemen Absensi',
                 'Manajemen Penggajian',

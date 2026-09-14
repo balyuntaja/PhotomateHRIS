@@ -9,6 +9,8 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class QueueStatsOverview extends BaseWidget
 {
+    protected static bool $isDiscovered = false;
+
     protected static ?string $pollingInterval = '5s';
 
     protected function getStats(): array

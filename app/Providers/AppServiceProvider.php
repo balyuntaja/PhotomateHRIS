@@ -31,6 +31,8 @@ class AppServiceProvider extends ServiceProvider
             URL::forceScheme('https');
         }
 
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\SessionReport::class, \App\Policies\SessionReportPolicy::class);
+
         DateTimePicker::configureUsing(fn(DateTimePicker $component) => $component->native(false));
 
         FilamentColor::register([
