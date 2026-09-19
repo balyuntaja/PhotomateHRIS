@@ -49,38 +49,11 @@ class CabangResource extends Resource
 
                 Forms\Components\Textarea::make('alamat')
                     ->label('Alamat')
-                    ->required()
+                    ->nullable()
                     ->rows(3)
                     ->autocomplete(false)
+                    ->placeholder('Alamat cabang (opsional)')
                     ->columnSpanFull(),
-
-                Forms\Components\Grid::make(2)
-                    ->schema([
-                        Forms\Components\TextInput::make('latitude')
-                            ->label('Latitude')
-                            ->numeric()
-                            ->step('any')
-                            ->required()
-                            ->autocomplete(false)
-                            ->placeholder('-6.2088'),
-
-                        Forms\Components\TextInput::make('longitude')
-                            ->label('Longitude')
-                            ->numeric()
-                            ->step('any')
-                            ->required()
-                            ->autocomplete(false)
-                            ->placeholder('106.8456'),
-                    ]),
-
-                Forms\Components\TextInput::make('radius_lokasi')
-                    ->label('Radius Lokasi (meter)')
-                    ->numeric()
-                    ->required()
-                    ->default(100)
-                    ->suffix('meter')
-                    ->autocomplete(false)
-                    ->minValue(1),
             ]);
     }
 
@@ -111,22 +84,27 @@ class CabangResource extends Resource
                 Tables\Columns\TextColumn::make('alamat')
                     ->label('Alamat')
                     ->limit(20)
+                    ->placeholder('-')
                     ->tooltip(function (Tables\Columns\TextColumn $column): ?string {
                         $state = $column->getState();
-                        return strlen($state) > 20 ? $state : null;
+                        return ($state && strlen($state) > 20) ? $state : null;
                     })
                     ->searchable(),
 
                 Tables\Columns\TextColumn::make('koordinat')
                     ->label('Koordinat')
                     ->getStateUsing(function ($record) {
+                        if ($record->latitude === null && $record->longitude === null) {
+                            return '-';
+                        }
                         return "<div style='font-size: 0.875rem;'>
-                        <div>Lat: {$record->latitude}</div>
-                        <div>Lng: {$record->longitude}</div>
-                        <div>Radius: {$record->radius_lokasi} m</div>
+                        <div>Lat: " . ($record->latitude ?? '-') . "</div>
+                        <div>Lng: " . ($record->longitude ?? '-') . "</div>
+                        " . ($record->radius_lokasi ? "<div>Radius: {$record->radius_lokasi} m</div>" : "") . "
                         </div>";
                     })
-                    ->html(),
+                    ->html()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('Dibuat')

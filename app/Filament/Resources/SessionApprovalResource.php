@@ -80,12 +80,20 @@ class SessionApprovalResource extends Resource
                     ->separator(', ')
                     ->searchable(),
 
-                Tables\Columns\TextColumn::make('total_sessions')
+                Tables\Columns\TextColumn::make('total_transactions')
                     ->label('Total Sesi')
                     ->formatStateUsing(fn ($state) => $state . ' sesi')
                     ->alignCenter()
                     ->badge()
                     ->color('info')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('total_sessions')
+                    ->label('Total Lembar')
+                    ->formatStateUsing(fn ($state) => $state . ' lembar')
+                    ->alignCenter()
+                    ->badge()
+                    ->color('gray')
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('total_qris_amount')
@@ -100,12 +108,43 @@ class SessionApprovalResource extends Resource
                     ->alignEnd()
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('cabang.nama_cabang')
+                    ->label('Cabang')
+                    ->badge()
+                    ->color('gray')
+                    ->placeholder('-'),
+
                 Tables\Columns\TextColumn::make('grand_total_amount')
                     ->label('Grand Total')
                     ->formatStateUsing(fn ($state) => 'Rp ' . number_format($state, 0, ',', '.'))
                     ->weight('bold')
                     ->alignEnd()
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('bonus_amount')
+                    ->label('Bonus Crew')
+                    ->getStateUsing(function (SessionReport $record): string {
+                        if (!$record->isNewspaperJanus()) {
+                            return '-';
+                        }
+                        $bonus = (int) $record->bonus_amount;
+                        $crewCount = $record->crews->count();
+                        if ($bonus > 0) {
+                            $perCrew = $crewCount > 0 ? (int) round($bonus / $crewCount) : 0;
+                            return 'Rp ' . number_format($bonus, 0, ',', '.') . ($crewCount > 0 ? ' (@ Rp ' . number_format($perCrew, 0, ',', '.') . ')' : '');
+                        }
+                        return 'Rp 0 (Target 30 sesi)';
+                    })
+                    ->badge()
+                    ->color(function (string $state): string {
+                        if ($state === '-') {
+                            return 'gray';
+                        }
+                        return str_contains($state, 'Rp 50.000') ? 'success' : 'warning';
+                    })
+                    ->alignEnd()
+                    ->sortable()
+                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('submitted_at')
                     ->label('Submitted At')

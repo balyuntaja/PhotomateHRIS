@@ -16,6 +16,15 @@ class CreateSessionReport extends CreateRecord
 
     protected static ?string $title = 'Buat Rekap Sesi Baru';
 
+    protected static bool $canCreateAnother = false;
+
+    protected function getCreateFormAction(): \Filament\Actions\Action
+    {
+        return parent::getCreateFormAction()
+            ->label('Kirim ke Supervisor')
+            ->icon('heroicon-o-paper-airplane');
+    }
+
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $data['status'] = SessionReport::STATUS_DRAFT;
@@ -29,28 +38,24 @@ class CreateSessionReport extends CreateRecord
         /** @var SessionReport $record */
         $record = $this->record;
 
-        // Recalculate transaction amounts & report totals from backend source of truth
-        app(PricingService::class)->recalculateReport($record);
-
-        // Log draft creation
-        if (Auth::user()) {
-            app(SessionWorkflowService::class)->logAction(
-                $record,
-                Auth::user(),
-                'DRAFT_CREATED',
-                'Draft rekap sesi dibuat.'
-            );
+        $user = Auth::user();
+        if ($user) {
+            app(SessionWorkflowService::class)->submit($record, $user);
+        } else {
+            app(PricingService::class)->recalculateReport($record);
         }
+    }
 
-        Notification::make()
-            ->title('Draft Rekap Sesi Tersimpan')
-            ->body('Anda dapat memeriksa kembali atau langsung mengirimkan rekap ke Supervisor.')
-            ->success()
-            ->send();
+    protected function getCreatedNotification(): ?Notification
+    {
+        return Notification::make()
+            ->title('Rekap Sesi Berhasil Dikirim')
+            ->body('Rekap sesi telah diserahkan dan menunggu persetujuan (approval) Supervisor.')
+            ->success();
     }
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResource()::getUrl('edit', ['record' => $this->record]);
+        return $this->getResource()::getUrl('index');
     }
 }

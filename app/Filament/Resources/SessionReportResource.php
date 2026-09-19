@@ -106,9 +106,10 @@ class SessionReportResource extends Resource
                             ->options(\App\Models\Cabang::orderBy('nama_cabang')->pluck('nama_cabang', 'cabang_id'))
                             ->searchable()
                             ->preload()
-                            ->placeholder('Pilih Cabang (misal: Goliohub / Janus)')
+                            ->live()
+                            ->placeholder('Pilih Cabang (Newspaper Janus / Photomate Express)')
                             ->nullable()
-                            ->helperText('Pilih cabang tempat sesi berlangsung')
+                            ->helperText('⚠️ Wajib pilih cabang agar bonus Newspaper Janus terhitung otomatis!')
                             ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire)),
 
                         Forms\Components\Select::make('crews')
@@ -118,6 +119,7 @@ class SessionReportResource extends Resource
                             ->multiple()
                             ->searchable()
                             ->preload()
+                            ->live()
                             ->required()
                             ->default(fn () => Auth::user() ? [Auth::user()->karyawan_id] : [])
                             ->helperText('Dapat memilih lebih dari 1 crew')
@@ -126,12 +128,31 @@ class SessionReportResource extends Resource
                     ])
                     ->columns(2),
 
-                Forms\Components\Section::make('Detail Transaksi')
-                    ->description('Masukkan transaksi sesi foto yang terjadi. Nominal dihitung otomatis oleh sistem sesuai pricing rule (1 sesi = Rp 30.000, tambahan sesi = Rp 15.000/sesi).')
+                Forms\Components\Section::make('Detail Sesi Foto')
+                    ->description('Masukkan sesi foto yang terjadi. Input utama adalah nominal harga (Rp 30.000 = 1 lembar, Rp 45.000 = 2 lembar, Rp 67.500 / Rp 70.000 = 3 lembar, +Rp 22.500/lembar). Jumlah lembar ditentukan otomatis.')
                     ->schema([
                         Forms\Components\Repeater::make('transactions')
                             ->relationship('transactions')
                             ->schema([
+                                Forms\Components\Placeholder::make('row_number')
+                                    ->label('Sesi')
+                                    ->content(function ($component, Get $get) {
+                                        $transactions = $get('../../transactions') ?? [];
+                                        $keys = array_keys($transactions);
+                                        $currentKey = (string) str($component->getContainer()->getStatePath())->afterLast('.');
+                                        $index = array_search($currentKey, $keys);
+                                        $no = ($index !== false) ? ($index + 1) : 1;
+
+                                        return new \Illuminate\Support\HtmlString('
+                                            <div class="flex items-center h-9">
+                                                <span class="inline-flex items-center justify-center min-w-[2.5rem] h-7 px-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-xs font-bold border border-gray-200 dark:border-gray-700">
+                                                    Sesi ' . $no . '
+                                                </span>
+                                            </div>
+                                        ');
+                                    })
+                                    ->columnSpan(['default' => 1, 'md' => 1]),
+
                                 Forms\Components\Select::make('payment_method')
                                     ->label('Metode Pembayaran')
                                     ->options([
@@ -141,56 +162,66 @@ class SessionReportResource extends Resource
                                     ->default('CASH')
                                     ->required()
                                     ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
-                                    ->columnSpan(['sm' => 1, 'md' => 1]),
+                                    ->columnSpan(['default' => 1, 'md' => 3]),
 
-                                Forms\Components\TextInput::make('session_count')
-                                    ->label('Jumlah Sesi')
+                                Forms\Components\TextInput::make('amount')
+                                    ->label('Harga / Nominal')
+                                    ->prefix('Rp')
                                     ->numeric()
-                                    ->minValue(1)
-                                    ->default(1)
+                                    ->minValue(0)
+                                    ->default(30000)
                                     ->required()
-                                    ->live(debounce: 200)
-                                    ->afterStateUpdated(function (Get $get, Forms\Set $set, $state) use ($pricingService) {
-                                        $count = (int) $state;
-                                        if ($count >= 1) {
-                                            $calculated = $pricingService->calculateSessionPrice($count, $get('../../report_date'));
-                                            $set('calculated_amount_display', 'Rp ' . number_format($calculated, 0, ',', '.'));
-                                            $set('amount', $calculated);
-                                        } else {
-                                            $set('calculated_amount_display', 'Rp 0');
-                                            $set('amount', 0);
-                                        }
+                                    ->live(debounce: 250)
+                                    ->datalist([
+                                        30000,
+                                        45000,
+                                        67500,
+                                        70000,
+                                        90000,
+                                        112500,
+                                        135000,
+                                        157500,
+                                        180000,
+                                    ])
+                                    ->afterStateUpdated(function (Forms\Set $set, $state) use ($pricingService) {
+                                        $amt = (float) $state;
+                                        $sessions = $pricingService->calculateSessionsFromPrice($amt);
+                                        $set('session_count', $sessions);
                                     })
                                     ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
-                                    ->columnSpan(['sm' => 1, 'md' => 1]),
+                                    ->columnSpan(['default' => 1, 'md' => 3]),
 
-                                Forms\Components\Placeholder::make('calculated_amount_display')
-                                    ->label('Nominal')
+                                Forms\Components\Placeholder::make('calculated_session_display')
+                                    ->label('Jumlah Lembar')
                                     ->content(function (Get $get) use ($pricingService) {
-                                        $count = (int) ($get('session_count') ?? 1);
-                                        if ($count < 1) {
-                                            return 'Rp 0';
+                                        $amt = (float) ($get('amount') ?? 0);
+                                        if ($amt <= 0 && $get('session_count')) {
+                                            return $get('session_count') . ' Lembar';
                                         }
-                                        $calculated = $pricingService->calculateSessionPrice($count, $get('../../report_date'));
-                                        return 'Rp ' . number_format($calculated, 0, ',', '.');
+                                        $sessions = $pricingService->calculateSessionsFromPrice($amt);
+                                        return $sessions . ' Lembar';
                                     })
-                                    ->columnSpan(['sm' => 1, 'md' => 1]),
+                                    ->columnSpan(['default' => 1, 'md' => 2]),
+
+                                Forms\Components\Hidden::make('session_count')
+                                    ->default(1)
+                                    ->dehydrated(),
 
                                 Forms\Components\TextInput::make('notes')
                                     ->label('Catatan (Opsional)')
                                     ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
-                                    ->columnSpan(['sm' => 1, 'md' => 1]),
+                                    ->columnSpan(['default' => 1, 'md' => 3]),
                             ])
-                            ->columns(4)
+                            ->columns(['default' => 1, 'md' => 12])
                             ->minItems(1)
                             ->defaultItems(1)
-                            ->addActionLabel('+ Tambah Transaksi')
+                            ->addActionLabel('+ Tambah Sesi')
                             ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
                             ->reorderable(false),
                     ]),
 
                 Forms\Components\Section::make('Ringkasan Kalkulasi Otomatis')
-                    ->description('Dihitung otomatis realtime (1 sesi = Rp 30.000, sesi berikutnya +Rp 15.000)')
+                    ->description('Dihitung otomatis realtime berdasarkan harga transaksi yang diinput.')
                     ->icon('heroicon-m-calculator')
                     ->schema([
                         Forms\Components\Placeholder::make('live_summary')
@@ -247,12 +278,20 @@ class SessionReportResource extends Resource
                     ->placeholder('-')
                     ->toggleable(),
 
-                Tables\Columns\TextColumn::make('total_sessions')
+                Tables\Columns\TextColumn::make('total_transactions')
                     ->label('Total Sesi')
                     ->formatStateUsing(fn ($state) => $state . ' sesi')
                     ->alignCenter()
                     ->badge()
                     ->color('info')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('total_sessions')
+                    ->label('Total Lembar')
+                    ->formatStateUsing(fn ($state) => $state . ' lembar')
+                    ->alignCenter()
+                    ->badge()
+                    ->color('gray')
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('total_cash_amount')
@@ -273,6 +312,31 @@ class SessionReportResource extends Resource
                     ->weight('bold')
                     ->alignEnd()
                     ->sortable(),
+
+                Tables\Columns\TextColumn::make('bonus_amount')
+                    ->label('Bonus Crew')
+                    ->getStateUsing(function (SessionReport $record): string {
+                        if (!$record->isNewspaperJanus()) {
+                            return '-';
+                        }
+                        $bonus = (int) $record->bonus_amount;
+                        $crewCount = $record->crews->count();
+                        if ($bonus > 0) {
+                            $perCrew = $crewCount > 0 ? (int) round($bonus / $crewCount) : 0;
+                            return 'Rp ' . number_format($bonus, 0, ',', '.') . ($crewCount > 0 ? ' (@ Rp ' . number_format($perCrew, 0, ',', '.') . ')' : '');
+                        }
+                        return 'Rp 0 (Target 30 sesi)';
+                    })
+                    ->badge()
+                    ->color(function (string $state): string {
+                        if ($state === '-') {
+                            return 'gray';
+                        }
+                        return str_contains($state, 'Rp 50.000') ? 'success' : 'warning';
+                    })
+                    ->alignEnd()
+                    ->sortable()
+                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')

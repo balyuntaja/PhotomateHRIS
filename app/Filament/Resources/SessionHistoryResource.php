@@ -109,6 +109,31 @@ class SessionHistoryResource extends Resource
                     ->alignEnd()
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('bonus_amount')
+                    ->label('Bonus Crew')
+                    ->getStateUsing(function (SessionReport $record): string {
+                        if (!$record->isNewspaperJanus()) {
+                            return '-';
+                        }
+                        $bonus = (int) $record->bonus_amount;
+                        $crewCount = $record->crews->count();
+                        if ($bonus > 0) {
+                            $perCrew = $crewCount > 0 ? (int) round($bonus / $crewCount) : 0;
+                            return 'Rp ' . number_format($bonus, 0, ',', '.') . ($crewCount > 0 ? ' (@ Rp ' . number_format($perCrew, 0, ',', '.') . ')' : '');
+                        }
+                        return 'Rp 0 (Target 30 sesi)';
+                    })
+                    ->badge()
+                    ->color(function (string $state): string {
+                        if ($state === '-') {
+                            return 'gray';
+                        }
+                        return str_contains($state, 'Rp 50.000') ? 'success' : 'warning';
+                    })
+                    ->alignEnd()
+                    ->sortable()
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->badge()

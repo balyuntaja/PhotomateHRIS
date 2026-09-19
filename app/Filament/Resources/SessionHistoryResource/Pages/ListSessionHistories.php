@@ -50,6 +50,8 @@ class ListSessionHistories extends ListRecords
                             'Payment Method',
                             'Jumlah Sesi',
                             'Nominal',
+                            'Bonus Cabang (Rp)',
+                            'Bonus per Crew (Rp)',
                             'Status',
                             'Submitted At',
                             'Approved At',
@@ -64,6 +66,10 @@ class ListSessionHistories extends ListRecords
                             $approvedAt = $report->approved_at ? $report->approved_at->format('Y-m-d H:i:s') : '-';
                             $approvedBy = $report->approver?->nama_lengkap ?? '-';
 
+                            $bonusAmount = $report->isNewspaperJanus() ? (int) $report->bonus_amount : 0;
+                            $crewCount = $report->crews->count();
+                            $bonusPerCrew = ($bonusAmount > 0 && $crewCount > 0) ? (int) round($bonusAmount / $crewCount) : 0;
+
                             $transactions = $report->transactions;
                             if ($transactions->isNotEmpty()) {
                                 foreach ($transactions as $trx) {
@@ -75,6 +81,8 @@ class ListSessionHistories extends ListRecords
                                         $trx->payment_method_label,
                                         $trx->session_count,
                                         $trx->amount,
+                                        $bonusAmount,
+                                        $bonusPerCrew,
                                         $report->status_label,
                                         $submittedAt,
                                         $approvedAt,
@@ -91,6 +99,8 @@ class ListSessionHistories extends ListRecords
                                     '-',
                                     $report->total_sessions,
                                     $report->grand_total_amount,
+                                    $bonusAmount,
+                                    $bonusPerCrew,
                                     $report->status_label,
                                     $submittedAt,
                                     $approvedAt,

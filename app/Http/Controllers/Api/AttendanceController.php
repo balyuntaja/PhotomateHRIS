@@ -69,6 +69,10 @@ class AttendanceController extends Controller
         $shortestDistance = PHP_FLOAT_MAX;
 
         foreach ($branches as $branch) {
+            if ($branch->latitude === null || $branch->longitude === null) {
+                continue;
+            }
+
             $distance = $this->calculateDistance(
                 $request->latitude,
                 $request->longitude,
@@ -77,7 +81,7 @@ class AttendanceController extends Controller
             );
 
             // Check if within radius and is the nearest
-            if ($distance <= $branch->radius_lokasi && $distance < $shortestDistance) {
+            if ($distance <= ($branch->radius_lokasi ?? 0) && $distance < $shortestDistance) {
                 $shortestDistance = $distance;
                 $nearestBranch = $branch;
             }
@@ -90,6 +94,10 @@ class AttendanceController extends Controller
             $shortestDistanceOverall = PHP_FLOAT_MAX;
 
             foreach ($branches as $branch) {
+                if ($branch->latitude === null || $branch->longitude === null) {
+                    continue;
+                }
+
                 $distance = $this->calculateDistance(
                     $request->latitude,
                     $request->longitude,
@@ -285,6 +293,10 @@ class AttendanceController extends Controller
         $shortestDistance = PHP_FLOAT_MAX;
 
         foreach ($branches as $branch) {
+            if ($branch->latitude === null || $branch->longitude === null) {
+                continue;
+            }
+
             $distance = $this->calculateDistance(
                 $request->latitude,
                 $request->longitude,
@@ -293,7 +305,7 @@ class AttendanceController extends Controller
             );
 
             // Check if within radius and is the nearest
-            if ($distance <= $branch->radius_lokasi && $distance < $shortestDistance) {
+            if ($distance <= ($branch->radius_lokasi ?? 0) && $distance < $shortestDistance) {
                 $shortestDistance = $distance;
                 $nearestBranch = $branch;
             }
@@ -306,6 +318,10 @@ class AttendanceController extends Controller
             $shortestDistanceOverall = PHP_FLOAT_MAX;
 
             foreach ($branches as $branch) {
+                if ($branch->latitude === null || $branch->longitude === null) {
+                    continue;
+                }
+
                 $distance = $this->calculateDistance(
                     $request->latitude,
                     $request->longitude,

@@ -42,6 +42,7 @@ class ViewCabang extends ViewRecord
               ->color('success'),
             Infolists\Components\TextEntry::make('alamat')
               ->label('Alamat')
+              ->placeholder('-')
               ->columnSpanFull(),
           ])
           ->columns(2),
@@ -50,21 +51,25 @@ class ViewCabang extends ViewRecord
           ->schema([
             Infolists\Components\TextEntry::make('latitude')
               ->label('Latitude')
+              ->placeholder('-')
               ->icon('heroicon-m-map-pin'),
             Infolists\Components\TextEntry::make('longitude')
               ->label('Longitude')
+              ->placeholder('-')
               ->icon('heroicon-m-map-pin'),
             Infolists\Components\TextEntry::make('radius_lokasi')
               ->label('Radius Lokasi')
               ->suffix(' meter')
+              ->placeholder('-')
               ->badge()
               ->color('info')
               ->icon('heroicon-m-globe-alt'),
             Infolists\Components\TextEntry::make('maps_link')
               ->label('Google Maps')
-              ->getStateUsing(fn($record) => "https://maps.google.com/?q={$record->latitude},{$record->longitude}")
-              ->url(fn($record) => "https://maps.google.com/?q={$record->latitude},{$record->longitude}")
+              ->getStateUsing(fn($record) => ($record->latitude && $record->longitude) ? "https://maps.google.com/?q={$record->latitude},{$record->longitude}" : '-')
+              ->url(fn($record) => ($record->latitude && $record->longitude) ? "https://maps.google.com/?q={$record->latitude},{$record->longitude}" : null)
               ->openUrlInNewTab()
+              ->placeholder('-')
               ->icon('heroicon-m-map'),
           ])
           ->columns(2),

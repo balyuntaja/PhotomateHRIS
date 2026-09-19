@@ -36,6 +36,7 @@ class SessionReport extends Model
         'total_qris_amount',
         'total_qris_sessions',
         'grand_total_amount',
+        'bonus_amount',
         'validation_status',
         'validation_issues',
         'submitted_by',
@@ -56,6 +57,7 @@ class SessionReport extends Model
         'total_qris_amount' => 'integer',
         'total_qris_sessions' => 'integer',
         'grand_total_amount' => 'integer',
+        'bonus_amount' => 'integer',
         'validation_issues' => 'array',
     ];
 
@@ -196,5 +198,21 @@ class SessionReport extends Model
             self::STATUS_REJECTED => 'danger',
             default => 'primary',
         };
+    }
+
+    public function isNewspaperJanus(): bool
+    {
+        return app(\App\Services\BranchBonusService::class)->isEligibleBranch($this->cabang);
+    }
+
+    public function getBonusDetails(): array
+    {
+        return app(\App\Services\BranchBonusService::class)->calculateBonusForReport($this);
+    }
+
+    public function getBonusPerCrewAttribute(): float
+    {
+        $details = $this->getBonusDetails();
+        return (float) ($details['bonus_per_crew_exact'] ?? 0);
     }
 }

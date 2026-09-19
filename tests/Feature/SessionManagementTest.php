@@ -113,20 +113,39 @@ class SessionManagementTest extends TestCase
      */
     public function test_pricing_calculation_formula(): void
     {
-        // 1 session = Rp 30.000
+        // Price -> Session mapping according to business logic:
+        // Rp 30.000 -> 1 sesi
+        $this->assertEquals(1, $this->pricingService->calculateSessionsFromPrice(30000));
+
+        // Rp 45.000 -> 2 sesi
+        $this->assertEquals(2, $this->pricingService->calculateSessionsFromPrice(45000));
+
+        // Rp 67.500 / Rp 70.000 -> 3 sesi
+        $this->assertEquals(3, $this->pricingService->calculateSessionsFromPrice(67500));
+        $this->assertEquals(3, $this->pricingService->calculateSessionsFromPrice(70000));
+
+        // +22.500 per session pattern after 45.000:
+        // Rp 90.000 -> 4 sesi
+        $this->assertEquals(4, $this->pricingService->calculateSessionsFromPrice(90000));
+
+        // Rp 112.500 -> 5 sesi
+        $this->assertEquals(5, $this->pricingService->calculateSessionsFromPrice(112500));
+
+        // Rp 135.000 -> 6 sesi
+        $this->assertEquals(6, $this->pricingService->calculateSessionsFromPrice(135000));
+
+        // Rp 157.500 -> 7 sesi
+        $this->assertEquals(7, $this->pricingService->calculateSessionsFromPrice(157500));
+
+        // Rp 180.000 -> 8 sesi
+        $this->assertEquals(8, $this->pricingService->calculateSessionsFromPrice(180000));
+
+        // Backward compatibility: calculateSessionPrice
         $this->assertEquals(30000, $this->pricingService->calculateSessionPrice(1));
-
-        // 2 sessions = Rp 45.000
         $this->assertEquals(45000, $this->pricingService->calculateSessionPrice(2));
-
-        // 3 sessions = Rp 60.000
-        $this->assertEquals(60000, $this->pricingService->calculateSessionPrice(3));
-
-        // 4 sessions = Rp 75.000
-        $this->assertEquals(75000, $this->pricingService->calculateSessionPrice(4));
-
-        // 8 sessions = Rp 135.000
-        $this->assertEquals(135000, $this->pricingService->calculateSessionPrice(8));
+        $this->assertEquals(67500, $this->pricingService->calculateSessionPrice(3));
+        $this->assertEquals(90000, $this->pricingService->calculateSessionPrice(4));
+        $this->assertEquals(180000, $this->pricingService->calculateSessionPrice(8));
 
         // Invalid session count (< 1) must throw InvalidArgumentException
         $this->expectException(\InvalidArgumentException::class);
@@ -150,55 +169,55 @@ class SessionManagementTest extends TestCase
 
         $report->crews()->attach([$this->crewKia->karyawan_id, $this->crewShasha->karyawan_id]);
 
-        // Transactions:
-        // 1. Tunai - 1 sesi - Rp 30.000
-        // 2. Tunai - 2 sesi - Rp 45.000
-        // 3. QRIS - 3 sesi - Rp 60.000
-        // 4. QRIS - 4 sesi - Rp 75.000
+        // Transactions with inputted prices:
+        // 1. Tunai - Rp 30.000 -> 1 sesi
+        // 2. Tunai - Rp 45.000 -> 2 sesi
+        // 3. QRIS - Rp 70.000 -> 3 sesi (promo / alternative price)
+        // 4. QRIS - Rp 90.000 -> 4 sesi
         SessionTransaction::create([
             'session_report_id' => $report->id,
             'payment_method' => 'CASH',
-            'session_count' => 1,
-            'amount' => 0, // Should be recalculated by backend
+            'amount' => 30000,
+            'session_count' => 0, // Should be calculated by backend
         ]);
 
         SessionTransaction::create([
             'session_report_id' => $report->id,
             'payment_method' => 'CASH',
-            'session_count' => 2,
-            'amount' => 0,
+            'amount' => 45000,
+            'session_count' => 0,
         ]);
 
         SessionTransaction::create([
             'session_report_id' => $report->id,
             'payment_method' => 'QRIS',
-            'session_count' => 3,
-            'amount' => 0,
+            'amount' => 70000,
+            'session_count' => 0,
         ]);
 
         SessionTransaction::create([
             'session_report_id' => $report->id,
             'payment_method' => 'QRIS',
-            'session_count' => 4,
-            'amount' => 0,
+            'amount' => 90000,
+            'session_count' => 0,
         ]);
 
         // Recalculate via PricingService
         $this->pricingService->recalculateReport($report);
         $report->refresh();
 
-        // Verify Expected Totals from Section 38:
-        // Total Sesi: 10
+        // Verify Expected Totals:
+        // Total Sesi: 1 + 2 + 3 + 4 = 10
         // Total Tunai: 3 sesi, Rp 75.000
-        // Total QRIS: 7 sesi, Rp 135.000
-        // Grand Total: Rp 210.000
+        // Total QRIS: 7 sesi, Rp 160.000
+        // Grand Total: Rp 235.000
         $this->assertEquals(10, $report->total_sessions);
         $this->assertEquals(4, $report->total_transactions);
         $this->assertEquals(3, $report->total_cash_sessions);
         $this->assertEquals(75000, $report->total_cash_amount);
         $this->assertEquals(7, $report->total_qris_sessions);
-        $this->assertEquals(135000, $report->total_qris_amount);
-        $this->assertEquals(210000, $report->grand_total_amount);
+        $this->assertEquals(160000, $report->total_qris_amount);
+        $this->assertEquals(235000, $report->grand_total_amount);
         $this->assertEquals('VALID', $report->validation_status);
 
         // Step 2: Crew submit
@@ -304,8 +323,7 @@ class SessionManagementTest extends TestCase
     }
 
     /**
-     * Test 5: Backend Amount Recalculation (Client Input Tampering Guard)
-     * Backend MUST recalculate amount and NEVER trust client-provided numbers.
+     * Test 5: Backend Recalculates Session Count from Inputted Amount Source of Truth
      */
     public function test_backend_recalculates_client_amounts_source_of_truth(): void
     {
@@ -316,22 +334,34 @@ class SessionManagementTest extends TestCase
         ]);
         $report->crews()->attach([$this->crewKia->karyawan_id]);
 
-        // Client maliciously attempts to set 8 sessions as Rp 5.000 instead of Rp 135.000
-        $trx = SessionTransaction::create([
+        // Client attempts to input 70.000 with session_count 1 (should be 3)
+        // and 180.000 with session_count 2 (should be 8)
+        $trx1 = SessionTransaction::create([
+            'session_report_id' => $report->id,
+            'payment_method' => 'CASH',
+            'session_count' => 1,
+            'amount' => 70000,
+        ]);
+
+        $trx2 = SessionTransaction::create([
             'session_report_id' => $report->id,
             'payment_method' => 'QRIS',
-            'session_count' => 8,
-            'amount' => 5000,
+            'session_count' => 2,
+            'amount' => 180000,
         ]);
 
         $this->pricingService->recalculateReport($report);
-        $trx->refresh();
+        $trx1->refresh();
+        $trx2->refresh();
         $report->refresh();
 
-        // Must be corrected by backend to 135.000 (30000 + 7 * 15000)
-        $this->assertEquals(135000, $trx->amount);
-        $this->assertEquals(135000, $report->total_qris_amount);
-        $this->assertEquals(135000, $report->grand_total_amount);
+        // Must be mapped by backend to 3 sessions for 70.000 and 8 sessions for 180.000
+        $this->assertEquals(3, $trx1->session_count);
+        $this->assertEquals(8, $trx2->session_count);
+        $this->assertEquals(11, $report->total_sessions);
+        $this->assertEquals(70000, $report->total_cash_amount);
+        $this->assertEquals(180000, $report->total_qris_amount);
+        $this->assertEquals(250000, $report->grand_total_amount);
     }
 
     /**
@@ -457,7 +487,9 @@ class SessionManagementTest extends TestCase
         $this->actingAs($this->crewKia);
 
         \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\CreateSessionReport::class)
-            ->assertSuccessful();
+            ->assertSuccessful()
+            ->assertSee('Sesi')
+            ->assertSee('Metode Pembayaran');
 
         $report = SessionReport::create([
             'report_date' => Carbon::today(),
@@ -474,7 +506,41 @@ class SessionManagementTest extends TestCase
         \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\EditSessionReport::class, [
             'record' => $report->getKey(),
         ])
-            ->assertSuccessful();
+            ->assertSuccessful()
+            ->assertSee('Sesi')
+            ->assertSee('Metode Pembayaran');
+    }
+
+    public function test_create_session_report_immediately_submits_to_supervisor(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\CreateSessionReport::class)
+            ->fillForm([
+                'report_date' => Carbon::today()->format('Y-m-d'),
+                'crews' => [$this->crewKia->karyawan_id],
+                'transactions' => [
+                    [
+                        'payment_method' => 'CASH',
+                        'amount' => 30000,
+                    ],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(\App\Filament\Resources\SessionReportResource::getUrl('index'));
+
+        $latestReport = SessionReport::latest('id')->first();
+        $this->assertNotNull($latestReport);
+        $this->assertEquals(SessionReport::STATUS_WAITING_APPROVAL, $latestReport->status);
+        $this->assertEquals($this->crewKia->karyawan_id, $latestReport->submitted_by);
+        $this->assertNotNull($latestReport->submitted_at);
+
+        $this->assertDatabaseHas('approval_logs', [
+            'session_report_id' => $latestReport->id,
+            'action' => 'SUBMITTED',
+            'user_id' => $this->crewKia->karyawan_id,
+        ]);
     }
 
     public function test_review_modal_and_view_session_report_render_cleanly(): void
@@ -552,5 +618,243 @@ class SessionManagementTest extends TestCase
             ->assertSuccessful()
             ->assertSee('Validasi Otomatis Sistem')
             ->assertSee('Audit Trail');
+    }
+
+    /**
+     * Test 12: Detailed mapping verification for user requested price -> sessions
+     */
+    public function test_rekap_sesi_price_to_session_mapping(): void
+    {
+        $testCases = [
+            30000 => 1,
+            45000 => 2,
+            67500 => 3,
+            70000 => 3,
+            90000 => 4,
+            112500 => 5,
+            135000 => 6,
+            157500 => 7,
+            180000 => 8,
+            202500 => 9,
+            225000 => 10,
+        ];
+
+        foreach ($testCases as $price => $expectedSessions) {
+            $this->assertEquals(
+                $expectedSessions,
+                $this->pricingService->calculateSessionsFromPrice($price),
+                "Mapping failed for price Rp " . number_format($price, 0, ',', '.')
+            );
+        }
+
+        // Test with a SessionReport containing multiple transactions with various prices
+        $report = SessionReport::create([
+            'report_date' => Carbon::today(),
+            'status' => SessionReport::STATUS_DRAFT,
+            'submitted_by' => $this->crewKia->karyawan_id,
+        ]);
+        $report->crews()->attach([$this->crewKia->karyawan_id]);
+
+        $prices = [30000, 45000, 67500, 70000, 90000, 112500, 135000, 157500, 180000];
+        foreach ($prices as $p) {
+            SessionTransaction::create([
+                'session_report_id' => $report->id,
+                'payment_method' => 'CASH',
+                'amount' => $p,
+            ]);
+        }
+
+        $this->pricingService->recalculateReport($report);
+        $report->refresh();
+
+        // Total sessions: 1 + 2 + 3 + 3 + 4 + 5 + 6 + 7 + 8 = 39 sessions
+        $this->assertEquals(39, $report->total_sessions);
+        $this->assertEquals(count($prices), $report->total_transactions);
+        $this->assertEquals(array_sum($prices), $report->grand_total_amount);
+        $this->assertEquals('VALID', $report->validation_status);
+
+        // Verify each individual transaction session count
+        $transactions = $report->transactions()->orderBy('id')->get();
+        $expectedSessionCounts = [1, 2, 3, 3, 4, 5, 6, 7, 8];
+        foreach ($transactions as $index => $trx) {
+            $this->assertEquals($expectedSessionCounts[$index], $trx->session_count);
+            $this->assertEquals($prices[$index], (int) $trx->amount);
+        }
+    }
+
+    /**
+     * Test 13: Newspaper Janus Bonus Rules & Crew Distribution
+     */
+    public function test_newspaper_janus_bonus_rules_and_crew_distribution(): void
+    {
+        $bonusService = app(\App\Services\BranchBonusService::class);
+
+        $cabangJanus = \App\Models\Cabang::create([
+            'cabang_id' => 'C-NJ',
+            'perusahaan_id' => 'P01',
+            'nama_cabang' => 'Newspaper Janus',
+        ]);
+
+        $this->assertTrue($bonusService->isEligibleBranch($cabangJanus));
+
+        // 1. Below 30 sessions (29 sessions) -> Bonus = 0
+        $belowTarget = $bonusService->calculateDailyBonus(29, 2, $cabangJanus);
+        $this->assertFalse($belowTarget['target_reached']);
+        $this->assertEquals(0, $belowTarget['total_bonus']);
+        $this->assertEquals(0, $belowTarget['bonus_per_crew']);
+        $this->assertEquals(1, $belowTarget['remaining_sessions']);
+
+        // 2. Exact 30 sessions with 1 crew -> Bonus = Rp 50.000, 1 crew gets Rp 50.000
+        $exactTarget1Crew = $bonusService->calculateDailyBonus(30, 1, $cabangJanus);
+        $this->assertTrue($exactTarget1Crew['target_reached']);
+        $this->assertEquals(50000, $exactTarget1Crew['total_bonus']);
+        $this->assertEquals(50000, $exactTarget1Crew['bonus_per_crew']);
+
+        // 3. Exact 30 sessions with 2 crews -> Bonus = Rp 50.000, each gets Rp 25.000
+        $exactTarget2Crews = $bonusService->calculateDailyBonus(30, 2, $cabangJanus);
+        $this->assertTrue($exactTarget2Crews['target_reached']);
+        $this->assertEquals(50000, $exactTarget2Crews['total_bonus']);
+        $this->assertEquals(25000, $exactTarget2Crews['bonus_per_crew']);
+
+        // 4. Above 30 sessions (31 sessions & 40 sessions) -> Bonus remains flat Rp 50.000
+        $aboveTarget31 = $bonusService->calculateDailyBonus(31, 2, $cabangJanus);
+        $this->assertEquals(50000, $aboveTarget31['total_bonus']);
+        $this->assertEquals(25000, $aboveTarget31['bonus_per_crew']);
+
+        $aboveTarget40 = $bonusService->calculateDailyBonus(40, 2, $cabangJanus);
+        $this->assertEquals(50000, $aboveTarget40['total_bonus']);
+        $this->assertEquals(25000, $aboveTarget40['bonus_per_crew']);
+
+        // 5. 3 crews with >= 30 sessions -> Rp 50.000 / 3
+        $threeCrews = $bonusService->calculateDailyBonus(35, 3, $cabangJanus);
+        $this->assertEquals(50000, $threeCrews['total_bonus']);
+        $this->assertEquals((int) round(50000 / 3), $threeCrews['bonus_per_crew']);
+
+        // Test with SessionReport model and recalculateReport
+        $report = SessionReport::create([
+            'report_date' => Carbon::today(),
+            'status' => SessionReport::STATUS_DRAFT,
+            'submitted_by' => $this->crewKia->karyawan_id,
+            'cabang_id' => $cabangJanus->cabang_id,
+        ]);
+        $report->crews()->attach([$this->crewKia->karyawan_id, $this->crewShasha->karyawan_id]);
+
+        // Add transactions totaling 30 sessions
+        // 30 sessions @ 30.000 = 1 session each x 30
+        for ($i = 0; $i < 30; $i++) {
+            SessionTransaction::create([
+                'session_report_id' => $report->id,
+                'payment_method' => 'CASH',
+                'amount' => 30000,
+            ]);
+        }
+
+        $this->pricingService->recalculateReport($report);
+        $report->refresh();
+
+        $this->assertEquals(30, $report->total_sessions);
+        $this->assertEquals(50000, $report->bonus_amount);
+        $this->assertTrue($report->isNewspaperJanus());
+
+        $bonusDetails = $report->getBonusDetails();
+        $this->assertTrue($bonusDetails['target_reached']);
+        $this->assertEquals(50000, $bonusDetails['total_bonus']);
+        $this->assertEquals(25000, $bonusDetails['bonus_per_crew']);
+        $this->assertCount(2, $bonusDetails['crew_breakdown']);
+        $this->assertEquals(25000, $bonusDetails['crew_breakdown'][0]['bonus']);
+        $this->assertEquals(25000, $bonusDetails['crew_breakdown'][1]['bonus']);
+    }
+
+    /**
+     * Test 14: Photomate Express is explicitly NOT eligible for the bonus
+     */
+    public function test_photomate_express_is_not_eligible_for_bonus(): void
+    {
+        $bonusService = app(\App\Services\BranchBonusService::class);
+
+        $cabangExpress = \App\Models\Cabang::create([
+            'cabang_id' => 'C-PE',
+            'perusahaan_id' => 'P01',
+            'nama_cabang' => 'Photomate Express',
+        ]);
+
+        $this->assertFalse($bonusService->isEligibleBranch($cabangExpress));
+
+        // Even with 40 sessions and 2 crews, bonus must remain 0
+        $result = $bonusService->calculateDailyBonus(40, 2, $cabangExpress);
+        $this->assertFalse($result['is_eligible_branch']);
+        $this->assertFalse($result['target_reached']);
+        $this->assertEquals(0, $result['total_bonus']);
+        $this->assertEquals(0, $result['bonus_per_crew']);
+
+        // Test with SessionReport model
+        $report = SessionReport::create([
+            'report_date' => Carbon::today(),
+            'status' => SessionReport::STATUS_DRAFT,
+            'submitted_by' => $this->crewKia->karyawan_id,
+            'cabang_id' => $cabangExpress->cabang_id,
+        ]);
+        $report->crews()->attach([$this->crewKia->karyawan_id, $this->crewShasha->karyawan_id]);
+
+        for ($i = 0; $i < 35; $i++) {
+            SessionTransaction::create([
+                'session_report_id' => $report->id,
+                'payment_method' => 'CASH',
+                'amount' => 30000,
+            ]);
+        }
+
+        $this->pricingService->recalculateReport($report);
+        $report->refresh();
+
+        $this->assertEquals(35, $report->total_sessions);
+        $this->assertEquals(0, $report->bonus_amount);
+        $this->assertFalse($report->isNewspaperJanus());
+
+        $details = $report->getBonusDetails();
+        $this->assertFalse($details['is_eligible_branch']);
+        $this->assertEquals(0, $details['total_bonus']);
+    }
+
+    /**
+     * Test 15: Review Modal renders Newspaper Janus bonus details cleanly
+     */
+    public function test_newspaper_janus_bonus_display_in_review_modal(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $cabangJanus = \App\Models\Cabang::create([
+            'cabang_id' => 'C-JAN',
+            'perusahaan_id' => 'P01',
+            'nama_cabang' => 'Newspaper Janus',
+        ]);
+
+        $report = SessionReport::create([
+            'report_date' => Carbon::today(),
+            'status' => SessionReport::STATUS_DRAFT,
+            'submitted_by' => $this->crewKia->karyawan_id,
+            'cabang_id' => $cabangJanus->cabang_id,
+        ]);
+        $report->crews()->attach([$this->crewKia->karyawan_id, $this->crewShasha->karyawan_id]);
+
+        // 30 sessions
+        for ($i = 0; $i < 30; $i++) {
+            SessionTransaction::create([
+                'session_report_id' => $report->id,
+                'payment_method' => 'CASH',
+                'amount' => 30000,
+            ]);
+        }
+
+        $this->pricingService->recalculateReport($report);
+        $report->refresh();
+
+        $view = $this->view('filament.resources.session-reports.review-modal', ['record' => $report]);
+        $view->assertSee('Bonus Crew Cabang Newspaper Janus');
+        $view->assertSee('TARGET HARIAN TERCAPAI (≥ 30 SESI)');
+        $view->assertSee('Rp 50.000');
+        $view->assertSee('Rp 25.000');
+        $view->assertSee('Kia');
+        $view->assertSee('Shasha');
     }
 }

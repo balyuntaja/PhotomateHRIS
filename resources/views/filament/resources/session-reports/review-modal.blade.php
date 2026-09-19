@@ -90,6 +90,103 @@
         </div>
     </div>
 
+    <!-- Bonus Crew Newspaper Janus (Khusus Cabang Newspaper Janus) -->
+    @if($report->isNewspaperJanus())
+    @php
+        $bonusDetails = $report->getBonusDetails();
+        $isTargetReached = $bonusDetails['target_reached'];
+        $totalBonus = $bonusDetails['total_bonus'];
+        $bonusPerCrew = $bonusDetails['bonus_per_crew'];
+        $crewBreakdown = $bonusDetails['crew_breakdown'];
+        $crewCount = $bonusDetails['crew_count'];
+    @endphp
+    <div>
+        <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400 mb-2">Bonus Crew Cabang Newspaper Janus</h3>
+        @if($isTargetReached)
+        <div class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-600 text-white font-bold text-xs">✓</span>
+                    <span class="font-bold text-sm text-emerald-800 dark:text-emerald-200">TARGET HARIAN TERCAPAI (≥ 30 SESI)</span>
+                </div>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 border border-emerald-300">
+                    Bonus Aktif Rp 50.000
+                </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-emerald-200 dark:border-emerald-800/60 text-xs">
+                <div class="p-2.5 bg-white/70 dark:bg-gray-900/50 rounded-lg border border-emerald-200 dark:border-emerald-800/40">
+                    <span class="text-gray-500 block">Total Sesi Hari Ini:</span>
+                    <span class="text-base font-bold text-gray-900 dark:text-gray-100">{{ $bonusDetails['day_total_sessions'] }} Sesi</span>
+                    <span class="text-[10px] text-emerald-600 block">(Target: ≥ 30 sesi)</span>
+                </div>
+                <div class="p-2.5 bg-white/70 dark:bg-gray-900/50 rounded-lg border border-emerald-200 dark:border-emerald-800/40">
+                    <span class="text-gray-500 block">Total Bonus Cabang:</span>
+                    <span class="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">Rp {{ number_format($totalBonus, 0, ',', '.') }}</span>
+                    <span class="text-[10px] text-gray-400 block">Untuk crew bertugas</span>
+                </div>
+                <div class="p-2.5 bg-white/70 dark:bg-gray-900/50 rounded-lg border border-emerald-200 dark:border-emerald-800/40">
+                    <span class="text-gray-500 block">Bonus per Crew ({{ $crewCount }} orang):</span>
+                    <span class="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">Rp {{ number_format($bonusPerCrew, 0, ',', '.') }}</span>
+                    <span class="text-[10px] text-gray-400 block">
+                        @if($crewCount === 1)
+                            (1 crew: Rp 50.000)
+                        @elseif($crewCount === 2)
+                            (Rp 50.000 ÷ 2 = Rp 25.000)
+                        @elseif($crewCount > 2)
+                            (Rp 50.000 ÷ {{ $crewCount }})
+                        @else
+                            -
+                        @endif
+                    </span>
+                </div>
+            </div>
+
+            @if(!empty($crewBreakdown))
+            <div class="pt-2">
+                <span class="text-xs font-semibold text-emerald-900 dark:text-emerald-100 block mb-1.5">Penghasilan Bonus per Crew Bertugas:</span>
+                <div class="overflow-x-auto rounded-lg border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-gray-900">
+                    <table class="min-w-full divide-y divide-emerald-200 dark:divide-emerald-800 text-xs">
+                        <thead class="bg-emerald-50/70 dark:bg-emerald-950/50 text-emerald-900 dark:text-emerald-200 font-semibold">
+                            <tr>
+                                <th class="px-3 py-1.5 text-left">Nama Crew</th>
+                                <th class="px-3 py-1.5 text-center">Status</th>
+                                <th class="px-3 py-1.5 text-right">Bonus Diterima</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-emerald-100 dark:divide-emerald-900/50">
+                            @foreach($crewBreakdown as $c)
+                            <tr>
+                                <td class="px-3 py-1.5 font-medium text-gray-900 dark:text-gray-100">{{ $c['nama_lengkap'] }}</td>
+                                <td class="px-3 py-1.5 text-center text-emerald-600 font-semibold">Bertugas</td>
+                                <td class="px-3 py-1.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">Rp {{ number_format($c['bonus'], 0, ',', '.') }}</td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            @endif
+        </div>
+        @else
+        <div class="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-100 space-y-1.5">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-200">
+                    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 text-amber-900 font-bold text-xs">!</span>
+                    <span>BELUM MENCAPAI TARGET BONUS ({{ $report->total_sessions }} / 30 SESI)</span>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+                    Bonus: Rp 0
+                </span>
+            </div>
+            <p class="text-amber-700 dark:text-amber-300">
+                Target 30 sesi belum terpenuhi (kurang <strong>{{ max(0, 30 - $report->total_sessions) }} sesi lagi</strong>). Bonus total Rp 50.000 hanya aktif apabila sesi pada hari tersebut mencapai minimal 30 sesi.
+            </p>
+        </div>
+        @endif
+    </div>
+    @endif
+
     <!-- Detail Transaksi -->
     <div>
         <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400 mb-2">Detail Transaksi ({{ $transactions->count() }})</h3>
