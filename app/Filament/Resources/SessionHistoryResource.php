@@ -231,8 +231,16 @@ class SessionHistoryResource extends Resource
                     ->modalContent(fn (SessionReport $record) => view('filament.resources.session-reports.review-modal', ['record' => $record]))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Tutup'),
+
+                Tables\Actions\DeleteAction::make()
+                    ->visible(fn () => (bool) Auth::user()?->isSuperAdmin()),
             ])
-            ->bulkActions([]);
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn () => (bool) Auth::user()?->isSuperAdmin()),
+                ]),
+            ]);
     }
 
     public static function getRelations(): array

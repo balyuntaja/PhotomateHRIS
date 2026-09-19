@@ -23,6 +23,7 @@ class SessionManagementTest extends TestCase
     protected Karyawan $crewKia;
     protected Karyawan $crewShasha;
     protected Karyawan $supervisor;
+    protected Karyawan $superAdmin;
 
     protected function setUp(): void
     {
@@ -44,6 +45,7 @@ class SessionManagementTest extends TestCase
         );
 
         // Ensure roles exist
+        Role::firstOrCreate(['name' => 'Admin', 'guard_name' => 'web'], ['role_id' => 'R01']);
         Role::firstOrCreate(['name' => 'Karyawan', 'guard_name' => 'web'], ['role_id' => 'R07']);
         Role::firstOrCreate(['name' => 'Supervisor', 'guard_name' => 'web'], ['role_id' => 'R08']);
 
@@ -56,6 +58,22 @@ class SessionManagementTest extends TestCase
                 'nomor_telepon' => '08123456789',
                 'jam_masuk' => '08:00',
                 'jam_pulang' => '17:00',
+            ]
+        );
+
+        // Create test Super Admin
+        $this->superAdmin = Karyawan::firstOrCreate(
+            ['karyawan_id' => 'ADM01'],
+            [
+                'role_id' => 'R01',
+                'perusahaan_id' => 'P01',
+                'nik' => '1234567890123450',
+                'nama_lengkap' => 'Admin Super',
+                'email' => 'admin.super@photomate.id',
+                'password' => bcrypt('password'),
+                'tanggal_lahir' => '1990-01-01',
+                'jenis_kelamin' => 'Laki-laki',
+                'alamat' => 'Jakarta',
             ]
         );
 
@@ -387,6 +405,60 @@ class SessionManagementTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $report->delete();
+    }
+
+    public function test_super_admin_can_delete_approved_report(): void
+    {
+        $report = SessionReport::create([
+            'report_date' => '2026-05-23',
+            'status' => SessionReport::STATUS_WAITING_APPROVAL,
+            'submitted_by' => $this->crewKia->karyawan_id,
+        ]);
+        $report->crews()->attach([$this->crewKia->karyawan_id]);
+
+        SessionTransaction::create([
+            'session_report_id' => $report->id,
+            'payment_method' => 'CASH',
+            'session_count' => 1,
+            'amount' => 30000,
+        ]);
+
+        $this->workflowService->approve($report, $this->supervisor);
+
+        $this->actingAs($this->superAdmin);
+        $this->assertTrue($this->superAdmin->isSuperAdmin());
+
+        $reportId = $report->id;
+        $report->delete();
+
+        $this->assertDatabaseMissing('session_reports', ['id' => $reportId]);
+        $this->assertDatabaseMissing('session_transactions', ['session_report_id' => $reportId]);
+    }
+
+    public function test_delete_action_visibility_in_rekap_sesi_and_history(): void
+    {
+        $report = SessionReport::create([
+            'report_date' => '2026-05-23',
+            'status' => SessionReport::STATUS_APPROVED,
+            'submitted_by' => $this->crewKia->karyawan_id,
+        ]);
+        $report->crews()->attach([$this->crewKia->karyawan_id]);
+
+        // Regular crew should NOT see delete action on approved report in rekap sesi or history
+        $this->actingAs($this->crewKia);
+        \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\ListSessionReports::class)
+            ->assertTableActionHidden('delete', $report);
+
+        \Livewire\Livewire::test(\App\Filament\Resources\SessionHistoryResource\Pages\ListSessionHistories::class)
+            ->assertTableActionHidden('delete', $report);
+
+        // Super Admin SHOULD see delete action on both rekap sesi and history
+        $this->actingAs($this->superAdmin);
+        \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\ListSessionReports::class)
+            ->assertTableActionVisible('delete', $report);
+
+        \Livewire\Livewire::test(\App\Filament\Resources\SessionHistoryResource\Pages\ListSessionHistories::class)
+            ->assertTableActionVisible('delete', $report);
     }
 
     /**

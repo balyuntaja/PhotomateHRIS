@@ -80,7 +80,7 @@ class Karyawan extends Authenticable implements FilamentUser, HasName
 
   public function isSuperAdmin(): bool
   {
-    return $this->role_id === 'R01' || $this->hasRole('Admin');
+    return $this->role_id === 'R01' || $this->hasRole(['Admin', 'admin', 'Super Admin', 'super_admin']);
   }
 
   public function getFilamentName(): string

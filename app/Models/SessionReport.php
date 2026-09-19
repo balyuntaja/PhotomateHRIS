@@ -85,7 +85,11 @@ class SessionReport extends Model
         });
 
         static::deleting(function ($model) {
-            if ($model->status === self::STATUS_APPROVED) {
+            /** @var \App\Models\Karyawan|null $user */
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+            if ($model->status === self::STATUS_APPROVED && !$isSuperAdmin) {
                 throw new \RuntimeException('Data rekap sesi yang telah disetujui (APPROVED) tidak dapat dihapus.');
             }
         });

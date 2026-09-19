@@ -406,10 +406,13 @@ class SessionReportResource extends Resource
                     }),
 
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn (SessionReport $record) => $record->status === SessionReport::STATUS_DRAFT),
+                    ->visible(fn (SessionReport $record) => $record->status === SessionReport::STATUS_DRAFT || (bool) Auth::user()?->isSuperAdmin()),
             ])
             ->bulkActions([
-                // Avoid bulk deletion of operational data
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn () => (bool) Auth::user()?->isSuperAdmin()),
+                ]),
             ]);
     }
 

@@ -18,6 +18,8 @@ class ViewSessionReport extends ViewRecord
         return [
             Actions\EditAction::make()
                 ->visible(fn () => in_array($this->record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION])),
+            Actions\DeleteAction::make()
+                ->visible(fn () => (bool) \Illuminate\Support\Facades\Auth::user()?->isSuperAdmin()),
         ];
     }
 

@@ -87,7 +87,7 @@ class EditSessionReport extends EditRecord
                 ->visible(fn () => in_array($this->record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION])),
 
             Actions\DeleteAction::make()
-                ->visible(fn () => $this->record->status === SessionReport::STATUS_DRAFT),
+                ->visible(fn () => $this->record->status === SessionReport::STATUS_DRAFT || (bool) Auth::user()?->isSuperAdmin()),
         ];
     }
 }

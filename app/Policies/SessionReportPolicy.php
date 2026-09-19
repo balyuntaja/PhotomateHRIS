@@ -65,7 +65,12 @@ class SessionReportPolicy
 
     public function delete(Karyawan $user, SessionReport $report): bool
     {
-        // Cannot delete approved reports
+        // Super Admin can delete any report regardless of status
+        if ($user->isSuperAdmin()) {
+            return true;
+        }
+
+        // Cannot delete approved reports for non-superadmin
         if ($report->isApproved()) {
             return false;
         }
@@ -80,6 +85,11 @@ class SessionReportPolicy
         }
 
         return false;
+    }
+
+    public function deleteAny(Karyawan $user): bool
+    {
+        return $user->isSuperAdmin();
     }
 
     public function approve(Karyawan $user, SessionReport $report): bool
