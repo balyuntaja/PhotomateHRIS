@@ -129,7 +129,7 @@ class SessionReportResource extends Resource
                     ->columns(2),
 
                 Forms\Components\Section::make('Detail Sesi Foto')
-                    ->description('Masukkan sesi foto yang terjadi. Input utama adalah nominal harga (Rp 30.000 = 1 lembar, Rp 45.000 = 2 lembar, Rp 67.500 / Rp 70.000 = 3 lembar, +Rp 22.500/lembar). Jumlah lembar ditentukan otomatis.')
+                    ->description('Input utama adalah nominal harga transaksi, jumlah lembar dihitung otomatis.')
                     ->schema([
                         Forms\Components\Repeater::make('transactions')
                             ->relationship('transactions')
@@ -145,13 +145,13 @@ class SessionReportResource extends Resource
 
                                         return new \Illuminate\Support\HtmlString('
                                             <div class="flex items-center h-9">
-                                                <span class="inline-flex items-center justify-center min-w-[2.5rem] h-7 px-2 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-xs font-bold border border-gray-200 dark:border-gray-700">
+                                                <span class="inline-flex items-center justify-center min-w-[2.5rem] h-7 px-2.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-xs font-bold border border-gray-200 dark:border-gray-700">
                                                     Sesi ' . $no . '
                                                 </span>
                                             </div>
                                         ');
                                     })
-                                    ->columnSpan(['default' => 1, 'md' => 1]),
+                                    ->columnSpan(['default' => 4, 'sm' => 4, 'md' => 1]),
 
                                 Forms\Components\Select::make('payment_method')
                                     ->label('Metode Pembayaran')
@@ -162,7 +162,7 @@ class SessionReportResource extends Resource
                                     ->default('CASH')
                                     ->required()
                                     ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
-                                    ->columnSpan(['default' => 1, 'md' => 3]),
+                                    ->columnSpan(['default' => 8, 'sm' => 8, 'md' => 3]),
 
                                 Forms\Components\TextInput::make('amount')
                                     ->label('Harga / Nominal')
@@ -189,19 +189,28 @@ class SessionReportResource extends Resource
                                         $set('session_count', $sessions);
                                     })
                                     ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
-                                    ->columnSpan(['default' => 1, 'md' => 3]),
+                                    ->columnSpan(['default' => 7, 'sm' => 7, 'md' => 3]),
 
                                 Forms\Components\Placeholder::make('calculated_session_display')
                                     ->label('Jumlah Lembar')
                                     ->content(function (Get $get) use ($pricingService) {
                                         $amt = (float) ($get('amount') ?? 0);
                                         if ($amt <= 0 && $get('session_count')) {
-                                            return $get('session_count') . ' Lembar';
+                                            $sessions = (int) $get('session_count');
+                                        } else {
+                                            $sessions = $pricingService->calculateSessionsFromPrice($amt);
                                         }
-                                        $sessions = $pricingService->calculateSessionsFromPrice($amt);
-                                        return $sessions . ' Lembar';
+
+                                        return new \Illuminate\Support\HtmlString('
+                                            <div class="flex items-center h-9">
+                                                <span class="inline-flex items-center gap-1 h-7 px-2 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 text-xs font-semibold border border-emerald-200 dark:border-emerald-800 whitespace-nowrap">
+                                                    <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                    ' . $sessions . ' Lembar
+                                                </span>
+                                            </div>
+                                        ');
                                     })
-                                    ->columnSpan(['default' => 1, 'md' => 2]),
+                                    ->columnSpan(['default' => 5, 'sm' => 5, 'md' => 2]),
 
                                 Forms\Components\Hidden::make('session_count')
                                     ->default(1)
@@ -209,10 +218,20 @@ class SessionReportResource extends Resource
 
                                 Forms\Components\TextInput::make('notes')
                                     ->label('Catatan (Opsional)')
+                                    ->placeholder('Misal: cetak ulang, promo...')
                                     ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
-                                    ->columnSpan(['default' => 1, 'md' => 3]),
+                                    ->columnSpan(['default' => 12, 'sm' => 12, 'md' => 3]),
                             ])
-                            ->columns(['default' => 1, 'md' => 12])
+                            ->columns(['default' => 12, 'md' => 12])
+                            ->itemLabel(function (array $state) use ($pricingService): ?string {
+                                $amt = (float) ($state['amount'] ?? 30000);
+                                $method = strtoupper($state['payment_method'] ?? 'CASH');
+                                $methodLabel = $method === 'QRIS' ? 'QRIS' : 'Tunai';
+                                $sheets = $pricingService->calculateSessionsFromPrice($amt);
+                                return "{$methodLabel} · Rp " . number_format($amt, 0, ',', '.') . " ({$sheets} Lembar)";
+                            })
+                            ->collapsible()
+                            ->collapseAllAction(fn (\Filament\Forms\Components\Actions\Action $action) => $action->label('Ciutkan Semua')->icon('heroicon-m-chevron-up-down'))
                             ->minItems(1)
                             ->defaultItems(1)
                             ->addActionLabel('+ Tambah Sesi')
