@@ -68,9 +68,9 @@
         <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400 mb-2">Ringkasan Sesi & Pendapatan</h3>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
-                <span class="text-xs text-gray-500 block">Total Sesi</span>
-                <div class="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100">{{ number_format($report->total_sessions) }} <span class="text-xs font-normal text-gray-500">Sesi</span></div>
-                <span class="text-[11px] text-gray-400">{{ $report->total_transactions }} Transaksi</span>
+                <span class="text-xs text-gray-500 block">Total Lembar</span>
+                <div class="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100">{{ number_format($report->total_sessions) }} <span class="text-xs font-normal text-gray-500">Lembar</span></div>
+                <span class="text-[11px] text-gray-400">{{ $report->total_transactions }} Sesi</span>
             </div>
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
                 <span class="text-xs text-gray-500 block">Tunai (Cash)</span>
@@ -85,7 +85,7 @@
             <div class="p-3 bg-primary-50 dark:bg-primary-950/40 rounded-xl border border-primary-200 dark:border-primary-800/60">
                 <span class="text-xs text-primary-700 dark:text-primary-300 font-medium block">Total Revenue</span>
                 <div class="text-base sm:text-lg font-bold text-primary-700 dark:text-primary-300 font-mono">Rp {{ number_format($report->grand_total_amount, 0, ',', '.') }}</div>
-                <span class="text-[11px] text-primary-600/80 dark:text-primary-400/80">{{ $report->total_sessions }} Total sesi</span>
+                <span class="text-[11px] text-primary-600/80 dark:text-primary-400/80">{{ $report->total_sessions }} Total lembar</span>
             </div>
         </div>
     </div>
@@ -173,14 +173,14 @@
             <div class="flex items-center justify-between flex-wrap gap-2">
                 <div class="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-200">
                     <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 text-amber-900 font-bold text-xs">!</span>
-                    <span>BELUM MENCAPAI TARGET BONUS ({{ $report->total_sessions }} / 30 SESI)</span>
+                    <span>BELUM MENCAPAI TARGET BONUS ({{ $report->total_transactions }} / 30 SESI)</span>
                 </div>
                 <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
                     Bonus: Rp 0
                 </span>
             </div>
             <p class="text-amber-700 dark:text-amber-300">
-                Target 30 sesi belum terpenuhi (kurang <strong>{{ max(0, 30 - $report->total_sessions) }} sesi lagi</strong>). Bonus total Rp 50.000 hanya aktif apabila sesi pada hari tersebut mencapai minimal 30 sesi.
+                Target 30 sesi belum terpenuhi (kurang <strong>{{ max(0, 30 - $report->total_transactions) }} sesi lagi</strong>). Bonus total Rp 50.000 hanya aktif apabila sesi pada hari tersebut mencapai minimal 30 sesi.
             </p>
         </div>
         @endif
@@ -227,7 +227,7 @@
                 <tfoot class="bg-gray-50 dark:bg-gray-800 font-bold border-t border-gray-200 dark:border-gray-700">
                     <tr>
                         <td colspan="2" class="px-3 py-2.5 text-right">Total:</td>
-                        <td class="px-3 py-2.5 text-center text-gray-900 dark:text-gray-100">{{ $report->total_sessions }} Sesi</td>
+                        <td class="px-3 py-2.5 text-center text-gray-900 dark:text-gray-100">{{ $report->total_sessions }} Lembar</td>
                         <td class="px-3 py-2.5 text-right font-mono text-primary-600 dark:text-primary-400">
                             Rp {{ number_format($report->grand_total_amount, 0, ',', '.') }}
                         </td>
