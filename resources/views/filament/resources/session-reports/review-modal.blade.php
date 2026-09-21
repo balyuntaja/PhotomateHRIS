@@ -75,12 +75,12 @@
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
                 <span class="text-xs text-gray-500 block">Tunai (Cash)</span>
                 <div class="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono">Rp {{ number_format($report->total_cash_amount, 0, ',', '.') }}</div>
-                <span class="text-[11px] text-gray-400">{{ $report->total_cash_sessions }} Sesi tunai</span>
+                <span class="text-[11px] text-gray-400">{{ $report->total_cash_sessions }} Lembar tunai</span>
             </div>
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
                 <span class="text-xs text-gray-500 block">QRIS</span>
                 <div class="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400 font-mono">Rp {{ number_format($report->total_qris_amount, 0, ',', '.') }}</div>
-                <span class="text-[11px] text-gray-400">{{ $report->total_qris_sessions }} Sesi non-tunai</span>
+                <span class="text-[11px] text-gray-400">{{ $report->total_qris_sessions }} Lembar non-tunai</span>
             </div>
             <div class="p-3 bg-primary-50 dark:bg-primary-950/40 rounded-xl border border-primary-200 dark:border-primary-800/60">
                 <span class="text-xs text-primary-700 dark:text-primary-300 font-medium block">Total Revenue</span>
