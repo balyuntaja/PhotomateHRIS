@@ -5,8 +5,12 @@ namespace App\Services;
 use App\Models\ApprovalLog;
 use App\Models\Karyawan;
 use App\Models\SessionReport;
+use App\Notifications\SessionApprovedNotification;
+use App\Notifications\SessionRevisionNotification;
+use App\Notifications\SessionSubmittedNotification;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification as EmailNotification;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -91,6 +95,12 @@ class SessionWorkflowService
                     ->sendToDatabase($supervisor);
             }
 
+            // Send email notification to supervisors asynchronously via queue
+            $validSupervisors = $supervisors->filter(fn ($s) => !empty($s->email));
+            if ($validSupervisors->isNotEmpty()) {
+                EmailNotification::send($validSupervisors, new SessionSubmittedNotification($report, $isResubmission));
+            }
+
             return $report;
         });
     }
@@ -133,6 +143,12 @@ class SessionWorkflowService
                     ->sendToDatabase($crew);
             }
 
+            // Send email notification to submitter and crew asynchronously via queue
+            $validNotifiables = $notifiables->filter(fn ($c) => !empty($c->email));
+            if ($validNotifiables->isNotEmpty()) {
+                EmailNotification::send($validNotifiables, new SessionRevisionNotification($report, $reason, $supervisor->nama_lengkap));
+            }
+
             return $report;
         });
     }
@@ -172,6 +188,12 @@ class SessionWorkflowService
                     ->body("Rekap sesi #{$report->report_number} telah disetujui oleh {$supervisor->nama_lengkap}.")
                     ->success()
                     ->sendToDatabase($crew);
+            }
+
+            // Send email notification to submitter and crew asynchronously via queue
+            $validNotifiables = $notifiables->filter(fn ($c) => !empty($c->email));
+            if ($validNotifiables->isNotEmpty()) {
+                EmailNotification::send($validNotifiables, new SessionApprovedNotification($report));
             }
 
             return $report;
