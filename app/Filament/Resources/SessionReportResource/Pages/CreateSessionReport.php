@@ -9,6 +9,7 @@ use App\Services\SessionWorkflowService;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class CreateSessionReport extends CreateRecord
 {
@@ -27,6 +28,15 @@ class CreateSessionReport extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        $user = Auth::user();
+        $reportDate = $data['report_date'] ?? null;
+
+        if ($reportDate && app(SessionWorkflowService::class)->isInputClosed($user, $reportDate)) {
+            throw ValidationException::withMessages([
+                'data.report_date' => SessionReport::inputClosedMessageFor($reportDate),
+            ]);
+        }
+
         $data['status'] = SessionReport::STATUS_DRAFT;
         $data['submitted_by'] = Auth::user()?->karyawan_id;
 

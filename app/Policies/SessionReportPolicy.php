@@ -25,6 +25,14 @@ class SessionReportPolicy
         return $report->crews()->where('karyawan.karyawan_id', $user->karyawan_id)->exists();
     }
 
+    /**
+     * Batas waktu input/edit/delete (tanggal rekap + 2 hari 23:59:59) hanya untuk crew.
+     */
+    protected function isInputClosed(Karyawan $user, SessionReport $report): bool
+    {
+        return app(SessionWorkflowService::class)->isInputClosed($user, $report->report_date);
+    }
+
     public function viewAny(Karyawan $user): bool
     {
         return true;
@@ -51,6 +59,11 @@ class SessionReportPolicy
             return false;
         }
 
+        // Crew tidak boleh mengubah rekap yang sudah melewati batas waktu input
+        if ($this->isInputClosed($user, $report)) {
+            return false;
+        }
+
         if ($this->isSupervisorOrAdmin($user)) {
             return true;
         }
@@ -72,6 +85,11 @@ class SessionReportPolicy
 
         // Cannot delete approved reports for non-superadmin
         if ($report->isApproved()) {
+            return false;
+        }
+
+        // Crew tidak boleh menghapus rekap yang sudah melewati batas waktu input
+        if ($this->isInputClosed($user, $report)) {
             return false;
         }
 

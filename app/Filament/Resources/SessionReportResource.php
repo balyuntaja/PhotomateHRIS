@@ -43,19 +43,29 @@ class SessionReportResource extends Resource
     {
         $pricingService = app(PricingService::class);
 
-        $isApproved = function ($record = null, $livewire = null): bool {
+        $resolveReport = function ($record = null, $livewire = null): ?SessionReport {
             if ($record instanceof SessionReport) {
-                return $record->isApproved();
+                return $record;
             }
             if ($record instanceof \App\Models\SessionTransaction) {
-                return (bool) $record->sessionReport?->isApproved();
+                return $record->sessionReport;
             }
             if ($livewire && method_exists($livewire, 'getRecord')) {
                 $parent = $livewire->getRecord();
-                return $parent instanceof SessionReport && $parent->isApproved();
+                return $parent instanceof SessionReport ? $parent : null;
             }
-            return false;
+            return null;
         };
+
+        $isApproved = fn ($record = null, $livewire = null): bool => (bool) $resolveReport($record, $livewire)?->isApproved();
+
+        // Crew (Karyawan) terkunci jika APPROVED atau sudah lewat batas waktu input rekap
+        $isLocked = fn ($record = null, $livewire = null): bool => $isApproved($record, $livewire)
+            || app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $resolveReport($record, $livewire)?->report_date);
+
+        /** @var Karyawan|null $user */
+        $user = Auth::user();
+        $isCrew = $user instanceof Karyawan && !app(SessionWorkflowService::class)->isSupervisorOrAdmin($user);
 
         return $form
             ->schema([
@@ -98,7 +108,9 @@ class SessionReportResource extends Resource
                             ->label('Tanggal Sesi')
                             ->default(now())
                             ->required()
-                            ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
+                            ->minDate(fn () => $isCrew ? SessionReport::earliestInputDate() : null)
+                            ->helperText(fn () => $isCrew ? 'Batas input, edit, dan hapus rekap adalah 2 hari setelah tanggal sesi (pukul 23:59 WIB).' : null)
+                            ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
                             ->native(false),
 
                         Forms\Components\Select::make('cabang_id')
@@ -110,7 +122,7 @@ class SessionReportResource extends Resource
                             ->placeholder('Pilih Cabang (Newspaper Janus / Photomate Express)')
                             ->nullable()
                             ->helperText('⚠️ Wajib pilih cabang agar bonus Newspaper Janus terhitung otomatis!')
-                            ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire)),
+                            ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire)),
 
                         Forms\Components\Select::make('crews')
                             ->label('Crew yang Bertugas')
@@ -124,7 +136,7 @@ class SessionReportResource extends Resource
                             ->default(fn () => Auth::user() ? [Auth::user()->karyawan_id] : [])
                             ->helperText('Dapat memilih lebih dari 1 crew')
                             ->columnSpanFull()
-                            ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire)),
+                            ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire)),
                     ])
                     ->columns(2),
 
@@ -161,7 +173,7 @@ class SessionReportResource extends Resource
                                     ])
                                     ->default('CASH')
                                     ->required()
-                                    ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
+                                    ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
                                     ->columnSpan(['default' => 8, 'sm' => 8, 'md' => 3]),
 
                                 Forms\Components\TextInput::make('amount')
@@ -188,7 +200,7 @@ class SessionReportResource extends Resource
                                         $sessions = $pricingService->calculateSessionsFromPrice($amt);
                                         $set('session_count', $sessions);
                                     })
-                                    ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
+                                    ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
                                     ->columnSpan(['default' => 7, 'sm' => 7, 'md' => 3]),
 
                                 Forms\Components\Placeholder::make('calculated_session_display')
@@ -219,7 +231,7 @@ class SessionReportResource extends Resource
                                 Forms\Components\TextInput::make('notes')
                                     ->label('Catatan (Opsional)')
                                     ->placeholder('Misal: cetak ulang, promo...')
-                                    ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
+                                    ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
                                     ->columnSpan(['default' => 12, 'sm' => 12, 'md' => 3]),
                             ])
                             ->columns(['default' => 12, 'md' => 12])
@@ -235,7 +247,7 @@ class SessionReportResource extends Resource
                             ->minItems(1)
                             ->defaultItems(1)
                             ->addActionLabel('+ Tambah Sesi')
-                            ->disabled(fn ($record, $livewire = null) => $isApproved($record, $livewire))
+                            ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
                             ->reorderable(false),
                     ]),
 
@@ -253,14 +265,14 @@ class SessionReportResource extends Resource
 
     public static function table(Table $table): Table
     {
-        return $table
-            ->modifyQueryUsing(function (Builder $query) {
-                /** @var Karyawan $user */
-                $user = Auth::user();
-                $workflow = app(SessionWorkflowService::class);
+        /** @var Karyawan|null $user */
+        $user = Auth::user();
+        $isCrew = $user instanceof Karyawan && !app(SessionWorkflowService::class)->isSupervisorOrAdmin($user);
 
+        return $table
+            ->modifyQueryUsing(function (Builder $query) use ($user, $isCrew) {
                 // If regular crew, only show reports where user is submitter OR in crews
-                if ($user && !$workflow->isSupervisorOrAdmin($user)) {
+                if ($isCrew && $user instanceof Karyawan) {
                     $query->where(function ($q) use ($user) {
                         $q->where('submitted_by', $user->karyawan_id)
                             ->orWhereHas('crews', function ($c) use ($user) {
@@ -364,6 +376,15 @@ class SessionReportResource extends Resource
                     ->formatStateUsing(fn (SessionReport $record): string => $record->status_label)
                     ->sortable(),
 
+                Tables\Columns\TextColumn::make('input_deadline')
+                    ->label('Batas Input')
+                    ->visible($isCrew)
+                    ->badge()
+                    ->state(fn (SessionReport $record): string => $record->isPastInputDeadline() ? 'Ditutup' : 'Terbuka')
+                    ->color(fn (SessionReport $record): string => $record->isPastInputDeadline() ? 'danger' : 'success')
+                    ->description(fn (SessionReport $record): string => 's/d ' . ($record->inputDeadlineDescription() ?? '-'))
+                    ->tooltip('Batas input, edit, dan hapus rekap untuk role Karyawan'),
+
                 Tables\Columns\TextColumn::make('updated_at')
                     ->label('Last Updated')
                     ->since()
@@ -397,7 +418,8 @@ class SessionReportResource extends Resource
                     ->modalCancelActionLabel('Tutup'),
 
                 Tables\Actions\EditAction::make()
-                    ->visible(fn (SessionReport $record) => in_array($record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION])),
+                    ->visible(fn (SessionReport $record) => in_array($record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION])
+                        && !app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $record->report_date)),
 
                 Tables\Actions\Action::make('submit_rekap')
                     ->label(fn (SessionReport $record) => $record->status === SessionReport::STATUS_REVISION ? 'Submit Ulang' : 'Submit')
@@ -425,7 +447,8 @@ class SessionReportResource extends Resource
                     }),
 
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn (SessionReport $record) => $record->status === SessionReport::STATUS_DRAFT || (bool) Auth::user()?->isSuperAdmin()),
+                    ->visible(fn (SessionReport $record) => ($record->status === SessionReport::STATUS_DRAFT || (bool) Auth::user()?->isSuperAdmin())
+                        && !app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $record->report_date)),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

@@ -6,3 +6,10 @@
 - Prefers using framework-native features (e.g. Laravel Notifications) over ad-hoc custom implementations. Confidence: 0.6
 - Prefers slow operations (like sending email) run asynchronously via the queue (database queue driver), with failures recorded in failed_jobs and retryable. Confidence: 0.65
 - Wants email/UI templates that are clean, professional, responsive, and consistent with project branding. Confidence: 0.6
+- Does not use Docker in the deployment environment (e.g. Laravel app served on a VM/panel, not via docker-compose); prefers deployment/ops guidance targeted at a non-Docker setup (Supervisor/systemd or bare-metal, panel/cron). Confidence: 0.8
+- Treats backend as the source of truth for business rules: when a restriction (e.g. a deadline) matters, it must be enforced in the backend/API/service layer, not only in the frontend, so it can't be bypassed via direct API calls or Postman. Frontend enforcement is only for UX. Confidence: 0.8
+- Wants date/time logic to use the app's existing timezone/date-handling utilities and to avoid naive string date comparisons; explicitly cautions about UTC/timezone pitfalls. Confidence: 0.7
+- Prefers reusing the application's existing authorization mechanism (existing roles/Gates/Policies) rather than introducing a new role system. Confidence: 0.7
+- Keeps tests isolated from the development database: run the suite against in-memory SQLite (a gitignored `.env.testing` with `DB_CONNECTION=sqlite`, `DB_DATABASE=:memory:`) and force the critical config vars in `phpunit.xml` (`force="true"` on both `<env>` and `<server>`) so shell-exported `.env` values cannot leak into tests. Confidence: 0.6
+- Treats destructive database operations against the dev database (e.g. `RefreshDatabase`/`migrate:fresh` wiping live dev data) as unacceptable; verifies the actual data impact before continuing and reports it. Confidence: 0.55
+- Values focus and effectiveness over exhaustive investigation: once the task is understood, expects the agent to implement the feature directly and avoid long side-quests/deep dives into unrelated issues ("kenapa jadi kemana mana, kurang efektif"). Confidence: 0.7

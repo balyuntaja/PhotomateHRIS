@@ -33,6 +33,45 @@ class EditSessionReport extends EditRecord
         }
     }
 
+    protected function authorizeAccess(): void
+    {
+        if (static::getResource()::canEdit($this->getRecord())) {
+            parent::authorizeAccess();
+
+            return;
+        }
+
+        // Rekap yang sudah melewati batas waktu input ditolak dengan pesan, bukan halaman 403
+        if (app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $this->getRecord()->report_date)) {
+            Notification::make()
+                ->title('Rekap Sesi Sudah Ditutup')
+                ->body($this->getRecord()->inputClosedMessage())
+                ->warning()
+                ->send();
+
+            $this->redirect(static::getResource()::getUrl('view', ['record' => $this->getRecord()]));
+
+            return;
+        }
+
+        parent::authorizeAccess();
+    }
+
+    public function save(bool $shouldRedirect = true, bool $shouldSendSavedNotification = true): void
+    {
+        if (app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $this->getRecord()->report_date)) {
+            Notification::make()
+                ->title('Rekap Sesi Sudah Ditutup')
+                ->body($this->getRecord()->inputClosedMessage())
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        parent::save($shouldRedirect, $shouldSendSavedNotification);
+    }
+
     protected function afterSave(): void
     {
         /** @var SessionReport $record */
@@ -87,7 +126,8 @@ class EditSessionReport extends EditRecord
                 ->visible(fn () => in_array($this->record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION])),
 
             Actions\DeleteAction::make()
-                ->visible(fn () => $this->record->status === SessionReport::STATUS_DRAFT || (bool) Auth::user()?->isSuperAdmin()),
+                ->visible(fn () => ($this->record->status === SessionReport::STATUS_DRAFT || (bool) Auth::user()?->isSuperAdmin())
+                    && !app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $this->record->report_date)),
         ];
     }
 }

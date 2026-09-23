@@ -42,6 +42,23 @@ class SessionWorkflowService
     }
 
     /**
+     * Batas waktu input/edit/delete rekap sesi (tanggal rekap + 2 hari pukul 23:59:59)
+     * hanya berlaku untuk crew (Karyawan). Supervisor/Admin tidak dibatasi.
+     */
+    public function isInputClosed(?Karyawan $user, $reportDate): bool
+    {
+        if (!$user || blank($reportDate)) {
+            return false;
+        }
+
+        if ($this->isSupervisorOrAdmin($user)) {
+            return false;
+        }
+
+        return SessionReport::inputWindowClosedFor($reportDate);
+    }
+
+    /**
      * Log an action to approval_logs table.
      */
     public function logAction(SessionReport $report, Karyawan $user, string $action, ?string $note = null): ApprovalLog

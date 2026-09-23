@@ -21,6 +21,8 @@ class SessionReport extends Model
     const STATUS_APPROVED = 'APPROVED';
     const STATUS_REJECTED = 'REJECTED';
 
+    const INPUT_WINDOW_DAYS = 2;
+
     protected $fillable = [
         'report_number',
         'report_date',
@@ -69,6 +71,8 @@ class SessionReport extends Model
             if (empty($model->report_number)) {
                 $model->report_number = static::generateReportNumber($model->report_date);
             }
+
+            static::assertInputWindowOpen($model);
         });
 
         static::updating(function ($model) {
@@ -82,6 +86,8 @@ class SessionReport extends Model
                     throw new \RuntimeException('Data rekap sesi yang telah disetujui (APPROVED) tidak dapat diubah (immutable).');
                 }
             }
+
+            static::assertInputWindowOpen($model);
         });
 
         static::deleting(function ($model) {
@@ -92,7 +98,86 @@ class SessionReport extends Model
             if ($model->status === self::STATUS_APPROVED && !$isSuperAdmin) {
                 throw new \RuntimeException('Data rekap sesi yang telah disetujui (APPROVED) tidak dapat dihapus.');
             }
+
+            static::assertInputWindowOpen($model);
         });
+    }
+
+    /**
+     * Batas waktu input/edit/delete rekap sesi: tanggal rekap + 2 hari pukul 23:59:59 (WIB).
+     */
+    public static function inputDeadlineFor($date): ?Carbon
+    {
+        if (blank($date)) {
+            return null;
+        }
+
+        return Carbon::parse($date)
+            ->copy()
+            ->setTimezone(config('session_reports.timezone'))
+            ->startOfDay()
+            ->addDays(self::INPUT_WINDOW_DAYS)
+            ->setTime(23, 59, 59);
+    }
+
+    public static function inputWindowClosedFor($date): bool
+    {
+        return (bool) static::inputDeadlineFor($date)?->isPast();
+    }
+
+    /**
+     * Tanggal rekap paling lama yang masih boleh diinput crew pada hari ini.
+     */
+    public static function earliestInputDate(): Carbon
+    {
+        return Carbon::now(config('session_reports.timezone'))
+            ->startOfDay()
+            ->subDays(self::INPUT_WINDOW_DAYS);
+    }
+
+    public static function inputClosedMessageFor($date): string
+    {
+        $deadline = static::inputDeadlineFor($date);
+
+        return sprintf(
+            'Rekap sudah ditutup. Batas input dan perubahan rekap untuk tanggal %s adalah %s.',
+            Carbon::parse($date)->translatedFormat('d F Y'),
+            $deadline ? $deadline->translatedFormat('d F Y') . ' pukul ' . $deadline->format('H:i') : '-'
+        );
+    }
+
+    public function inputDeadline(): ?Carbon
+    {
+        return static::inputDeadlineFor($this->report_date);
+    }
+
+    public function inputDeadlineDescription(): ?string
+    {
+        $deadline = $this->inputDeadline();
+
+        return $deadline ? $deadline->translatedFormat('d F Y') . ' pukul ' . $deadline->format('H:i') : null;
+    }
+
+    public function isPastInputDeadline(): bool
+    {
+        return static::inputWindowClosedFor($this->report_date);
+    }
+
+    public function inputClosedMessage(): string
+    {
+        return static::inputClosedMessageFor($this->report_date);
+    }
+
+    protected static function assertInputWindowOpen($model): void
+    {
+        /** @var \App\Models\Karyawan|null $user */
+        $user = \Illuminate\Support\Facades\Auth::user();
+
+        if (!$user || !app(\App\Services\SessionWorkflowService::class)->isInputClosed($user, $model->report_date)) {
+            return;
+        }
+
+        throw new \RuntimeException($model->inputClosedMessage());
     }
 
     public static function generateReportNumber($date = null): string

@@ -2,6 +2,12 @@
     $report = $record ?? (isset($getRecord) ? $getRecord() : ($this->record ?? null));
     $transactions = $report ? $report->transactions : collect();
     $logs = $report ? $report->approvalLogs : collect();
+
+    $viewer = \Illuminate\Support\Facades\Auth::user();
+    $viewerIsCrew = $viewer instanceof \App\Models\Karyawan
+        && !app(\App\Services\SessionWorkflowService::class)->isSupervisorOrAdmin($viewer);
+    $inputDeadline = $report && $viewerIsCrew ? $report->inputDeadlineDescription() : null;
+    $inputClosed = $inputDeadline && $report->isPastInputDeadline();
 @endphp
 
 @if($report)
@@ -52,6 +58,24 @@
             </div>
         </div>
     </div>
+
+    @if($inputDeadline)
+    <div class="p-3.5 border-l-4 rounded-r-lg {{ $inputClosed ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-500' : 'bg-sky-50 dark:bg-sky-950/40 border-sky-500' }}">
+        <h4 class="font-bold flex items-center gap-1.5 text-xs {{ $inputClosed ? 'text-rose-800 dark:text-rose-300' : 'text-sky-800 dark:text-sky-300' }}">
+            <svg class="w-4 h-4 shrink-0 {{ $inputClosed ? 'text-rose-600 dark:text-rose-400' : 'text-sky-600 dark:text-sky-400' }}" fill="currentColor" viewBox="0 0 20 20">
+                @if($inputClosed)
+                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"></path>
+                @else
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
+                @endif
+            </svg>
+            {{ $inputClosed ? 'Rekap Sudah Ditutup' : 'Periode Input Rekap Masih Terbuka' }}
+        </h4>
+        <p class="mt-1 text-xs font-medium {{ $inputClosed ? 'text-rose-700 dark:text-rose-200' : 'text-sky-700 dark:text-sky-200' }}">
+            Batas input dan perubahan rekap untuk tanggal {{ $report->report_date->translatedFormat('d F Y') }} adalah {{ $inputDeadline }}.
+        </p>
+    </div>
+    @endif
 
     @if($report->status === 'REVISION' && $report->revision_note)
     <div class="p-3.5 bg-rose-50 dark:bg-rose-950/40 border-l-4 border-rose-500 rounded-r-lg">
