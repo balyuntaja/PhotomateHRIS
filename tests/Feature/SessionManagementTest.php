@@ -929,4 +929,308 @@ class SessionManagementTest extends TestCase
         $view->assertSee('Kia');
         $view->assertSee('Shasha');
     }
+
+    /**
+     * Helper: cabang Wedding Photomate (mode input manual Jumlah Sesi + Jumlah Lembar)
+     */
+    protected function weddingCabang(): \App\Models\Cabang
+    {
+        return \App\Models\Cabang::firstOrCreate(
+            ['cabang_id' => 'C-WED'],
+            [
+                'perusahaan_id' => 'P01',
+                'nama_cabang' => 'Wedding Photomate',
+                'alamat' => 'Wedding Photomate Studio',
+            ]
+        );
+    }
+
+    protected function janusCabang(): \App\Models\Cabang
+    {
+        return \App\Models\Cabang::firstOrCreate(
+            ['cabang_id' => 'C-JAN'],
+            [
+                'perusahaan_id' => 'P01',
+                'nama_cabang' => 'Newspaper Janus',
+            ]
+        );
+    }
+
+    protected function createWeddingReport(array $attributes = []): SessionReport
+    {
+        return SessionReport::create(array_merge([
+            'report_date' => Carbon::today(),
+            'status' => SessionReport::STATUS_DRAFT,
+            'submitted_by' => $this->crewKia->karyawan_id,
+            'cabang_id' => $this->weddingCabang()->cabang_id,
+            'wedding_total_sessions' => 150,
+            'wedding_total_sheets' => 300,
+        ], $attributes));
+    }
+
+    /**
+     * Test 16: Wedding Photomate memakai input manual Jumlah Sesi & Jumlah Lembar
+     */
+    public function test_wedding_photomate_report_uses_manual_session_and_sheet_totals(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $report = $this->createWeddingReport();
+        $report->crews()->attach($this->crewKia->karyawan_id);
+
+        $this->pricingService->recalculateReport($report);
+        $report->refresh();
+
+        $this->assertTrue($report->isWeddingPhotomate());
+        $this->assertFalse($report->isNewspaperJanus());
+        $this->assertEquals(150, $report->total_transactions);
+        $this->assertEquals(300, $report->total_sessions);
+        $this->assertEquals(0, $report->total_cash_amount);
+        $this->assertEquals(0, $report->total_qris_amount);
+        $this->assertEquals(0, $report->grand_total_amount);
+        $this->assertEquals(0, $report->bonus_amount);
+        $this->assertEquals('VALID', $report->validation_status);
+    }
+
+    /**
+     * Test 17: Rekap Wedding Photomate bisa disubmit tanpa detail transaksi
+     */
+    public function test_wedding_photomate_report_submits_without_transactions(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $report = $this->createWeddingReport();
+        $report->crews()->attach($this->crewKia->karyawan_id);
+
+        $this->workflowService->submit($report, $this->crewKia);
+        $report->refresh();
+
+        $this->assertEquals(SessionReport::STATUS_WAITING_APPROVAL, $report->status);
+        $this->assertEquals(0, $report->transactions()->count());
+        $this->assertEquals(150, $report->total_transactions);
+        $this->assertEquals(300, $report->total_sessions);
+
+        $this->assertDatabaseHas('approval_logs', [
+            'session_report_id' => $report->id,
+            'action' => 'SUBMITTED',
+            'user_id' => $this->crewKia->karyawan_id,
+        ]);
+    }
+
+    /**
+     * Test 18: Jumlah Sesi & Jumlah Lembar wajib diisi minimal 1 (Wedding Photomate)
+     */
+    public function test_wedding_photomate_requires_jumlah_sesi_and_jumlah_lembar(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $report = $this->createWeddingReport([
+            'wedding_total_sessions' => null,
+            'wedding_total_sheets' => null,
+        ]);
+        $report->crews()->attach($this->crewKia->karyawan_id);
+
+        $this->pricingService->recalculateReport($report);
+        $report->refresh();
+
+        $this->assertEquals('HAS_ISSUE', $report->validation_status);
+        $this->assertContains('Jumlah Sesi wajib diisi minimal 1.', $report->validation_issues);
+        $this->assertContains('Jumlah Lembar wajib diisi minimal 1.', $report->validation_issues);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->workflowService->submit($report, $this->crewKia);
+    }
+
+    /**
+     * Test 19: Cabang non-Wedding tetap memakai flow lama & membersihkan nilai manual Wedding
+     */
+    public function test_non_wedding_branch_ignores_and_clears_wedding_values(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $report = SessionReport::create([
+            'report_date' => Carbon::today(),
+            'status' => SessionReport::STATUS_DRAFT,
+            'submitted_by' => $this->crewKia->karyawan_id,
+            'cabang_id' => $this->janusCabang()->cabang_id,
+            'wedding_total_sessions' => 99,
+            'wedding_total_sheets' => 99,
+        ]);
+        $report->crews()->attach($this->crewKia->karyawan_id);
+
+        SessionTransaction::create([
+            'session_report_id' => $report->id,
+            'payment_method' => 'CASH',
+            'amount' => 30000,
+        ]);
+
+        $this->pricingService->recalculateReport($report);
+        $report->refresh();
+
+        $this->assertFalse($report->isWeddingPhotomate());
+        $this->assertNull($report->wedding_total_sessions);
+        $this->assertNull($report->wedding_total_sheets);
+        $this->assertEquals(1, $report->total_transactions);
+        $this->assertEquals(1, $report->total_sessions);
+        $this->assertEquals(30000, $report->grand_total_amount);
+        $this->assertEquals('VALID', $report->validation_status);
+    }
+
+    /**
+     * Test 20: Evidence disimpan sebagai array path & diekspos sebagai item siap render
+     */
+    public function test_evidence_files_are_exposed_as_items(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $report = $this->createWeddingReport([
+            'evidence_files' => [
+                'session-reports/evidence/foto-sesi.jpg',
+                'session-reports/evidence/bukti-transfer.pdf',
+            ],
+        ]);
+        $report->refresh();
+
+        $this->assertCount(2, $report->evidence_files);
+
+        $items = $report->evidence_items;
+        $this->assertCount(2, $items);
+
+        $this->assertEquals('foto-sesi.jpg', $items[0]['name']);
+        $this->assertTrue($items[0]['is_image']);
+        $this->assertEquals(asset('storage/session-reports/evidence/foto-sesi.jpg'), $items[0]['url']);
+
+        $this->assertEquals('bukti-transfer.pdf', $items[1]['name']);
+        $this->assertFalse($items[1]['is_image']);
+    }
+
+    /**
+     * Test 21: Evidence opsional — rekap tetap bisa disimpan & disubmit tanpa evidence
+     */
+    public function test_evidence_is_optional(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $report = $this->createWeddingReport();
+        $report->crews()->attach($this->crewKia->karyawan_id);
+        $report->refresh();
+
+        $this->assertNull($report->evidence_files);
+        $this->assertSame([], $report->evidence_items);
+
+        $this->workflowService->submit($report, $this->crewKia);
+        $report->refresh();
+
+        $this->assertEquals(SessionReport::STATUS_WAITING_APPROVAL, $report->status);
+    }
+
+    /**
+     * Test 22: Form Rekap Sesi menampilkan input Wedding hanya untuk cabang Wedding Photomate
+     */
+    public function test_filament_form_shows_wedding_inputs_only_for_wedding_branch(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\CreateSessionReport::class)
+            ->fillForm(['cabang_id' => $this->weddingCabang()->cabang_id])
+            ->assertFormFieldIsVisible('wedding_total_sessions')
+            ->assertFormFieldIsVisible('wedding_total_sheets')
+            ->assertFormFieldIsHidden('transactions')
+            ->assertSee('Upload Evidence');
+
+        \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\CreateSessionReport::class)
+            ->fillForm(['cabang_id' => $this->janusCabang()->cabang_id])
+            ->assertFormFieldIsHidden('wedding_total_sessions')
+            ->assertFormFieldIsHidden('wedding_total_sheets')
+            ->assertFormFieldIsVisible('transactions')
+            ->assertSee('Upload Evidence');
+    }
+
+    /**
+     * Test 23: Review modal menampilkan ringkasan Wedding + evidence
+     */
+    public function test_review_modal_renders_wedding_summary_and_evidence(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $report = $this->createWeddingReport([
+            'status' => SessionReport::STATUS_WAITING_APPROVAL,
+            'submitted_at' => now(),
+            'validation_status' => 'VALID',
+            'evidence_files' => ['session-reports/evidence/foto-sesi.jpg'],
+        ]);
+        $report->crews()->attach($this->crewKia->karyawan_id);
+
+        $this->pricingService->recalculateReport($report);
+        $report->refresh();
+
+        $view = $this->view('filament.resources.session-reports.review-modal', ['record' => $report]);
+        $view->assertSee('Ringkasan Sesi Foto (Wedding Photomate)');
+        $view->assertSee('Jumlah Sesi');
+        $view->assertSee('150');
+        $view->assertSee('Jumlah Lembar');
+        $view->assertSee('300');
+        $view->assertSee('Evidence / Bukti Pendukung (1)');
+        $view->assertSee('foto-sesi.jpg');
+        $view->assertSee('STATUS VALID');
+        $view->assertDontSee('Detail Transaksi');
+    }
+
+    /**
+     * Test 24: Create Rekap Sesi cabang Wedding Photomate end-to-end lewat form Filament
+     */
+    public function test_create_wedding_report_through_filament_form(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $weddingCabangId = $this->weddingCabang()->cabang_id;
+
+        \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\CreateSessionReport::class)
+            ->fillForm([
+                'report_date' => Carbon::today()->format('Y-m-d'),
+                'cabang_id' => $weddingCabangId,
+                'crews' => [$this->crewKia->karyawan_id],
+            ])
+            ->fillForm([
+                'wedding_total_sessions' => 150,
+                'wedding_total_sheets' => 300,
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $report = SessionReport::latest('id')->first();
+
+        $this->assertNotNull($report);
+        $this->assertEquals($weddingCabangId, $report->cabang_id);
+        $this->assertEquals(150, $report->wedding_total_sessions);
+        $this->assertEquals(300, $report->wedding_total_sheets);
+        $this->assertEquals(150, $report->total_transactions);
+        $this->assertEquals(300, $report->total_sessions);
+        $this->assertEquals(0, $report->transactions()->count());
+        $this->assertEquals(SessionReport::STATUS_WAITING_APPROVAL, $report->status);
+
+        $this->assertDatabaseHas('approval_logs', [
+            'session_report_id' => $report->id,
+            'action' => 'SUBMITTED',
+        ]);
+    }
+
+    /**
+     * Test 25: Form Wedding Photomate menolak submit bila Jumlah Sesi / Jumlah Lembar kosong
+     */
+    public function test_wedding_form_requires_jumlah_sesi_and_jumlah_lembar(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\CreateSessionReport::class)
+            ->fillForm([
+                'report_date' => Carbon::today()->format('Y-m-d'),
+                'cabang_id' => $this->weddingCabang()->cabang_id,
+                'crews' => [$this->crewKia->karyawan_id],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['wedding_total_sessions', 'wedding_total_sheets']);
+
+        $this->assertEquals(0, SessionReport::count());
+    }
 }

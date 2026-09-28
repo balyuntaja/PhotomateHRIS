@@ -31,6 +31,9 @@ class SessionReport extends Model
         'cabang_id',
         'invoice_id',
         'event_id',
+        'wedding_total_sessions',
+        'wedding_total_sheets',
+        'evidence_files',
         'total_sessions',
         'total_transactions',
         'total_cash_amount',
@@ -52,6 +55,9 @@ class SessionReport extends Model
         'report_date' => 'date',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
+        'wedding_total_sessions' => 'integer',
+        'wedding_total_sheets' => 'integer',
+        'evidence_files' => 'array',
         'total_sessions' => 'integer',
         'total_transactions' => 'integer',
         'total_cash_amount' => 'integer',
@@ -292,6 +298,36 @@ class SessionReport extends Model
     public function isNewspaperJanus(): bool
     {
         return app(\App\Services\BranchBonusService::class)->isEligibleBranch($this->cabang);
+    }
+
+    /**
+     * Cabang Wedding Photomate memakai input manual Jumlah Sesi + Jumlah Lembar,
+     * bukan detail sesi foto per transaksi.
+     */
+    public function isWeddingPhotomate(): bool
+    {
+        return app(\App\Services\BranchInputModeService::class)->isWeddingPhotomate($this->cabang);
+    }
+
+    /**
+     * Daftar evidence (foto/screenshot/dokumen) yang siap dirender di Blade.
+     */
+    public function getEvidenceItemsAttribute(): array
+    {
+        return collect($this->evidence_files ?? [])
+            ->filter()
+            ->map(function (string $path): array {
+                $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+
+                return [
+                    'name' => basename($path),
+                    'path' => $path,
+                    'url' => asset('storage/' . $path),
+                    'is_image' => in_array($extension, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     public function getBonusDetails(): array

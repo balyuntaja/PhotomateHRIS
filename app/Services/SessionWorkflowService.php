@@ -84,7 +84,11 @@ class SessionWorkflowService
         return DB::transaction(function () use ($report, $user, $note) {
             $this->pricingService->recalculateReport($report);
 
-            if ($report->transactions()->count() === 0) {
+            if ($report->isWeddingPhotomate()) {
+                if ((int) $report->wedding_total_sessions < 1 || (int) $report->wedding_total_sheets < 1) {
+                    throw new InvalidArgumentException('Jumlah Sesi dan Jumlah Lembar wajib diisi minimal 1 untuk cabang Wedding Photomate.');
+                }
+            } elseif ($report->transactions()->count() === 0) {
                 throw new InvalidArgumentException('Minimal harus ada 1 transaksi untuk mengajukan rekap sesi.');
             }
 

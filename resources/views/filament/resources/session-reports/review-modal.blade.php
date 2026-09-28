@@ -87,6 +87,22 @@
     </div>
     @endif
 
+    @if($report->isWeddingPhotomate())
+    <!-- Ringkasan Wedding Photomate (input manual Jumlah Sesi & Jumlah Lembar) -->
+    <div>
+        <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400 mb-2">Ringkasan Sesi Foto (Wedding Photomate)</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+            <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
+                <span class="text-xs text-gray-500 block">Jumlah Sesi</span>
+                <div class="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100">{{ number_format($report->total_transactions) }} <span class="text-xs font-normal text-gray-500">Sesi</span></div>
+            </div>
+            <div class="p-3 bg-primary-50 dark:bg-primary-950/40 rounded-xl border border-primary-200 dark:border-primary-800/60">
+                <span class="text-xs text-primary-700 dark:text-primary-300 font-medium block">Jumlah Lembar</span>
+                <div class="text-base sm:text-lg font-bold text-primary-700 dark:text-primary-300">{{ number_format($report->total_sessions) }} <span class="text-xs font-normal">Lembar</span></div>
+            </div>
+        </div>
+    </div>
+    @else
     <!-- Session Summary -->
     <div>
         <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400 mb-2">Ringkasan Sesi & Pendapatan</h3>
@@ -261,6 +277,30 @@
             </table>
         </div>
     </div>
+    @endif
+
+    <!-- Evidence / Bukti Pendukung -->
+    @php $evidenceItems = $report->evidence_items; @endphp
+    @if(!empty($evidenceItems))
+    <div>
+        <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400 mb-2">Evidence / Bukti Pendukung ({{ count($evidenceItems) }})</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px;">
+            @foreach($evidenceItems as $item)
+            <a href="{{ $item['url'] }}" target="_blank" rel="noopener"
+               class="block rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden hover:border-primary-400 dark:hover:border-primary-600 transition">
+                @if($item['is_image'])
+                    <img src="{{ $item['url'] }}" alt="{{ $item['name'] }}" class="w-full h-28 object-cover">
+                @else
+                    <div class="w-full h-28 flex items-center justify-center text-gray-400">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    </div>
+                @endif
+                <div class="px-2 py-1.5 text-[11px] truncate text-gray-600 dark:text-gray-300">{{ $item['name'] }}</div>
+            </a>
+            @endforeach
+        </div>
+    </div>
+    @endif
 
     <!-- Validasi Otomatis Sistem -->
     <div>
@@ -271,13 +311,21 @@
                 <div style="display: flex; align-items: center; gap: 7px;">
                     <span style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background-color: #10b981; color: white; font-size: 11px; font-weight: bold; flex-shrink: 0;">✓</span>
                     <span style="font-weight: 700; font-size: 12px; color: #065f46;">STATUS VALID</span>
-                    <span style="font-size: 12px; color: #047857;">— Semua data transaksi terverifikasi sistem</span>
+                    <span style="font-size: 12px; color: #047857;">— {{ $report->isWeddingPhotomate() ? 'Data sesi Wedding Photomate terverifikasi sistem' : 'Semua data transaksi terverifikasi sistem' }}</span>
                 </div>
                 <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700; background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0;">
                     Lolos Verifikasi
                 </span>
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                @if($report->isWeddingPhotomate())
+                <span style="display: inline-flex; align-items: center; gap: 5px; background-color: #ffffff; border: 1px solid #a7f3d0; border-radius: 6px; padding: 3px 9px; font-size: 11px; color: #065f46;">
+                    <span style="color: #10b981; font-weight: bold;">✓</span> Jumlah Sesi &amp; Jumlah Lembar terisi
+                </span>
+                <span style="display: inline-flex; align-items: center; gap: 5px; background-color: #ffffff; border: 1px solid #a7f3d0; border-radius: 6px; padding: 3px 9px; font-size: 11px; color: #065f46;">
+                    <span style="color: #10b981; font-weight: bold;">✓</span> Crew bertugas terdaftar
+                </span>
+                @else
                 <span style="display: inline-flex; align-items: center; gap: 5px; background-color: #ffffff; border: 1px solid #a7f3d0; border-radius: 6px; padding: 3px 9px; font-size: 11px; color: #065f46;">
                     <span style="color: #10b981; font-weight: bold;">✓</span> Metode Pembayaran (Cash/QRIS)
                 </span>
@@ -287,6 +335,7 @@
                 <span style="display: inline-flex; align-items: center; gap: 5px; background-color: #ffffff; border: 1px solid #a7f3d0; border-radius: 6px; padding: 3px 9px; font-size: 11px; color: #065f46;">
                     <span style="color: #10b981; font-weight: bold;">✓</span> Pricing Rule Photomate
                 </span>
+                @endif
             </div>
         </div>
         @else

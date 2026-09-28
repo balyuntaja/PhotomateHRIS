@@ -71,7 +71,25 @@ class ListSessionHistories extends ListRecords
                             $bonusPerCrew = ($bonusAmount > 0 && $crewCount > 0) ? (int) round($bonusAmount / $crewCount) : 0;
 
                             $transactions = $report->transactions;
-                            if ($transactions->isNotEmpty()) {
+                            if ($report->isWeddingPhotomate()) {
+                                // Wedding Photomate: tanpa detail transaksi, Jumlah Sesi & Lembar diinput manual
+                                fputcsv($handle, [
+                                    $report->report_date ? $report->report_date->format('Y-m-d') : '-',
+                                    $report->report_number,
+                                    $cabangName,
+                                    $crewNames,
+                                    '-',
+                                    $report->total_transactions,
+                                    $report->grand_total_amount,
+                                    $bonusAmount,
+                                    $bonusPerCrew,
+                                    $report->status_label,
+                                    $submittedAt,
+                                    $approvedAt,
+                                    $approvedBy,
+                                    '-',
+                                ]);
+                            } elseif ($transactions->isNotEmpty()) {
                                 foreach ($transactions as $trx) {
                                     fputcsv($handle, [
                                         $report->report_date ? $report->report_date->format('Y-m-d') : '-',

@@ -98,13 +98,13 @@ class SessionApprovalResource extends Resource
 
                 Tables\Columns\TextColumn::make('total_qris_amount')
                     ->label('Total QRIS')
-                    ->formatStateUsing(fn ($state) => 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->isWeddingPhotomate() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
                     ->alignEnd()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('total_cash_amount')
                     ->label('Total Tunai')
-                    ->formatStateUsing(fn ($state) => 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->isWeddingPhotomate() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
                     ->alignEnd()
                     ->sortable(),
 
@@ -116,7 +116,7 @@ class SessionApprovalResource extends Resource
 
                 Tables\Columns\TextColumn::make('grand_total_amount')
                     ->label('Grand Total')
-                    ->formatStateUsing(fn ($state) => 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->isWeddingPhotomate() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
                     ->weight('bold')
                     ->alignEnd()
                     ->sortable(),

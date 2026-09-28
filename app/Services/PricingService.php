@@ -75,6 +75,13 @@ class PricingService
      */
     public function recalculateReport(SessionReport $report): void
     {
+        // Wedding Photomate: total diambil dari input manual Jumlah Sesi & Jumlah Lembar
+        if ($report->isWeddingPhotomate()) {
+            $this->recalculateWeddingReport($report);
+
+            return;
+        }
+
         $transactions = $report->transactions()->get();
 
         $totalSessions = 0;
@@ -144,10 +151,49 @@ class PricingService
         $report->validation_status = empty($issues) ? 'VALID' : 'HAS_ISSUE';
         $report->validation_issues = $issues;
 
+        // Bersihkan input manual Wedding bila cabang bukan Wedding Photomate
+        $report->wedding_total_sessions = null;
+        $report->wedding_total_sheets = null;
+
         // Calculate Newspaper Janus branch bonus
         $bonusService = app(\App\Services\BranchBonusService::class);
         $bonusData = $bonusService->calculateBonusForReport($report);
         $report->bonus_amount = $bonusData['total_bonus'];
+
+        $report->saveQuietly();
+    }
+
+    /**
+     * Rekap cabang Wedding Photomate: total diambil langsung dari input manual
+     * Jumlah Sesi (total_transactions) dan Jumlah Lembar (total_sessions).
+     */
+    protected function recalculateWeddingReport(SessionReport $report): void
+    {
+        $totalSesi = (int) ($report->wedding_total_sessions ?? 0);
+        $totalLembar = (int) ($report->wedding_total_sheets ?? 0);
+
+        $issues = [];
+
+        if ($totalSesi < 1) {
+            $issues[] = 'Jumlah Sesi wajib diisi minimal 1.';
+        }
+        if ($totalLembar < 1) {
+            $issues[] = 'Jumlah Lembar wajib diisi minimal 1.';
+        }
+        if (!$report->crews()->exists()) {
+            $issues[] = 'Rekap sesi wajib memiliki minimal satu crew.';
+        }
+
+        $report->total_transactions = $totalSesi;
+        $report->total_sessions = $totalLembar;
+        $report->total_cash_amount = 0;
+        $report->total_cash_sessions = 0;
+        $report->total_qris_amount = 0;
+        $report->total_qris_sessions = 0;
+        $report->grand_total_amount = 0;
+        $report->bonus_amount = 0;
+        $report->validation_status = empty($issues) ? 'VALID' : 'HAS_ISSUE';
+        $report->validation_issues = $issues;
 
         $report->saveQuietly();
     }
