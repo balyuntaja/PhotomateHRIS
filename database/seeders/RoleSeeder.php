@@ -229,6 +229,26 @@ class RoleSeeder extends Seeder
         'update_penggajian',
         'delete_penggajian',
         'restore_penggajian',
+        // Modul Keuangan permissions
+        'view_keuangan_dashboard',
+        'view_keuangan_report',
+        'export_keuangan_report',
+        'print_keuangan_report',
+        'view_any_keuangan_transaction',
+        'view_keuangan_transaction',
+        'create_keuangan_transaction',
+        'update_keuangan_transaction',
+        'delete_keuangan_transaction',
+        'restore_keuangan_transaction',
+        'force_delete_keuangan_transaction',
+        'view_any_keuangan_category',
+        'create_keuangan_category',
+        'update_keuangan_category',
+        'delete_keuangan_category',
+        'view_any_keuangan_payment_method',
+        'create_keuangan_payment_method',
+        'update_keuangan_payment_method',
+        'delete_keuangan_payment_method',
       ]);
 
       DB::table('role_has_permissions')->where('role_id', $managerFinanceRole->role_id)->delete();
@@ -250,6 +270,16 @@ class RoleSeeder extends Seeder
         'update_penggajian',
         'delete_penggajian',
         'restore_penggajian',
+        // Modul Keuangan permissions (input transaksi, edit/hapus transaksi sendiri)
+        'view_keuangan_dashboard',
+        'view_keuangan_report',
+        'export_keuangan_report',
+        'print_keuangan_report',
+        'view_any_keuangan_transaction',
+        'view_keuangan_transaction',
+        'create_keuangan_transaction',
+        'update_own_keuangan_transaction',
+        'delete_own_keuangan_transaction',
       ]);
 
       DB::table('role_has_permissions')->where('role_id', $accountPaymentRole->role_id)->delete();

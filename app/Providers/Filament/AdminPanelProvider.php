@@ -79,6 +79,7 @@ class AdminPanelProvider extends PanelProvider
                 'Sistem Antrean',
                 'Manajemen Absensi',
                 'Manajemen Penggajian',
+                'Keuangan',
                 'Laporan',
                 'Data Master',
                 'Keamanan',

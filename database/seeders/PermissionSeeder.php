@@ -183,6 +183,29 @@ class PermissionSeeder extends Seeder
 
       // Invoice permissions
       'view_any_invoice', 'view_invoice', 'create_invoice', 'update_invoice', 'delete_invoice', 'delete_any_invoice', 'force_delete_invoice', 'force_delete_any_invoice', 'restore_invoice', 'restore_any_invoice', 'replicate_invoice', 'reorder_invoice',
+
+      // Modul Keuangan permissions
+      'view_keuangan_dashboard',
+      'view_keuangan_report',
+      'export_keuangan_report',
+      'print_keuangan_report',
+      'view_any_keuangan_transaction',
+      'view_keuangan_transaction',
+      'create_keuangan_transaction',
+      'update_keuangan_transaction',
+      'update_own_keuangan_transaction',
+      'delete_keuangan_transaction',
+      'delete_own_keuangan_transaction',
+      'restore_keuangan_transaction',
+      'force_delete_keuangan_transaction',
+      'view_any_keuangan_category',
+      'create_keuangan_category',
+      'update_keuangan_category',
+      'delete_keuangan_category',
+      'view_any_keuangan_payment_method',
+      'create_keuangan_payment_method',
+      'update_keuangan_payment_method',
+      'delete_keuangan_payment_method',
     ];
 
     // Create permissions with custom ID format

@@ -5,6 +5,7 @@ use App\Http\Controllers\LaporanKinerjaController;
 use App\Http\Controllers\RekapitulasiAbsensiController;
 use App\Http\Controllers\SlipGajiController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\KeuanganLaporanController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/qr/{slug?}', function ($slug = null) {
@@ -189,7 +190,7 @@ Route::get('/{any?}', function () {
     }
 
     return view('react.app', compact('cmsData', 'seo'));
-})->where('any', '^(?!admin|livewire|api|slip-gaji|laporan|rekapitulasi|invoice|storage|qr(?:/|$)|q(?:/|$)).*');
+})->where('any', '^(?!admin|livewire|api|slip-gaji|laporan|rekapitulasi|invoice|keuangan(?:/|$)|storage|qr(?:/|$)|q(?:/|$)).*');
 
 Route::get('/slip-gaji/cetak/{tahun}/{bulan}', [SlipGajiController::class, 'cetakSemuaSlipGaji'])
     ->name('slip-gaji.cetak');
@@ -208,3 +209,6 @@ Route::get('/rekapitulasi-absensi/cetak', [RekapitulasiAbsensiController::class,
 
 Route::get('/invoice/{invoice}/pdf', [InvoiceController::class, 'generatePdf'])
     ->name('invoice.pdf');
+
+Route::get('/keuangan/laporan/cetak', [KeuanganLaporanController::class, 'cetak'])
+    ->name('keuangan.laporan.cetak');

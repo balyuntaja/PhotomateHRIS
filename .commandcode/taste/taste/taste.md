@@ -1,7 +1,9 @@
 # Taste
 - Writes and specifies requirements in Indonesian (Bahasa Indonesia); expects explanations and reports in Indonesian. Confidence: 0.75
 - Before making broad changes, wants the agent to first analyze the existing project structure (models, services, config, schema, authorization logic) and then explain which files will be created/changed and why, instead of editing immediately. Confidence: 0.8
-- Prefers minimal, targeted changes: avoid altering existing business logic without justification, and integrate new behavior at the points the existing code already provides. Confidence: 0.7
+- Prefers minimal, targeted changes: avoid altering existing business logic without justification, and integrate new behavior at the points the existing code already provides. Confidence: 0.8
+- Wants new features built inside the existing application, never as a separate new app: follow the project's existing stack, architecture, patterns, naming conventions, design system and reusable components, and avoid switching frameworks or doing large unrequested refactors. Confidence: 0.85
+- Prefers reusing existing UI primitives (dialogs, toasts, cards, tables, badges) instead of native browser constructs — e.g. no browser `alert()` for confirmations when the project already has a dialog component. Confidence: 0.6
 - Never hardcode API keys or credentials in source code; keep secrets in environment/config. Confidence: 0.8
 - Prefers using framework-native features (e.g. Laravel Notifications) over ad-hoc custom implementations. Confidence: 0.6
 - Prefers slow operations (like sending email) run asynchronously via the queue (database queue driver), with failures recorded in failed_jobs and retryable. Confidence: 0.65
@@ -13,3 +15,9 @@
 - Keeps tests isolated from the development database: run the suite against in-memory SQLite (a gitignored `.env.testing` with `DB_CONNECTION=sqlite`, `DB_DATABASE=:memory:`) and force the critical config vars in `phpunit.xml` (`force="true"` on both `<env>` and `<server>`) so shell-exported `.env` values cannot leak into tests. Confidence: 0.6
 - Treats destructive database operations against the dev database (e.g. `RefreshDatabase`/`migrate:fresh` wiping live dev data) as unacceptable; verifies the actual data impact before continuing and reports it. Confidence: 0.55
 - Values focus and effectiveness over exhaustive investigation: once the task is understood, expects the agent to implement the feature directly and avoid long side-quests/deep dives into unrelated issues ("kenapa jadi kemana mana, kurang efektif"). Confidence: 0.7
+- Actively guards against over-engineering: repeatedly states the scope, lists what must NOT be built (e.g. no double-entry accounting, no tax engine, no forecasting), and expects each delivery phase to stay small and focused on the stated goal. Confidence: 0.8
+- Wants user-facing copy in Bahasa Indonesia — navigation/menu labels, field labels, buttons, empty states, and validation/error messages — matching the existing UI language. Confidence: 0.7
+- Prefers to avoid introducing new dependencies when the existing stack already covers the need (e.g. streamed CSV with UTF-8 BOM + dompdf PDF instead of installing an Excel-writing package). Confidence: 0.5
+- For money, wants amounts stored as plain positive integers in the base currency (IDR) with sign derived from the record type, and Rupiah formatting applied only in the UI — never a formatted string or floating point in the database. Confidence: 0.65
+- Prefers auditable, recoverable data handling: record create/update/delete with old and new values in an audit log, and soft delete (keep the row) rather than hard delete for records that feed reports. Confidence: 0.65
+- When a new module should not yet integrate with existing systems, wants it built self-contained but with explicit future-integration fields/hooks prepared (disabled for now), rather than coupling to systems that are not yet stable. Confidence: 0.6
