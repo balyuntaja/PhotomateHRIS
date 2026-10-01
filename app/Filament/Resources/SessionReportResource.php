@@ -63,9 +63,10 @@ class SessionReportResource extends Resource
         $isLocked = fn ($record = null, $livewire = null): bool => $isApproved($record, $livewire)
             || app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $resolveReport($record, $livewire)?->report_date);
 
-        // Cabang Wedding Photomate memakai input manual Jumlah Sesi + Jumlah Lembar
-        $isWeddingBranch = fn (Get $get): bool => app(\App\Services\BranchInputModeService::class)
-            ->isWeddingPhotomate(null, $get('cabang_id'));
+        // Cabang mode manual (Wedding Photomate, Express Sewa, Express Self Run)
+        // memakai input total Jumlah Sesi + Jumlah Lembar
+        $isManualBranch = fn (Get $get): bool => app(\App\Services\BranchInputModeService::class)
+            ->usesManualSessionInput(null, $get('cabang_id'));
 
         /** @var Karyawan|null $user */
         $user = Auth::user();
@@ -145,13 +146,13 @@ class SessionReportResource extends Resource
                     ->columns(2),
 
                 Forms\Components\Section::make('Detail Sesi Foto')
-                    ->description(fn (Get $get) => $isWeddingBranch($get)
-                        ? 'Cabang Wedding Photomate: cukup isi total Jumlah Sesi dan Jumlah Lembar.'
+                    ->description(fn (Get $get) => $isManualBranch($get)
+                        ? 'Cabang ' . (\App\Models\Cabang::find($get('cabang_id'))?->nama_cabang ?? 'ini') . ': cukup isi total Jumlah Sesi dan Jumlah Lembar.'
                         : 'Input utama adalah nominal harga transaksi, jumlah lembar dihitung otomatis.')
                     ->schema([
                         Forms\Components\Repeater::make('transactions')
                             ->relationship('transactions')
-                            ->visible(fn (Get $get) => ! $isWeddingBranch($get))
+                            ->visible(fn (Get $get) => ! $isManualBranch($get))
                             ->schema([
                                 Forms\Components\Placeholder::make('row_number')
                                     ->label('Sesi')
@@ -262,8 +263,8 @@ class SessionReportResource extends Resource
                             ->numeric()
                             ->integer()
                             ->minValue(1)
-                            ->required(fn (Get $get) => $isWeddingBranch($get))
-                            ->visible(fn (Get $get) => $isWeddingBranch($get))
+                            ->required(fn (Get $get) => $isManualBranch($get))
+                            ->visible(fn (Get $get) => $isManualBranch($get))
                             ->helperText('Total sesi pemotretan. Contoh: 150.')
                             ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
                             ->columnSpan(['default' => 12, 'md' => 6]),
@@ -273,8 +274,8 @@ class SessionReportResource extends Resource
                             ->numeric()
                             ->integer()
                             ->minValue(1)
-                            ->required(fn (Get $get) => $isWeddingBranch($get))
-                            ->visible(fn (Get $get) => $isWeddingBranch($get))
+                            ->required(fn (Get $get) => $isManualBranch($get))
+                            ->visible(fn (Get $get) => $isManualBranch($get))
                             ->helperText('Total lembar foto. Contoh: 300.')
                             ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
                             ->columnSpan(['default' => 12, 'md' => 6]),
@@ -315,7 +316,7 @@ class SessionReportResource extends Resource
                 Forms\Components\Section::make('Ringkasan Kalkulasi Otomatis')
                     ->description('Dihitung otomatis realtime berdasarkan harga transaksi yang diinput.')
                     ->icon('heroicon-m-calculator')
-                    ->visible(fn (Get $get) => ! $isWeddingBranch($get))
+                    ->visible(fn (Get $get) => ! $isManualBranch($get))
                     ->schema([
                         Forms\Components\Placeholder::make('live_summary')
                             ->hiddenLabel()
@@ -389,19 +390,19 @@ class SessionReportResource extends Resource
 
                 Tables\Columns\TextColumn::make('total_cash_amount')
                     ->label('Total Tunai')
-                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->isWeddingPhotomate() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
                     ->alignEnd()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('total_qris_amount')
                     ->label('Total QRIS')
-                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->isWeddingPhotomate() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
                     ->alignEnd()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('grand_total_amount')
                     ->label('Grand Total')
-                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->isWeddingPhotomate() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
                     ->weight('bold')
                     ->alignEnd()
                     ->sortable(),

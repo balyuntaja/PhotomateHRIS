@@ -232,8 +232,10 @@ class SessionManagementTest extends TestCase
         $this->assertEquals(10, $report->total_sessions);
         $this->assertEquals(4, $report->total_transactions);
         $this->assertEquals(3, $report->total_cash_sessions);
+        $this->assertEquals(2, $report->total_cash_transactions);
         $this->assertEquals(75000, $report->total_cash_amount);
         $this->assertEquals(7, $report->total_qris_sessions);
+        $this->assertEquals(2, $report->total_qris_transactions);
         $this->assertEquals(160000, $report->total_qris_amount);
         $this->assertEquals(235000, $report->grand_total_amount);
         $this->assertEquals('VALID', $report->validation_status);
@@ -674,6 +676,8 @@ class SessionManagementTest extends TestCase
         $view = $this->view('filament.resources.session-reports.review-modal', ['record' => $report]);
         $view->assertSee('Validasi Otomatis Sistem');
         $view->assertSee('STATUS VALID');
+        $view->assertSee('1 Lembar tunai · 1 transaksi', false);
+        $view->assertSee('2 Lembar non-tunai · 1 transaksi', false);
         $view->assertSee('Metode Pembayaran');
         $view->assertSee('Jumlah Sesi');
         $view->assertSee('Pricing Rule');
@@ -981,10 +985,12 @@ class SessionManagementTest extends TestCase
         $this->pricingService->recalculateReport($report);
         $report->refresh();
 
-        $this->assertTrue($report->isWeddingPhotomate());
+        $this->assertTrue($report->usesManualSessionInput());
         $this->assertFalse($report->isNewspaperJanus());
         $this->assertEquals(150, $report->total_transactions);
         $this->assertEquals(300, $report->total_sessions);
+        $this->assertEquals(0, $report->total_cash_transactions);
+        $this->assertEquals(0, $report->total_qris_transactions);
         $this->assertEquals(0, $report->total_cash_amount);
         $this->assertEquals(0, $report->total_qris_amount);
         $this->assertEquals(0, $report->grand_total_amount);
@@ -1067,7 +1073,7 @@ class SessionManagementTest extends TestCase
         $this->pricingService->recalculateReport($report);
         $report->refresh();
 
-        $this->assertFalse($report->isWeddingPhotomate());
+        $this->assertFalse($report->usesManualSessionInput());
         $this->assertNull($report->wedding_total_sessions);
         $this->assertNull($report->wedding_total_sheets);
         $this->assertEquals(1, $report->total_transactions);
@@ -1232,5 +1238,198 @@ class SessionManagementTest extends TestCase
             ->assertHasFormErrors(['wedding_total_sessions', 'wedding_total_sheets']);
 
         $this->assertEquals(0, SessionReport::count());
+    }
+
+    /**
+     * Helper: cabang Express Sewa (mode input manual Jumlah Sesi + Jumlah Lembar)
+     */
+    protected function expressSewaCabang(): \App\Models\Cabang
+    {
+        return \App\Models\Cabang::firstOrCreate(
+            ['cabang_id' => 'C-EXP-SEWA'],
+            [
+                'perusahaan_id' => 'P01',
+                'nama_cabang' => 'Express Sewa',
+                'alamat' => 'Express Sewa Outlet',
+            ]
+        );
+    }
+
+    /**
+     * Helper: cabang Express Self Run (mode input manual Jumlah Sesi + Jumlah Lembar)
+     */
+    protected function expressSelfRunCabang(): \App\Models\Cabang
+    {
+        return \App\Models\Cabang::firstOrCreate(
+            ['cabang_id' => 'C-EXP-SELF'],
+            [
+                'perusahaan_id' => 'P01',
+                'nama_cabang' => 'Express Self Run',
+                'alamat' => 'Express Self Run Outlet',
+            ]
+        );
+    }
+
+    /**
+     * Helper: cabang Photomate Express (tetap memakai detail transaksi per sesi)
+     */
+    protected function photomateExpressCabang(): \App\Models\Cabang
+    {
+        return \App\Models\Cabang::firstOrCreate(
+            ['cabang_id' => 'C-EXP-DETAIL'],
+            [
+                'perusahaan_id' => 'P01',
+                'nama_cabang' => 'Photomate Express',
+            ]
+        );
+    }
+
+    /**
+     * Test 26: Deteksi cabang mode input manual (Wedding Photomate, Express Sewa, Express Self Run)
+     */
+    public function test_manual_input_mode_detection_for_branches(): void
+    {
+        $service = app(\App\Services\BranchInputModeService::class);
+
+        $this->assertTrue($service->usesManualSessionInput($this->weddingCabang()));
+        $this->assertTrue($service->usesManualSessionInput($this->expressSewaCabang()));
+        $this->assertTrue($service->usesManualSessionInput($this->expressSelfRunCabang()));
+        $this->assertFalse($service->usesManualSessionInput($this->photomateExpressCabang()));
+        $this->assertFalse($service->usesManualSessionInput($this->janusCabang()));
+        $this->assertFalse($service->usesManualSessionInput(null));
+    }
+
+    /**
+     * Test 27: Express Sewa & Express Self Run memakai input manual Jumlah Sesi & Jumlah Lembar
+     */
+    public function test_express_branches_use_manual_session_and_sheet_totals(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        foreach ([$this->expressSewaCabang(), $this->expressSelfRunCabang()] as $cabang) {
+            $report = SessionReport::create([
+                'report_date' => Carbon::today(),
+                'status' => SessionReport::STATUS_DRAFT,
+                'submitted_by' => $this->crewKia->karyawan_id,
+                'cabang_id' => $cabang->cabang_id,
+                'wedding_total_sessions' => 120,
+                'wedding_total_sheets' => 240,
+            ]);
+            $report->crews()->attach($this->crewKia->karyawan_id);
+
+            $this->pricingService->recalculateReport($report);
+            $report->refresh();
+
+            $this->assertTrue($report->usesManualSessionInput());
+            $this->assertFalse($report->isNewspaperJanus());
+            $this->assertEquals(120, $report->total_transactions);
+            $this->assertEquals(240, $report->total_sessions);
+            $this->assertEquals(0, $report->total_cash_transactions);
+            $this->assertEquals(0, $report->total_qris_transactions);
+            $this->assertEquals(0, $report->total_cash_amount);
+            $this->assertEquals(0, $report->total_qris_amount);
+            $this->assertEquals(0, $report->grand_total_amount);
+            $this->assertEquals(0, $report->bonus_amount);
+            $this->assertEquals('VALID', $report->validation_status);
+
+            // Rekap bisa disubmit tanpa detail transaksi
+            $this->workflowService->submit($report, $this->crewKia);
+            $report->refresh();
+
+            $this->assertEquals(SessionReport::STATUS_WAITING_APPROVAL, $report->status);
+            $this->assertEquals(0, $report->transactions()->count());
+
+            // Review modal menampilkan ringkasan manual dengan nama cabang
+            $view = $this->view('filament.resources.session-reports.review-modal', ['record' => $report]);
+            $view->assertSee('Ringkasan Sesi Foto (' . $cabang->nama_cabang . ')');
+            $view->assertSee('Jumlah Sesi');
+            $view->assertSee('Jumlah Lembar');
+            $view->assertDontSee('Detail Transaksi');
+        }
+    }
+
+    /**
+     * Test 28: Form Rekap Sesi menampilkan input manual untuk Express Sewa & Express Self Run
+     */
+    public function test_filament_form_shows_manual_inputs_for_express_branches(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        foreach ([$this->expressSewaCabang()->cabang_id, $this->expressSelfRunCabang()->cabang_id] as $cabangId) {
+            \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\CreateSessionReport::class)
+                ->fillForm(['cabang_id' => $cabangId])
+                ->assertFormFieldIsVisible('wedding_total_sessions')
+                ->assertFormFieldIsVisible('wedding_total_sheets')
+                ->assertFormFieldIsHidden('transactions')
+                ->assertSee('Upload Evidence');
+        }
+    }
+
+    /**
+     * Test 29: Create Rekap Sesi Express Sewa end-to-end lewat form Filament
+     */
+    public function test_create_express_sewa_report_through_filament_form(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $cabangId = $this->expressSewaCabang()->cabang_id;
+
+        \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\CreateSessionReport::class)
+            ->fillForm([
+                'report_date' => Carbon::today()->format('Y-m-d'),
+                'cabang_id' => $cabangId,
+                'crews' => [$this->crewKia->karyawan_id],
+            ])
+            ->fillForm([
+                'wedding_total_sessions' => 90,
+                'wedding_total_sheets' => 180,
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $report = SessionReport::latest('id')->first();
+
+        $this->assertNotNull($report);
+        $this->assertEquals($cabangId, $report->cabang_id);
+        $this->assertEquals(90, $report->wedding_total_sessions);
+        $this->assertEquals(180, $report->wedding_total_sheets);
+        $this->assertEquals(90, $report->total_transactions);
+        $this->assertEquals(180, $report->total_sessions);
+        $this->assertEquals(0, $report->transactions()->count());
+        $this->assertEquals(SessionReport::STATUS_WAITING_APPROVAL, $report->status);
+    }
+
+    /**
+     * Test 30: Photomate Express tetap memakai detail transaksi (bukan mode manual)
+     */
+    public function test_photomate_express_keeps_detailed_transaction_mode(): void
+    {
+        $this->actingAs($this->crewKia);
+
+        $report = SessionReport::create([
+            'report_date' => Carbon::today(),
+            'status' => SessionReport::STATUS_DRAFT,
+            'submitted_by' => $this->crewKia->karyawan_id,
+            'cabang_id' => $this->photomateExpressCabang()->cabang_id,
+            'wedding_total_sessions' => 99,
+            'wedding_total_sheets' => 99,
+        ]);
+        $report->crews()->attach($this->crewKia->karyawan_id);
+
+        SessionTransaction::create([
+            'session_report_id' => $report->id,
+            'payment_method' => 'CASH',
+            'amount' => 30000,
+        ]);
+
+        $this->pricingService->recalculateReport($report);
+        $report->refresh();
+
+        $this->assertFalse($report->usesManualSessionInput());
+        $this->assertNull($report->wedding_total_sessions);
+        $this->assertNull($report->wedding_total_sheets);
+        $this->assertEquals(1, $report->total_transactions);
+        $this->assertEquals(1, $report->total_sessions);
+        $this->assertEquals(30000, $report->grand_total_amount);
     }
 }

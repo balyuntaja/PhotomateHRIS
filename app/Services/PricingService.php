@@ -75,9 +75,10 @@ class PricingService
      */
     public function recalculateReport(SessionReport $report): void
     {
-        // Wedding Photomate: total diambil dari input manual Jumlah Sesi & Jumlah Lembar
-        if ($report->isWeddingPhotomate()) {
-            $this->recalculateWeddingReport($report);
+        // Cabang mode manual (Wedding Photomate, Express Sewa, Express Self Run):
+        // total diambil dari input manual Jumlah Sesi & Jumlah Lembar
+        if ($report->usesManualSessionInput()) {
+            $this->recalculateManualInputReport($report);
 
             return;
         }
@@ -88,8 +89,10 @@ class PricingService
         $totalTransactions = $transactions->count();
         $totalCashAmount = 0;
         $totalCashSessions = 0;
+        $totalCashTransactions = 0;
         $totalQrisAmount = 0;
         $totalQrisSessions = 0;
+        $totalQrisTransactions = 0;
         $issues = [];
 
         foreach ($transactions as $idx => $trx) {
@@ -122,9 +125,11 @@ class PricingService
             if (strtoupper($trx->payment_method) === 'QRIS') {
                 $totalQrisSessions += $sessionCount;
                 $totalQrisAmount += $amount;
+                $totalQrisTransactions++;
             } else {
                 $totalCashSessions += $sessionCount;
                 $totalCashAmount += $amount;
+                $totalCashTransactions++;
             }
         }
 
@@ -145,13 +150,15 @@ class PricingService
         $report->total_transactions = $totalTransactions;
         $report->total_cash_amount = $totalCashAmount;
         $report->total_cash_sessions = $totalCashSessions;
+        $report->total_cash_transactions = $totalCashTransactions;
         $report->total_qris_amount = $totalQrisAmount;
         $report->total_qris_sessions = $totalQrisSessions;
+        $report->total_qris_transactions = $totalQrisTransactions;
         $report->grand_total_amount = $grandTotalAmount;
         $report->validation_status = empty($issues) ? 'VALID' : 'HAS_ISSUE';
         $report->validation_issues = $issues;
 
-        // Bersihkan input manual Wedding bila cabang bukan Wedding Photomate
+        // Bersihkan input manual bila cabang bukan cabang mode manual
         $report->wedding_total_sessions = null;
         $report->wedding_total_sheets = null;
 
@@ -164,10 +171,11 @@ class PricingService
     }
 
     /**
-     * Rekap cabang Wedding Photomate: total diambil langsung dari input manual
-     * Jumlah Sesi (total_transactions) dan Jumlah Lembar (total_sessions).
+     * Rekap cabang mode manual (Wedding Photomate, Express Sewa, Express Self Run):
+     * total diambil langsung dari input manual Jumlah Sesi (total_transactions)
+     * dan Jumlah Lembar (total_sessions).
      */
-    protected function recalculateWeddingReport(SessionReport $report): void
+    protected function recalculateManualInputReport(SessionReport $report): void
     {
         $totalSesi = (int) ($report->wedding_total_sessions ?? 0);
         $totalLembar = (int) ($report->wedding_total_sheets ?? 0);
@@ -188,8 +196,10 @@ class PricingService
         $report->total_sessions = $totalLembar;
         $report->total_cash_amount = 0;
         $report->total_cash_sessions = 0;
+        $report->total_cash_transactions = 0;
         $report->total_qris_amount = 0;
         $report->total_qris_sessions = 0;
+        $report->total_qris_transactions = 0;
         $report->grand_total_amount = 0;
         $report->bonus_amount = 0;
         $report->validation_status = empty($issues) ? 'VALID' : 'HAS_ISSUE';

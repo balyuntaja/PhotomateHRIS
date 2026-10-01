@@ -71,8 +71,8 @@ class ListSessionHistories extends ListRecords
                             $bonusPerCrew = ($bonusAmount > 0 && $crewCount > 0) ? (int) round($bonusAmount / $crewCount) : 0;
 
                             $transactions = $report->transactions;
-                            if ($report->isWeddingPhotomate()) {
-                                // Wedding Photomate: tanpa detail transaksi, Jumlah Sesi & Lembar diinput manual
+                            if ($report->usesManualSessionInput()) {
+                                // Cabang mode manual: tanpa detail transaksi, Jumlah Sesi & Lembar diinput manual
                                 fputcsv($handle, [
                                     $report->report_date ? $report->report_date->format('Y-m-d') : '-',
                                     $report->report_number,

@@ -38,8 +38,10 @@ class SessionReport extends Model
         'total_transactions',
         'total_cash_amount',
         'total_cash_sessions',
+        'total_cash_transactions',
         'total_qris_amount',
         'total_qris_sessions',
+        'total_qris_transactions',
         'grand_total_amount',
         'bonus_amount',
         'validation_status',
@@ -62,8 +64,10 @@ class SessionReport extends Model
         'total_transactions' => 'integer',
         'total_cash_amount' => 'integer',
         'total_cash_sessions' => 'integer',
+        'total_cash_transactions' => 'integer',
         'total_qris_amount' => 'integer',
         'total_qris_sessions' => 'integer',
+        'total_qris_transactions' => 'integer',
         'grand_total_amount' => 'integer',
         'bonus_amount' => 'integer',
         'validation_issues' => 'array',
@@ -301,12 +305,12 @@ class SessionReport extends Model
     }
 
     /**
-     * Cabang Wedding Photomate memakai input manual Jumlah Sesi + Jumlah Lembar,
-     * bukan detail sesi foto per transaksi.
+     * Cabang mode input manual (Wedding Photomate, Express Sewa, Express Self Run)
+     * memakai total Jumlah Sesi + Jumlah Lembar, bukan detail sesi per transaksi.
      */
-    public function isWeddingPhotomate(): bool
+    public function usesManualSessionInput(): bool
     {
-        return app(\App\Services\BranchInputModeService::class)->isWeddingPhotomate($this->cabang);
+        return app(\App\Services\BranchInputModeService::class)->usesManualSessionInput($this->cabang);
     }
 
     /**

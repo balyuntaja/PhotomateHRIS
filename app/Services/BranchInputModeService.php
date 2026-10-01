@@ -6,13 +6,20 @@ use App\Models\Cabang;
 
 class BranchInputModeService
 {
-    public const WEDDING_BRANCH_KEYWORD = 'wedding';
+    /**
+     * Cabang dengan mode input manual: cukup isi total Jumlah Sesi + Jumlah Lembar,
+     * tanpa detail sesi per transaksi.
+     */
+    public const MANUAL_INPUT_BRANCH_KEYWORDS = [
+        'wedding',
+        'express sewa',
+        'express self run',
+    ];
 
     /**
-     * Cek apakah cabang menggunakan mode input sederhana Wedding Photomate
-     * (Jumlah Sesi + Jumlah Lembar), bukan detail sesi per transaksi.
+     * Cek apakah cabang memakai mode input manual (Jumlah Sesi + Jumlah Lembar).
      */
-    public function isWeddingPhotomate(Cabang|string|null $cabang, ?string $cabangId = null): bool
+    public function usesManualSessionInput(Cabang|string|null $cabang, ?string $cabangId = null): bool
     {
         if (!$cabang && $cabangId) {
             $cabang = Cabang::find($cabangId);
@@ -26,6 +33,14 @@ class BranchInputModeService
             return false;
         }
 
-        return str_contains(strtolower(trim($cabang->nama_cabang)), self::WEDDING_BRANCH_KEYWORD);
+        $normalizedName = preg_replace('/[^a-z0-9]+/', ' ', strtolower(trim($cabang->nama_cabang)));
+
+        foreach (self::MANUAL_INPUT_BRANCH_KEYWORDS as $keyword) {
+            if (str_contains($normalizedName, $keyword)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

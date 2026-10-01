@@ -87,10 +87,10 @@
     </div>
     @endif
 
-    @if($report->isWeddingPhotomate())
-    <!-- Ringkasan Wedding Photomate (input manual Jumlah Sesi & Jumlah Lembar) -->
+    @if($report->usesManualSessionInput())
+    <!-- Ringkasan cabang mode manual (input Jumlah Sesi & Jumlah Lembar) -->
     <div>
-        <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400 mb-2">Ringkasan Sesi Foto (Wedding Photomate)</h3>
+        <h3 class="text-xs uppercase tracking-wider font-bold text-gray-500 dark:text-gray-400 mb-2">Ringkasan Sesi Foto ({{ $report->cabang?->nama_cabang ?? 'Input Manual' }})</h3>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
                 <span class="text-xs text-gray-500 block">Jumlah Sesi</span>
@@ -115,12 +115,12 @@
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
                 <span class="text-xs text-gray-500 block">Tunai (Cash)</span>
                 <div class="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono">Rp {{ number_format($report->total_cash_amount, 0, ',', '.') }}</div>
-                <span class="text-[11px] text-gray-400">{{ $report->total_cash_sessions }} Lembar tunai</span>
+                <span class="text-[11px] text-gray-400">{{ $report->total_cash_sessions }} Lembar tunai · {{ $report->total_cash_transactions }} transaksi</span>
             </div>
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
                 <span class="text-xs text-gray-500 block">QRIS</span>
                 <div class="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400 font-mono">Rp {{ number_format($report->total_qris_amount, 0, ',', '.') }}</div>
-                <span class="text-[11px] text-gray-400">{{ $report->total_qris_sessions }} Lembar non-tunai</span>
+                <span class="text-[11px] text-gray-400">{{ $report->total_qris_sessions }} Lembar non-tunai · {{ $report->total_qris_transactions }} transaksi</span>
             </div>
             <div class="p-3 bg-primary-50 dark:bg-primary-950/40 rounded-xl border border-primary-200 dark:border-primary-800/60">
                 <span class="text-xs text-primary-700 dark:text-primary-300 font-medium block">Total Revenue</span>
@@ -311,14 +311,14 @@
                 <div style="display: flex; align-items: center; gap: 7px;">
                     <span style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background-color: #10b981; color: white; font-size: 11px; font-weight: bold; flex-shrink: 0;">✓</span>
                     <span style="font-weight: 700; font-size: 12px; color: #065f46;">STATUS VALID</span>
-                    <span style="font-size: 12px; color: #047857;">— {{ $report->isWeddingPhotomate() ? 'Data sesi Wedding Photomate terverifikasi sistem' : 'Semua data transaksi terverifikasi sistem' }}</span>
+                    <span style="font-size: 12px; color: #047857;">— {{ $report->usesManualSessionInput() ? 'Data sesi ' . ($report->cabang?->nama_cabang ?? 'manual') . ' terverifikasi sistem' : 'Semua data transaksi terverifikasi sistem' }}</span>
                 </div>
                 <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 700; background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0;">
                     Lolos Verifikasi
                 </span>
             </div>
             <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                @if($report->isWeddingPhotomate())
+                @if($report->usesManualSessionInput())
                 <span style="display: inline-flex; align-items: center; gap: 5px; background-color: #ffffff; border: 1px solid #a7f3d0; border-radius: 6px; padding: 3px 9px; font-size: 11px; color: #065f46;">
                     <span style="color: #10b981; font-weight: bold;">✓</span> Jumlah Sesi &amp; Jumlah Lembar terisi
                 </span>
