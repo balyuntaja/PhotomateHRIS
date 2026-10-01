@@ -243,6 +243,27 @@ class KeuanganTransactionTest extends TestCase
         $this->assertFalse(FinancialTransactionResource::shouldRegisterNavigation());
     }
 
+    public function test_super_admin_tanpa_permission_keuangan_tetap_dapat_mengakses_modul(): void
+    {
+        $admin = $this->makeUser('K0009', 'Admin', 'R01', 'admin.super@photomate.id', []);
+
+        $this->actingAs($admin);
+
+        $this->assertTrue(FinancialTransactionResource::canViewAny());
+        $this->assertTrue(FinancialTransactionResource::shouldRegisterNavigation());
+        $this->assertTrue(\App\Filament\Resources\FinancialCategoryResource::canViewAny());
+        $this->assertTrue(\App\Filament\Resources\FinancialCategoryResource::shouldRegisterNavigation());
+        $this->assertTrue(\App\Filament\Resources\FinancialPaymentMethodResource::canViewAny());
+        $this->assertTrue(\App\Filament\Resources\FinancialPaymentMethodResource::shouldRegisterNavigation());
+
+        $this->get('/admin/keuangan-transaksi')->assertOk();
+        $this->get('/admin/keuangan-kategori')->assertOk();
+        $this->get('/admin/keuangan-metode-pembayaran')->assertOk();
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->assertActionVisible('export');
+    }
+
     public function test_tombol_tambah_transaksi_tersembunyi_tanpa_permission_create(): void
     {
         $viewer = $this->makeUser('K0004', 'CEO', 'R06', 'ceo@photomate.id', [

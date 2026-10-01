@@ -41,12 +41,16 @@ class FinancialTransactionResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::user()?->can('view_any_keuangan_transaction') ?? false;
+        $user = Auth::user();
+
+        return $user?->isSuperAdmin() || ($user?->can('view_any_keuangan_transaction') ?? false);
     }
 
     public static function canViewAny(): bool
     {
-        return Auth::user()?->can('view_any_keuangan_transaction') ?? false;
+        $user = Auth::user();
+
+        return $user?->isSuperAdmin() || ($user?->can('view_any_keuangan_transaction') ?? false);
     }
 
     public static function getEloquentQuery(): Builder

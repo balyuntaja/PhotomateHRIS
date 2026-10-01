@@ -13,8 +13,10 @@ class KeuanganLaporanController extends Controller
 {
     public function cetak(Request $request)
     {
+        $user = Auth::user();
+
         abort_unless(
-            Auth::user()?->can('print_keuangan_report'),
+            $user?->isSuperAdmin() || ($user?->can('print_keuangan_report') ?? false),
             403,
             'Anda tidak memiliki akses untuk mencetak laporan keuangan.'
         );

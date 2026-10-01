@@ -119,6 +119,30 @@ class KeuanganDashboardReportTest extends TestCase
         $this->assertFalse(KeuanganReport::shouldRegisterNavigation());
     }
 
+    public function test_super_admin_tanpa_permission_keuangan_tetap_dapat_mengakses_modul(): void
+    {
+        $admin = $this->makeUser('K0009', 'Admin', 'R01', 'admin.super@photomate.id', []);
+
+        $this->actingAs($admin);
+
+        $this->assertTrue(KeuanganDashboard::canAccess());
+        $this->assertTrue(KeuanganDashboard::shouldRegisterNavigation());
+        $this->assertTrue(KeuanganReport::canAccess());
+        $this->assertTrue(KeuanganReport::shouldRegisterNavigation());
+
+        $this->get('/admin/keuangan')->assertOk();
+        $this->get('/admin/keuangan-laporan')->assertOk();
+
+        \Livewire\Livewire::test(KeuanganReport::class)
+            ->assertActionVisible('export')
+            ->assertActionVisible('cetak');
+
+        $this->get('/keuangan/laporan/cetak?periode=this_month')
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf')
+            ->assertDownload();
+    }
+
     public function test_halaman_laporan_menampilkan_breakdown_kategori_dan_per_cabang(): void
     {
         $this->seedContohTransaksi();

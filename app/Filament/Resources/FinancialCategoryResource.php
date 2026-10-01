@@ -34,12 +34,16 @@ class FinancialCategoryResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::user()?->can('view_any_keuangan_category') ?? false;
+        $user = Auth::user();
+
+        return $user?->isSuperAdmin() || ($user?->can('view_any_keuangan_category') ?? false);
     }
 
     public static function canViewAny(): bool
     {
-        return Auth::user()?->can('view_any_keuangan_category') ?? false;
+        $user = Auth::user();
+
+        return $user?->isSuperAdmin() || ($user?->can('view_any_keuangan_category') ?? false);
     }
 
     public static function form(Form $form): Form

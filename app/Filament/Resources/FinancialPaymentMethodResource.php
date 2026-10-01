@@ -32,12 +32,16 @@ class FinancialPaymentMethodResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::user()?->can('view_any_keuangan_payment_method') ?? false;
+        $user = Auth::user();
+
+        return $user?->isSuperAdmin() || ($user?->can('view_any_keuangan_payment_method') ?? false);
     }
 
     public static function canViewAny(): bool
     {
-        return Auth::user()?->can('view_any_keuangan_payment_method') ?? false;
+        $user = Auth::user();
+
+        return $user?->isSuperAdmin() || ($user?->can('view_any_keuangan_payment_method') ?? false);
     }
 
     public static function form(Form $form): Form

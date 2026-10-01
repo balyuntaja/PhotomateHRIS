@@ -26,7 +26,7 @@ class ListFinancialTransactions extends ListRecords
                 ->successNotificationTitle('Transaksi berhasil disimpan.'),
         ];
 
-        if (Auth::user()?->can('export_keuangan_report')) {
+        if (Auth::user()?->isSuperAdmin() || Auth::user()?->can('export_keuangan_report')) {
             $actions[] = Actions\Action::make('export')
                 ->label('Export Excel / CSV')
                 ->icon('heroicon-o-arrow-down-tray')

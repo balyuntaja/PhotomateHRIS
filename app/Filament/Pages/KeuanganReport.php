@@ -36,7 +36,9 @@ class KeuanganReport extends Page implements HasForms
 
     public static function canAccess(): bool
     {
-        return Auth::user()?->can('view_keuangan_report') ?? false;
+        $user = Auth::user();
+
+        return $user?->isSuperAdmin() || ($user?->can('view_keuangan_report') ?? false);
     }
 
     public static function shouldRegisterNavigation(): bool
@@ -120,7 +122,7 @@ class KeuanganReport extends Page implements HasForms
                 ->label('Export CSV')
                 ->icon('heroicon-o-arrow-down-tray')
                 ->color('success')
-                ->visible(fn (): bool => Auth::user()?->can('export_keuangan_report') ?? false)
+                ->visible(fn (): bool => Auth::user()?->isSuperAdmin() || (Auth::user()?->can('export_keuangan_report') ?? false))
                 ->action(function (): StreamedResponse {
                     $report = $this->reportData();
 
@@ -178,7 +180,7 @@ class KeuanganReport extends Page implements HasForms
                 ->label('Cetak PDF')
                 ->icon('heroicon-o-printer')
                 ->color('primary')
-                ->visible(fn (): bool => Auth::user()?->can('print_keuangan_report') ?? false)
+                ->visible(fn (): bool => Auth::user()?->isSuperAdmin() || (Auth::user()?->can('print_keuangan_report') ?? false))
                 ->url(fn (): string => route('keuangan.laporan.cetak', [
                     'periode' => $this->data['periode'] ?? KeuanganService::DEFAULT_PRESET,
                     'dari' => $this->data['dari'] ?? null,

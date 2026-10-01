@@ -35,7 +35,9 @@ class KeuanganDashboard extends BaseDashboard
 
     public static function canAccess(): bool
     {
-        return Auth::user()?->can('view_keuangan_dashboard') ?? false;
+        $user = Auth::user();
+
+        return $user?->isSuperAdmin() || ($user?->can('view_keuangan_dashboard') ?? false);
     }
 
     public static function shouldRegisterNavigation(): bool

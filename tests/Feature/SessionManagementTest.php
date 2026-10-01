@@ -676,8 +676,8 @@ class SessionManagementTest extends TestCase
         $view = $this->view('filament.resources.session-reports.review-modal', ['record' => $report]);
         $view->assertSee('Validasi Otomatis Sistem');
         $view->assertSee('STATUS VALID');
-        $view->assertSee('1 Lembar tunai · 1 transaksi', false);
-        $view->assertSee('2 Lembar non-tunai · 1 transaksi', false);
+        $view->assertSee('1 Lembar tunai · 1 Sesi', false);
+        $view->assertSee('2 Lembar QRIS · 1 Sesi', false);
         $view->assertSee('Metode Pembayaran');
         $view->assertSee('Jumlah Sesi');
         $view->assertSee('Pricing Rule');
