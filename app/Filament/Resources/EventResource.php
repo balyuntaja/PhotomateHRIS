@@ -36,9 +36,10 @@ class EventResource extends Resource
         return $user && (
             $user->role_id === 'R01' || 
             $user->role_id === 'R02' || 
-            $user->role_id === 'R03' || 
-            $user->role_id === 'R06' || 
-            $user->hasRole(['Admin', 'admin', 'CEO', 'ceo', 'Manager HRD', 'manager hrd', 'Staff HRD', 'staff hrd'])
+            $user->role_id === 'R03' ||
+            $user->role_id === 'R06' ||
+            $user->role_id === 'R07' ||
+            $user->hasRole(['Admin', 'admin', 'CEO', 'ceo', 'Manager HRD', 'manager hrd', 'Staff HRD', 'staff hrd', 'Karyawan', 'karyawan'])
         );
     }
 

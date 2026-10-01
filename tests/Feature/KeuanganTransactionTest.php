@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Pages\KeuanganInputTransaksi;
 use App\Filament\Resources\FinancialTransactionResource;
 use App\Filament\Resources\FinancialTransactionResource\Pages\ListFinancialTransactions;
 use App\Models\Cabang;
@@ -342,6 +343,65 @@ class KeuanganTransactionTest extends TestCase
             ->filterTable('cabang_id', ['value' => 'C0005'])
             ->assertCanSeeTableRecords([$express])
             ->assertCanNotSeeTableRecords([$janus]);
+    }
+
+    public function test_input_transaksi_menyimpan_transaksi_tanpa_redirect_dan_reset_form(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        Livewire::test(KeuanganInputTransaksi::class)
+            ->assertSuccessful()
+            ->fillForm([
+                'transaction_type' => FinancialTransaction::TYPE_INCOME,
+                'amount' => '2.000.000',
+                'category_id' => $this->incomeCategory->id,
+                'transaction_date' => Carbon::today()->toDateString(),
+                'payment_method_id' => $this->cash->id,
+                'description' => 'Pelunasan Event A',
+            ])
+            ->call('simpan')
+            ->assertHasNoFormErrors()
+            ->assertNotified()
+            ->assertNoRedirect()
+            ->assertSet('data.amount', null)
+            ->assertSet('data.category_id', null)
+            ->assertSet('data.description', null)
+            ->assertSet('data.transaction_type', FinancialTransaction::TYPE_INCOME);
+
+        $transaction = FinancialTransaction::firstOrFail();
+
+        $this->assertSame(FinancialTransaction::TYPE_INCOME, $transaction->transaction_type);
+        $this->assertSame(2000000, $transaction->amount);
+        $this->assertSame('Pelunasan Event A', $transaction->description);
+        $this->assertSame($this->managerFinance->karyawan_id, $transaction->created_by);
+
+        $this->assertDatabaseHas('financial_audit_logs', [
+            'financial_transaction_id' => $transaction->id,
+            'user_id' => $this->managerFinance->karyawan_id,
+            'action' => FinancialTransaction::ACTION_CREATED,
+        ]);
+
+        // Transaksi langsung tampil di halaman Transaksi (model & database yang sama)
+        Livewire::test(ListFinancialTransactions::class)
+            ->assertCanSeeTableRecords([$transaction]);
+    }
+
+    public function test_input_transaksi_menolak_user_tanpa_permission(): void
+    {
+        $staff = $this->makeUser('K0005', 'Staff HRD', 'R02', 'staff.hrd.kedua@photomate.id', ['view_any_karyawan']);
+
+        $this->actingAs($staff);
+
+        $this->assertFalse(KeuanganInputTransaksi::canAccess());
+        $this->get('/admin/keuangan-input-transaksi')->assertForbidden();
+    }
+
+    public function test_account_payment_dapat_membuka_halaman_input_transaksi(): void
+    {
+        $this->actingAs($this->accountPayment);
+
+        $this->assertTrue(KeuanganInputTransaksi::canAccess());
+        $this->get('/admin/keuangan-input-transaksi')->assertOk();
     }
 
     protected function makeTransaction(

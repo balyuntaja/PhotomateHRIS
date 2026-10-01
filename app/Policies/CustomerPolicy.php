@@ -14,9 +14,10 @@ class CustomerPolicy
     {
         return $karyawan->role_id === 'R01' || 
             $karyawan->role_id === 'R02' || 
-            $karyawan->role_id === 'R03' || 
-            $karyawan->role_id === 'R06' || 
-            $karyawan->hasRole(['Admin', 'admin', 'CEO', 'ceo', 'Manager HRD', 'manager hrd', 'Staff HRD', 'staff hrd']);
+            $karyawan->role_id === 'R03' ||
+            $karyawan->role_id === 'R06' ||
+            $karyawan->role_id === 'R07' ||
+            $karyawan->hasRole(['Admin', 'admin', 'CEO', 'ceo', 'Manager HRD', 'manager hrd', 'Staff HRD', 'staff hrd', 'Karyawan', 'karyawan']);
     }
 
     public function viewAny(Karyawan $karyawan): bool

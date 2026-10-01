@@ -3,7 +3,8 @@
 - Before making broad changes, wants the agent to first analyze the existing project structure (models, services, config, schema, authorization logic) and then explain which files will be created/changed and why, instead of editing immediately. Confidence: 0.8
 - Prefers minimal, targeted changes: avoid altering existing business logic without justification, and integrate new behavior at the points the existing code already provides. Confidence: 0.8
 - Wants new features built inside the existing application, never as a separate new app: follow the project's existing stack, architecture, patterns, naming conventions, design system and reusable components, and avoid switching frameworks or doing large unrequested refactors. Confidence: 0.85
-- Prefers reusing existing UI primitives (dialogs, toasts, cards, tables, badges) instead of native browser constructs — e.g. no browser `alert()` for confirmations when the project already has a dialog component. Confidence: 0.6
+- Prefers reusing existing UI primitives (dialogs, toasts, cards, tables, badges) instead of native browser constructs — e.g. no browser `alert()` for confirmations when the project already has a dialog component. Confidence: 0.7
+- For repetitive/fast data-entry screens, prefers an inline form rendered directly on the page (not in a modal) with immediate success feedback and the form reset after save, and without redirecting away, so the user can record multiple entries consecutively. Confidence: 0.6
 - Never hardcode API keys or credentials in source code; keep secrets in environment/config. Confidence: 0.8
 - Prefers using framework-native features (e.g. Laravel Notifications) over ad-hoc custom implementations. Confidence: 0.6
 - Prefers slow operations (like sending email) run asynchronously via the queue (database queue driver), with failures recorded in failed_jobs and retryable. Confidence: 0.65

@@ -21,7 +21,7 @@ class KeuanganReport extends Page implements HasForms
 
     protected static ?string $navigationGroup = 'Keuangan';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
 
     protected static ?string $title = 'Laporan Keuangan';
 
