@@ -19,20 +19,7 @@
                 <span class="text-xs uppercase tracking-wider text-gray-500 font-bold">Nomor Rekap</span>
                 <div class="font-mono font-bold text-base text-primary-600 dark:text-primary-400">{{ $report->report_number }}</div>
             </div>
-            <div style="text-align: right;">
-                <span class="text-xs uppercase tracking-wider text-gray-500 font-bold block mb-1">Status</span>
-                @php
-                    $badgeClasses = match($report->status) {
-                        'APPROVED' => 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-                        'WAITING_APPROVAL' => 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
-                        'REVISION' => 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300',
-                        default => 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-                    };
-                @endphp
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold {{ $badgeClasses }}">
-                    {{ $report->status_label }}
-                </span>
-            </div>
+            @livewire('session-report-approval', ['reportId' => $report->id], key('session-report-approval-' . $report->id))
         </div>
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;" class="text-xs">

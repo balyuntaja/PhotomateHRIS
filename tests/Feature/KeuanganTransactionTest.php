@@ -138,6 +138,49 @@ class KeuanganTransactionTest extends TestCase
         $this->assertSame('integer', FinancialTransaction::firstOrFail()->getCasts()['amount']);
     }
 
+    public function test_field_nominal_modal_tambah_transaksi_memakai_mask_ribuan_indonesia(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountAction('create')
+            ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"');
+    }
+
+    public function test_field_nominal_modal_edit_transaksi_memakai_mask_ribuan_indonesia(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $transaction = $this->makeTransaction(1500000, $this->incomeCategory->id);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountTableAction('edit', $transaction)
+            ->assertTableActionDataSet(['amount' => 1500000])
+            ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"');
+    }
+
+    public function test_field_nominal_halaman_input_transaksi_memakai_mask_ribuan_indonesia(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        Livewire::test(KeuanganInputTransaksi::class)
+            ->assertSuccessful()
+            ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"');
+    }
+
+    public function test_edit_transaksi_memakai_nilai_numerik_setelah_mask_ribuan(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $transaction = $this->makeTransaction(1000000, $this->incomeCategory->id);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->callTableAction('edit', $transaction, ['amount' => '1.250.000'])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame(1250000, $transaction->fresh()->amount);
+    }
+
     public function test_nominal_harus_lebih_dari_nol(): void
     {
         $this->actingAs($this->managerFinance);

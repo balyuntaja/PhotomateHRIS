@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Models\Cabang;
+use App\Models\FinancialTransaction;
 use App\Services\KeuanganService;
 use Filament\Actions;
 use Filament\Forms;
@@ -10,11 +11,18 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Pages\Page;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Concerns\InteractsWithTable;
+use Filament\Tables\Contracts\HasTable;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
-class KeuanganReport extends Page implements HasForms
+class KeuanganReport extends Page implements HasForms, HasTable
 {
+    use InteractsWithTable;
+
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
 
     protected static ?string $navigationLabel = 'Laporan';
@@ -68,12 +76,14 @@ class KeuanganReport extends Page implements HasForms
                 Forms\Components\DatePicker::make('dari')
                     ->label('Dari Tanggal')
                     ->visible(fn (Get $get): bool => $get('periode') === KeuanganService::PRESET_CUSTOM)
-                    ->required(fn (Get $get): bool => $get('periode') === KeuanganService::PRESET_CUSTOM),
+                    ->required(fn (Get $get): bool => $get('periode') === KeuanganService::PRESET_CUSTOM)
+                    ->live(),
 
                 Forms\Components\DatePicker::make('sampai')
                     ->label('Sampai Tanggal')
                     ->visible(fn (Get $get): bool => $get('periode') === KeuanganService::PRESET_CUSTOM)
-                    ->required(fn (Get $get): bool => $get('periode') === KeuanganService::PRESET_CUSTOM),
+                    ->required(fn (Get $get): bool => $get('periode') === KeuanganService::PRESET_CUSTOM)
+                    ->live(),
 
                 Forms\Components\Select::make('cabang_id')
                     ->label('Cabang')
@@ -89,9 +99,9 @@ class KeuanganReport extends Page implements HasForms
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array{period: array{preset: string, start: \Illuminate\Support\Carbon, end: \Illuminate\Support\Carbon, label: string}, cabangId: ?string, cabangName: string}
      */
-    public function reportData(): array
+    protected function resolveReportFilters(): array
     {
         $service = app(KeuanganService::class);
 
@@ -109,10 +119,92 @@ class KeuanganReport extends Page implements HasForms
             'cabangName' => $cabangId
                 ? (Cabang::find($cabangId)?->nama_cabang ?? 'Semua Cabang')
                 : 'Semua Cabang',
-            'summary' => $service->summary($period['start'], $period['end'], $cabangId),
-            'categoryBreakdown' => $service->categoryBreakdown($period['start'], $period['end'], $cabangId),
-            'branchBreakdown' => $service->branchBreakdown($period['start'], $period['end']),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function reportData(): array
+    {
+        $filters = $this->resolveReportFilters();
+
+        return [
+            'period' => $filters['period'],
+            'cabangId' => $filters['cabangId'],
+            'cabangName' => $filters['cabangName'],
+            'summary' => app(KeuanganService::class)->summary(
+                $filters['period']['start'],
+                $filters['period']['end'],
+                $filters['cabangId'],
+            ),
+        ];
+    }
+
+    public function updatedData(): void
+    {
+        $this->resetPage();
+    }
+
+    public function table(Table $table): Table
+    {
+        return $table
+            ->heading('Rincian Transaksi')
+            ->query(fn (): Builder => $this->transactionsQuery())
+            ->columns([
+                TextColumn::make('transaction_date')
+                    ->label('Tanggal')
+                    ->date('d M Y')
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query
+                        ->orderBy('transaction_date', $direction)
+                        ->orderBy('created_at', $direction)
+                        ->orderBy('id', $direction)),
+
+                TextColumn::make('transaction_type')
+                    ->label('Jenis')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => FinancialTransaction::TYPE_LABELS[$state] ?? $state)
+                    ->color(fn (string $state): string => $state === FinancialTransaction::TYPE_INCOME ? 'success' : 'danger'),
+
+                TextColumn::make('category.name')
+                    ->label('Kategori')
+                    ->placeholder('-'),
+
+                TextColumn::make('description')
+                    ->label('Deskripsi')
+                    ->placeholder('-')
+                    ->limit(50)
+                    ->tooltip(fn (FinancialTransaction $record): ?string => $record->description),
+
+                TextColumn::make('cabang.nama_cabang')
+                    ->label('Cabang')
+                    ->placeholder('Tanpa Cabang'),
+
+                TextColumn::make('paymentMethod.name')
+                    ->label('Metode Pembayaran')
+                    ->placeholder('-'),
+
+                TextColumn::make('amount')
+                    ->label('Nominal')
+                    ->formatStateUsing(fn (FinancialTransaction $record): string => $record->signed_formatted_amount)
+                    ->color(fn (FinancialTransaction $record): string => $record->is_income ? 'success' : 'danger')
+                    ->weight('semibold')
+                    ->alignEnd()
+                    ->sortable(),
+            ])
+            ->defaultSort('transaction_date', 'desc')
+            ->emptyStateHeading('Belum ada transaksi pada periode ini.')
+            ->emptyStateDescription('Ubah periode atau cabang pada filter di atas untuk melihat transaksi lainnya.')
+            ->emptyStateIcon('heroicon-o-wallet');
+    }
+
+    protected function transactionsQuery(): Builder
+    {
+        $filters = $this->resolveReportFilters();
+
+        return app(KeuanganService::class)
+            ->baseQuery($filters['period']['start'], $filters['period']['end'], $filters['cabangId'])
+            ->with(['category', 'cabang', 'paymentMethod']);
     }
 
     protected function getHeaderActions(): array

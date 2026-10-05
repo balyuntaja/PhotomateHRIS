@@ -18,6 +18,7 @@ use App\Models\Role;
 use App\Services\KeuanganService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
@@ -143,7 +144,7 @@ class KeuanganDashboardReportTest extends TestCase
             ->assertDownload();
     }
 
-    public function test_halaman_laporan_menampilkan_breakdown_kategori_dan_per_cabang(): void
+    public function test_halaman_laporan_menampilkan_rincian_transaksi_individu(): void
     {
         $this->seedContohTransaksi();
 
@@ -153,11 +154,185 @@ class KeuanganDashboardReportTest extends TestCase
             ->assertSee('Total Pemasukan')
             ->assertSee('Total Pengeluaran')
             ->assertSee('Rp 1.518.450')
-            ->assertSee('Pelunasan')
-            ->assertSee('Tinta')
-            ->assertSee('Selisih Kas')
+            ->assertSee('Rincian Transaksi')
+            ->assertSee('Pelunasan Event A')
+            ->assertSee('Pembelian tinta printer Janus')
+            ->assertSee('Bensin operasional')
+            ->assertSee('+ Rp 2.000.000')
+            ->assertSee('- Rp 381.550')
+            ->assertSee('- Rp 100.000')
             ->assertSee('Newspaper Janus')
             ->assertSee('Photomate Express');
+    }
+
+    public function test_rincian_transaksi_mengikuti_filter_cabang(): void
+    {
+        $this->seedContohTransaksi();
+
+        $pelunasan = FinancialTransaction::where('description', 'Pelunasan Event A')->firstOrFail();
+        $tinta = FinancialTransaction::where('description', 'Pembelian tinta printer Janus')->firstOrFail();
+        $bensin = FinancialTransaction::where('description', 'Bensin operasional')->firstOrFail();
+
+        $this->actingAs($this->financeUser);
+
+        Livewire::test(KeuanganReport::class)
+            ->assertCanSeeTableRecords([$pelunasan, $tinta, $bensin])
+            ->set('data.cabang_id', 'C0005')
+            ->assertCanSeeTableRecords([$pelunasan, $bensin])
+            ->assertCanNotSeeTableRecords([$tinta]);
+    }
+
+    public function test_rincian_transaksi_mengikuti_filter_periode(): void
+    {
+        $this->actingAs($this->financeUser);
+
+        $transaksiBulanIni = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            1000000,
+            $this->incomeCategory->id,
+            null,
+            Carbon::today()->toDateString(),
+            'Transaksi bulan ini'
+        );
+
+        $transaksiBulanLalu = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            2000000,
+            $this->incomeCategory->id,
+            null,
+            Carbon::today()->subMonthNoOverflow()->startOfMonth()->toDateString(),
+            'Transaksi bulan lalu'
+        );
+
+        Livewire::test(KeuanganReport::class)
+            ->assertCanSeeTableRecords([$transaksiBulanIni])
+            ->assertCanNotSeeTableRecords([$transaksiBulanLalu])
+            ->set('data.periode', KeuanganService::PRESET_LAST_MONTH)
+            ->assertCanSeeTableRecords([$transaksiBulanLalu])
+            ->assertCanNotSeeTableRecords([$transaksiBulanIni]);
+    }
+
+    public function test_rincian_transaksi_mengikuti_filter_rentang_custom(): void
+    {
+        $this->actingAs($this->financeUser);
+
+        $dalamRentang = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            1000000,
+            $this->incomeCategory->id,
+            null,
+            Carbon::today()->subDays(3)->toDateString(),
+            'Transaksi dalam rentang'
+        );
+
+        $luarRentang = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            2000000,
+            $this->incomeCategory->id,
+            null,
+            Carbon::today()->subDays(10)->toDateString(),
+            'Transaksi luar rentang'
+        );
+
+        Livewire::test(KeuanganReport::class)
+            ->set('data.periode', KeuanganService::PRESET_CUSTOM)
+            ->set('data.dari', Carbon::today()->subDays(5)->toDateString())
+            ->set('data.sampai', Carbon::today()->toDateString())
+            ->assertCanSeeTableRecords([$dalamRentang])
+            ->assertCanNotSeeTableRecords([$luarRentang]);
+    }
+
+    public function test_rincian_transaksi_diurutkan_dari_terbaru_dengan_waktu_sebagai_pembeda(): void
+    {
+        $this->actingAs($this->financeUser);
+
+        $awalBulan = Carbon::today()->startOfMonth();
+
+        $terlama = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            100000,
+            $this->incomeCategory->id,
+            null,
+            $awalBulan->toDateString(),
+            'Transaksi terlama'
+        );
+
+        $seriPagi = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            200000,
+            $this->incomeCategory->id,
+            null,
+            $awalBulan->copy()->addDay()->toDateString(),
+            'Transaksi seri pagi'
+        );
+        $seriPagi->forceFill(['created_at' => $awalBulan->copy()->addDay()->setTime(8, 0)])->saveQuietly();
+
+        $seriSiang = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            300000,
+            $this->incomeCategory->id,
+            null,
+            $awalBulan->copy()->addDay()->toDateString(),
+            'Transaksi seri siang'
+        );
+        $seriSiang->forceFill(['created_at' => $awalBulan->copy()->addDay()->setTime(12, 0)])->saveQuietly();
+
+        $terbaru = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            400000,
+            $this->incomeCategory->id,
+            null,
+            $awalBulan->copy()->addDays(2)->toDateString(),
+            'Transaksi terbaru'
+        );
+
+        Livewire::test(KeuanganReport::class)
+            ->assertCanSeeTableRecords([$terbaru, $seriSiang, $seriPagi, $terlama], inOrder: true);
+    }
+
+    public function test_rincian_transaksi_menggunakan_pagination(): void
+    {
+        $this->actingAs($this->financeUser);
+
+        $awalBulan = Carbon::today()->startOfMonth();
+
+        $records = collect(range(0, 11))->map(fn (int $index): FinancialTransaction => $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            100000 + $index,
+            $this->incomeCategory->id,
+            null,
+            $awalBulan->copy()->addDays($index)->toDateString(),
+            "Transaksi pagination {$index}"
+        ));
+
+        $terurutTerbaru = $records->sortByDesc('transaction_date')->values();
+
+        Livewire::test(KeuanganReport::class)
+            ->assertCanSeeTableRecords($terurutTerbaru->take(10))
+            ->assertCanNotSeeTableRecords($terurutTerbaru->slice(10))
+            ->call('gotoPage', 2, 'page')
+            ->assertCanSeeTableRecords($terurutTerbaru->slice(10));
+    }
+
+    public function test_rincian_transaksi_menampilkan_empty_state(): void
+    {
+        $this->actingAs($this->financeUser);
+
+        Livewire::test(KeuanganReport::class)
+            ->assertSee('Belum ada transaksi pada periode ini.');
+    }
+
+    public function test_total_di_bawah_tabel_mengikuti_filter_aktif(): void
+    {
+        $this->seedContohTransaksi();
+
+        $this->actingAs($this->financeUser);
+
+        Livewire::test(KeuanganReport::class)
+            ->assertSee('Rp 1.518.450')
+            ->set('data.cabang_id', 'C0005')
+            ->assertSee('Rp 1.900.000')
+            ->assertDontSee('Rp 1.518.450');
     }
 
     public function test_export_query_mengikuti_filter_periode_dan_cabang(): void
