@@ -290,6 +290,22 @@ class KeuanganService
     }
 
     /**
+     * Transaksi rincian laporan dengan urutan yang sama seperti tabel
+     * "Rincian Transaksi" pada halaman Laporan Keuangan (terbaru di atas).
+     */
+    public function transactionsForReport(
+        CarbonInterface $start,
+        CarbonInterface $end,
+        ?string $cabangId = null
+    ): Builder {
+        return $this->baseQuery($start, $end, $cabangId)
+            ->with(['category', 'cabang', 'paymentMethod'])
+            ->orderByDesc('transaction_date')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+    }
+
+    /**
      * @return array<string, array{label: string, income: int, expense: int}>
      */
     protected function emptyBuckets(CarbonInterface $start, CarbonInterface $end, bool $useMonthly): array

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cabang;
+use App\Models\FinancialTransaction;
 use App\Services\KeuanganService;
+use App\Utils\MonthHelper;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -32,19 +34,33 @@ class KeuanganLaporanController extends Controller
 
             $cabangId = filled($request->query('cabang_id')) ? $request->query('cabang_id') : null;
 
+            $transactions = $service
+                ->transactionsForReport($period['start'], $period['end'], $cabangId)
+                ->get();
+
+            $income = (int) $transactions
+                ->where('transaction_type', FinancialTransaction::TYPE_INCOME)
+                ->sum('amount');
+
+            $expense = (int) $transactions
+                ->where('transaction_type', FinancialTransaction::TYPE_EXPENSE)
+                ->sum('amount');
+
             $pdf = Pdf::loadView('pdf.keuangan-laporan', [
                 'period' => $period,
                 'cabangName' => $cabangId
                     ? (Cabang::find($cabangId)?->nama_cabang ?? 'Semua Cabang')
                     : 'Semua Cabang',
-                'summary' => $service->summary($period['start'], $period['end'], $cabangId),
-                'categoryBreakdown' => $service->categoryBreakdown($period['start'], $period['end'], $cabangId),
-                'branchBreakdown' => $service->branchBreakdown($period['start'], $period['end']),
+                'summary' => [
+                    'income' => $income,
+                    'expense' => $expense,
+                    'balance' => $income - $expense,
+                ],
+                'transactions' => $transactions,
                 'judulDokumen' => 'Laporan Keuangan Photomate',
                 'periode' => $period['label'],
                 'tanggalCetak' => now()->day . ' '
-                    . \App\Utils\MonthHelper::formatPeriod((int) now()->month, (int) now()->year)
-                    . ' ' . now()->format('H:i'),
+                    . MonthHelper::formatPeriod((int) now()->month, (int) now()->year),
             ]);
 
             $pdf->setPaper('A4', 'portrait');
@@ -52,6 +68,8 @@ class KeuanganLaporanController extends Controller
                 'dpi' => 150,
                 'defaultFont' => 'sans-serif',
                 'isRemoteEnabled' => true,
+                // Diperlukan agar footer nomor halaman (page_text) dapat dirender.
+                'isPhpEnabled' => true,
             ]);
 
             $filename = sprintf(
