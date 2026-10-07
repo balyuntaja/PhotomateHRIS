@@ -26,6 +26,15 @@ class FinancialTransaction extends Model
         self::TYPE_EXPENSE => 'Pengeluaran',
     ];
 
+    public const PAYMENT_STATUS_LUNAS = 'lunas';
+
+    public const PAYMENT_STATUS_UTANG = 'utang';
+
+    public const PAYMENT_STATUS_LABELS = [
+        self::PAYMENT_STATUS_LUNAS => 'Lunas',
+        self::PAYMENT_STATUS_UTANG => 'Utang',
+    ];
+
     public const ACTION_CREATED = 'CREATED';
 
     public const ACTION_UPDATED = 'UPDATED';
@@ -40,9 +49,16 @@ class FinancialTransaction extends Model
         'transaction_type',
         'amount',
         'category_id',
+        'account_id',
+        'party_id',
         'cabang_id',
         'payment_method_id',
+        'payment_status',
         'transaction_date',
+        'period_month',
+        'period_year',
+        'due_date',
+        'counterparty',
         'description',
         'evidence_path',
         'source_type',
@@ -54,6 +70,9 @@ class FinancialTransaction extends Model
     protected $casts = [
         'amount' => 'integer',
         'transaction_date' => 'date',
+        'period_month' => 'integer',
+        'period_year' => 'integer',
+        'due_date' => 'date',
     ];
 
     /**
@@ -108,6 +127,16 @@ class FinancialTransaction extends Model
         return $this->belongsTo(FinancialCategory::class, 'category_id');
     }
 
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(FinancialAccount::class, 'account_id');
+    }
+
+    public function party(): BelongsTo
+    {
+        return $this->belongsTo(FinancialParty::class, 'party_id');
+    }
+
     public function paymentMethod(): BelongsTo
     {
         return $this->belongsTo(FinancialPaymentMethod::class, 'payment_method_id');
@@ -156,6 +185,40 @@ class FinancialTransaction extends Model
     public function getIsIncomeAttribute(): bool
     {
         return $this->transaction_type === self::TYPE_INCOME;
+    }
+
+    public function getPaymentStatusLabelAttribute(): string
+    {
+        return self::PAYMENT_STATUS_LABELS[$this->payment_status] ?? (string) $this->payment_status;
+    }
+
+    public function getIsUtangAttribute(): bool
+    {
+        return $this->payment_status === self::PAYMENT_STATUS_UTANG;
+    }
+
+    /**
+     * Label pihak pembayar/penerima sesuai jenis transaksi.
+     */
+    public function getPartyLabelAttribute(): string
+    {
+        return $this->is_income ? 'Diterima Oleh' : 'Dibayarkan Oleh';
+    }
+
+    /**
+     * Label periode laporan: dari kolom periode bila diisi, jika tidak
+     * memakai bulan/tahun tanggal transaksi (perilaku lama).
+     */
+    public function getPeriodLabelAttribute(): string
+    {
+        $month = (int) ($this->period_month ?: $this->transaction_date?->month);
+        $year = (int) ($this->period_year ?: $this->transaction_date?->year);
+
+        if (! $month || ! $year) {
+            return '-';
+        }
+
+        return MonthHelper::formatPeriod($month, $year);
     }
 
     /**
@@ -229,15 +292,24 @@ class FinancialTransaction extends Model
             'transaction_type',
             'amount',
             'category_id',
+            'account_id',
+            'party_id',
             'cabang_id',
             'payment_method_id',
+            'payment_status',
             'transaction_date',
+            'period_month',
+            'period_year',
+            'due_date',
+            'counterparty',
             'description',
             'evidence_path',
         ]);
 
-        if ($this->transaction_date) {
-            $snapshot['transaction_date'] = $this->transaction_date->toDateString();
+        foreach (['transaction_date', 'due_date'] as $column) {
+            if ($this->{$column}) {
+                $snapshot[$column] = $this->{$column}->toDateString();
+            }
         }
 
         return $this->normalizeAuditData($snapshot);
@@ -251,7 +323,15 @@ class FinancialTransaction extends Model
      */
     protected function normalizeAuditData(array $data): array
     {
-        foreach (['amount', 'category_id', 'payment_method_id'] as $key) {
+        foreach ([
+            'amount',
+            'category_id',
+            'account_id',
+            'party_id',
+            'payment_method_id',
+            'period_month',
+            'period_year',
+        ] as $key) {
             if (array_key_exists($key, $data) && $data[$key] !== null) {
                 $data[$key] = (int) $data[$key];
             }

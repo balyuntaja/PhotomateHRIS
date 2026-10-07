@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import OptimizedImage from "./OptimizedImage";
 
-type Category = "All" | "Wedding" | "Event" | "Brand" | "High School Collaboration";
-type ItemCategory = "Wedding" | "Event" | "Brand" | "High School Collaboration";
+// Kategori bawaan di website; kategori tambahan dari CMS otomatis ikut tampil
+const DEFAULT_CATEGORIES: string[] = [
+  "Wedding",
+  "Event",
+  "Brand",
+  "High School Collaboration",
+];
 
 interface GalleryItem {
   id: number;
-  category: ItemCategory;
+  category: string;
   image: string;
   alt: string;
 }
-
-const categories: Category[] = ["All", "Wedding", "Event", "Brand", "High School Collaboration"];
 
 // Muat gambar dari src/assets/img/event (termasuk wedding*, event*, brand1, brand2, dll)
 const eventModules = import.meta.glob<{ default: string }>(
@@ -24,7 +27,7 @@ const mapModulesToItems = (
   Object.entries(modules).map(([path, mod], index) => {
     const url = mod.default;
     const filename = path.split("/").pop()?.toLowerCase() ?? "";
-    const category: ItemCategory = filename.includes("brand")
+    const category = filename.includes("brand")
       ? "Brand"
       : filename.includes("highschool")
         ? "High School Collaboration"
@@ -43,7 +46,7 @@ const mapModulesToItems = (
   });
 
 const Gallery: React.FC = () => {
-  const [activeCategory, setActiveCategory] = useState<Category>("All");
+  const [activeCategory, setActiveCategory] = useState("All");
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [isGalleryActive, setIsGalleryActive] = useState(false);
   const [visibleCount, setVisibleCount] = useState(6);
@@ -82,7 +85,7 @@ const Gallery: React.FC = () => {
       
       const cmsGalleries = (window as any).CMS_DATA?.galleries?.map((g: any, i: number) => ({
         id: 1000 + i,
-        category: (g.category || "Event") as ItemCategory,
+        category: g.category || "Event",
         image: g.image,
         alt: g.title || "Gallery Photomate"
       })) || [];
@@ -92,6 +95,15 @@ const Gallery: React.FC = () => {
 
     void loadGallery();
   }, [isGalleryActive]);
+
+  // Filter = kategori bawaan + kategori lain yang benar-benar ada di data
+  const categories = [
+    "All",
+    ...DEFAULT_CATEGORIES,
+    ...Array.from(new Set(galleryItems.map((item) => item.category)))
+      .filter((category) => category && !DEFAULT_CATEGORIES.includes(category))
+      .sort((a, b) => a.localeCompare(b)),
+  ];
 
   const filteredItems =
     activeCategory === "All"
@@ -123,7 +135,7 @@ const Gallery: React.FC = () => {
           <span className="block w-20 h-1 bg-primary mx-auto mt-4 rounded-full" />
         </h2>
 
-        {/* Filter: All, Wedding, Event, Brand */}
+        {/* Filter kategori: bawaan website + kategori tambahan dari CMS */}
         <div className="flex justify-center flex-wrap gap-3 mb-10">
           {categories.map((category) => (
             <button

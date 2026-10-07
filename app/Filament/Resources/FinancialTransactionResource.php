@@ -55,7 +55,7 @@ class FinancialTransactionResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['category', 'cabang', 'paymentMethod', 'creator']);
+        return parent::getEloquentQuery()->with(['category', 'account', 'party', 'cabang', 'paymentMethod', 'creator']);
     }
 
     public static function form(Form $form): Form
@@ -191,6 +191,33 @@ class FinancialTransactionResource extends Resource
                         ->label('Metode Pembayaran')
                         ->placeholder('-'),
 
+                    Infolists\Components\TextEntry::make('account.name')
+                        ->label('Akun')
+                        ->placeholder('Tanpa Akun'),
+
+                    Infolists\Components\TextEntry::make('period_label')
+                        ->label('Periode'),
+
+                    Infolists\Components\TextEntry::make('payment_status_label')
+                        ->label('Status Pembayaran')
+                        ->badge()
+                        ->color(fn (FinancialTransaction $record): string => $record->is_utang ? 'warning' : 'success'),
+
+                    Infolists\Components\TextEntry::make('party.name')
+                        ->label(fn (FinancialTransaction $record): string => $record->party_label)
+                        ->placeholder('-'),
+
+                    Infolists\Components\TextEntry::make('due_date')
+                        ->label('Jatuh Tempo')
+                        ->date('d M Y')
+                        ->placeholder('-')
+                        ->visible(fn (FinancialTransaction $record): bool => $record->is_utang),
+
+                    Infolists\Components\TextEntry::make('counterparty')
+                        ->label('Pihak / Kepada')
+                        ->placeholder('-')
+                        ->visible(fn (FinancialTransaction $record): bool => $record->is_utang),
+
                     Infolists\Components\TextEntry::make('description')
                         ->label('Deskripsi')
                         ->placeholder('-')
@@ -248,6 +275,19 @@ class FinancialTransactionResource extends Resource
                     ->formatStateUsing(fn (string $state): string => FinancialTransaction::TYPE_LABELS[$state] ?? $state)
                     ->color(fn (string $state): string => $state === FinancialTransaction::TYPE_INCOME ? 'success' : 'danger'),
 
+                Tables\Columns\TextColumn::make('payment_status')
+                    ->label('Status')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => FinancialTransaction::PAYMENT_STATUS_LABELS[$state] ?? $state)
+                    ->color(fn (string $state): string => $state === FinancialTransaction::PAYMENT_STATUS_UTANG ? 'warning' : 'success')
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('account.name')
+                    ->label('Akun')
+                    ->searchable()
+                    ->placeholder('Tanpa Akun')
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('category.name')
                     ->label('Kategori')
                     ->searchable()
@@ -299,6 +339,16 @@ class FinancialTransactionResource extends Resource
                 Tables\Filters\SelectFilter::make('transaction_type')
                     ->label('Jenis')
                     ->options(FinancialTransaction::TYPE_LABELS),
+
+                Tables\Filters\SelectFilter::make('payment_status')
+                    ->label('Status Pembayaran')
+                    ->options(FinancialTransaction::PAYMENT_STATUS_LABELS),
+
+                Tables\Filters\SelectFilter::make('account_id')
+                    ->label('Akun')
+                    ->relationship('account', 'name')
+                    ->searchable()
+                    ->preload(),
 
                 Tables\Filters\SelectFilter::make('cabang_id')
                     ->label('Cabang')

@@ -34,9 +34,16 @@ class FinancialAuditLog extends Model
         'transaction_type' => 'Jenis Transaksi',
         'amount' => 'Nominal',
         'category_id' => 'Kategori',
+        'account_id' => 'Akun',
+        'party_id' => 'Dibayarkan / Diterima Oleh',
         'cabang_id' => 'Cabang',
         'payment_method_id' => 'Metode Pembayaran',
+        'payment_status' => 'Status Pembayaran',
         'transaction_date' => 'Tanggal',
+        'period_month' => 'Bulan Periode',
+        'period_year' => 'Tahun Periode',
+        'due_date' => 'Jatuh Tempo',
+        'counterparty' => 'Pihak / Kepada',
         'description' => 'Deskripsi',
         'evidence_path' => 'Bukti Transaksi',
     ];
@@ -109,10 +116,15 @@ class FinancialAuditLog extends Model
         return match ($field) {
             'amount' => 'Rp ' . number_format((int) $value, 0, ',', '.'),
             'transaction_type' => FinancialTransaction::TYPE_LABELS[$value] ?? (string) $value,
+            'payment_status' => FinancialTransaction::PAYMENT_STATUS_LABELS[$value] ?? (string) $value,
             'category_id' => $this->lookup('category', $value),
+            'account_id' => $this->lookup('account', $value),
+            'party_id' => $this->lookup('party', $value),
             'cabang_id' => $this->lookup('cabang', $value),
             'payment_method_id' => $this->lookup('payment_method', $value),
             'transaction_date' => $this->formatDate($value),
+            'due_date' => $this->formatDate($value),
+            'period_month' => MonthHelper::getMonthName((int) $value),
             default => (string) $value,
         };
     }
@@ -138,6 +150,8 @@ class FinancialAuditLog extends Model
 
         $name = match ($type) {
             'category' => FinancialCategory::find($id)?->name,
+            'account' => FinancialAccount::find($id)?->name,
+            'party' => FinancialParty::find($id)?->name,
             'cabang' => Cabang::find($id)?->nama_cabang,
             'payment_method' => FinancialPaymentMethod::find($id)?->name,
             default => null,

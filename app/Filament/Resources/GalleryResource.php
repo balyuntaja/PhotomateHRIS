@@ -40,14 +40,23 @@ class GalleryResource extends Resource
                     ->maxLength(255)
                     ->default(null),
                 Forms\Components\Select::make('category')
-                    ->options([
-                        'Wedding' => 'Wedding',
-                        'Event' => 'Event',
-                        'Brand' => 'Brand',
-                        'High School Collaboration' => 'High School Collaboration',
-                    ])
+                    ->label('Kategori')
+                    ->options(fn (): array => Gallery::categoryOptions())
+                    ->searchable()
                     ->required()
-                    ->default('Event'),
+                    ->default('Event')
+                    ->createOptionForm([
+                        Forms\Components\TextInput::make('name')
+                            ->label('Nama Kategori')
+                            ->required()
+                            ->maxLength(255)
+                            ->validationMessages(['required' => 'Nama kategori wajib diisi.']),
+                    ])
+                    ->createOptionModalHeading('Tambah Kategori Gallery')
+                    ->createOptionAction(fn (Forms\Components\Actions\Action $action): Forms\Components\Actions\Action => $action
+                        ->modalSubmitActionLabel('Simpan'))
+                    ->createOptionUsing(fn (array $data): string => Gallery::normalizeCategory((string) $data['name']))
+                    ->validationMessages(['required' => 'Kategori wajib dipilih.']),
                 Forms\Components\FileUpload::make('image')
                     ->image()
                     ->multiple(fn (string $context) => $context === 'create')
