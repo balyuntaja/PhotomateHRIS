@@ -9,9 +9,9 @@ return new class extends Migration
      * Akun keuangan Photomate yang dipakai pada Input Transaksi V2.
      */
     private const ACCOUNTS = [
-        'Express',
+        'Photomate Express',
         'Golio',
-        'Janus Ekspansi',
+        'Janus',
     ];
 
     /**

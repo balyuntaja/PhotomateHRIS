@@ -64,9 +64,9 @@ class KeuanganInputTransaksiV2Test extends TestCase
 
         $this->cash = FinancialPaymentMethod::where('name', 'Cash')->firstOrFail();
 
-        $this->express = FinancialAccount::where('name', 'Express')->firstOrFail();
+        $this->express = FinancialAccount::where('name', 'Photoamte Express')->firstOrFail();
         $this->golio = FinancialAccount::where('name', 'Golio')->firstOrFail();
-        $this->janusEkspansi = FinancialAccount::where('name', 'Janus Ekspansi')->firstOrFail();
+        $this->janusEkspansi = FinancialAccount::where('name', 'Janus')->firstOrFail();
 
         $this->pihak = FinancialParty::where('name', 'Balyun')->firstOrFail();
 
@@ -85,7 +85,7 @@ class KeuanganInputTransaksiV2Test extends TestCase
     {
         $accounts = FinancialAccount::query()->active()->orderBy('sort_order')->pluck('name')->all();
 
-        $this->assertSame(['Express', 'Golio', 'Janus Ekspansi'], $accounts);
+        $this->assertSame(['Photomate Express', 'Golio', 'Janus'], $accounts);
     }
 
     public function test_menu_dan_halaman_input_transaksi_v2_dapat_diakses_dengan_permission_create(): void
@@ -311,9 +311,9 @@ class KeuanganInputTransaksiV2Test extends TestCase
 
         Livewire::test(KeuanganInputTransaksiV2::class)
             ->assertSuccessful()
-            ->assertSee('Express')
+            ->assertSee('Photomate Express')
             ->assertSee('Golio')
-            ->assertSee('Janus Ekspansi')
+            ->assertSee('Janus')
             ->assertSee('Diterima Oleh')
             ->fillForm(['transaction_type' => FinancialTransaction::TYPE_EXPENSE])
             ->assertSee('Dibayarkan Oleh')
