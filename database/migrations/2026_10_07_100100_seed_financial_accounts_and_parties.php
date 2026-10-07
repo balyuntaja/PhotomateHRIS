@@ -12,6 +12,7 @@ return new class extends Migration
         'Photomate Express',
         'Golio',
         'Janus',
+        'Ekspansi',
     ];
 
     /**

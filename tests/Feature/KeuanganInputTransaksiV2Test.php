@@ -37,7 +37,9 @@ class KeuanganInputTransaksiV2Test extends TestCase
 
     protected FinancialAccount $golio;
 
-    protected FinancialAccount $janusEkspansi;
+    protected FinancialAccount $janus;
+
+    protected FinancialAccount $ekspansi;
 
     protected FinancialParty $pihak;
 
@@ -64,9 +66,10 @@ class KeuanganInputTransaksiV2Test extends TestCase
 
         $this->cash = FinancialPaymentMethod::where('name', 'Cash')->firstOrFail();
 
-        $this->express = FinancialAccount::where('name', 'Photoamte Express')->firstOrFail();
+        $this->express = FinancialAccount::where('name', 'Photomate Express')->firstOrFail();
         $this->golio = FinancialAccount::where('name', 'Golio')->firstOrFail();
-        $this->janusEkspansi = FinancialAccount::where('name', 'Janus')->firstOrFail();
+        $this->janus = FinancialAccount::where('name', 'Janus')->firstOrFail();
+        $this->ekspansi = FinancialAccount::where('name', 'Ekspansi')->firstOrFail();
 
         $this->pihak = FinancialParty::where('name', 'Balyun')->firstOrFail();
 
@@ -81,11 +84,11 @@ class KeuanganInputTransaksiV2Test extends TestCase
         ]);
     }
 
-    public function test_akun_keuangan_v2_tersedia_express_golio_dan_janus_ekspansi(): void
+    public function test_akun_keuangan_v2_tersedia_photomate_express_golio_janus_dan_ekspansi(): void
     {
         $accounts = FinancialAccount::query()->active()->orderBy('sort_order')->pluck('name')->all();
 
-        $this->assertSame(['Photomate Express', 'Golio', 'Janus'], $accounts);
+        $this->assertSame(['Photomate Express', 'Golio', 'Janus', 'Ekspansi'], $accounts);
     }
 
     public function test_menu_dan_halaman_input_transaksi_v2_dapat_diakses_dengan_permission_create(): void
@@ -216,7 +219,7 @@ class KeuanganInputTransaksiV2Test extends TestCase
         foreach ([0, -5000] as $nominal) {
             Livewire::test(KeuanganInputTransaksiV2::class)
                 ->fillForm([
-                    'account_id' => $this->janusEkspansi->id,
+                    'account_id' => $this->ekspansi->id,
                     'period' => '2026-10',
                     'transaction_date' => '2026-10-07',
                     'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
@@ -314,6 +317,7 @@ class KeuanganInputTransaksiV2Test extends TestCase
             ->assertSee('Photomate Express')
             ->assertSee('Golio')
             ->assertSee('Janus')
+            ->assertSee('Ekspansi')
             ->assertSee('Diterima Oleh')
             ->fillForm(['transaction_type' => FinancialTransaction::TYPE_EXPENSE])
             ->assertSee('Dibayarkan Oleh')
