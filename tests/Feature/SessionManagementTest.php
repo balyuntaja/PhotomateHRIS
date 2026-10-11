@@ -592,6 +592,7 @@ class SessionManagementTest extends TestCase
         \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\CreateSessionReport::class)
             ->fillForm([
                 'report_date' => Carbon::today()->format('Y-m-d'),
+                'cabang_id' => $this->janusCabang()->cabang_id,
                 'crews' => [$this->crewKia->karyawan_id],
                 'transactions' => [
                     [

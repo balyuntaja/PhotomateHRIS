@@ -24,6 +24,10 @@ import Rabraw from "../assets/img/client/Rabraw.webp";
 import SCE2026 from "../assets/img/client/SCE 2026.webp";
 import TeenRocket from "../assets/img/client/Teen Rocket.webp";
 import OptimizedImage from "./OptimizedImage";
+import Rans from "../assets/img/client/rans.webp";
+import Danantara from "../assets/img/client/danantara.webp";
+import BriPrioritas from "../assets/img/client/bri.webp";
+import Sampoerna from "../assets/img/client/sampoerna.webp";
 
 const defaultLogos = [
   { src: Dirganala, alt: "Dirganala" },
@@ -51,6 +55,10 @@ const defaultLogos = [
   { src: Rabraw, alt: "Rabraw" },
   { src: SCE2026, alt: "SCE 2026" },
   { src: TeenRocket, alt: "Teen Rocket" },
+  { src: Sampoerna, alt: "Sampoerna" },
+  { src: Rans, alt: "Rans" },
+  { src: Danantara, alt: "Danantara" },
+  { src: BriPrioritas, alt: "BRI Prioritas" },
 ];
 
 const cmsClients = (window as any).CMS_DATA?.clients?.map((c: any) => ({
@@ -82,14 +90,14 @@ const Client: React.FC = () => {
             {logos.map((logo, index) => (
               <div
                 key={`logo-1-${index}`}
-                className="flex items-center justify-center min-w-[120px]"
+                className="flex items-center justify-center min-w-[140px]"
               >
                 <OptimizedImage
                   src={logo.src}
                   alt={logo.alt}
                   width={240}
                   height={96}
-                  className="h-16 w-auto object-contain opacity-70 hover:opacity-100 transition"
+                  className="h-20 w-auto object-contain opacity-70 hover:opacity-100 transition"
                 />
               </div>
             ))}
@@ -98,14 +106,14 @@ const Client: React.FC = () => {
             {logos.map((logo, index) => (
               <div
                 key={`logo-2-${index}`}
-                className="flex items-center justify-center min-w-[120px]"
+                className="flex items-center justify-center min-w-[140px]"
               >
                 <OptimizedImage
                   src={logo.src}
                   alt={logo.alt}
                   width={180}
                   height={72}
-                  className="h-12 w-auto object-contain opacity-70 hover:opacity-100 transition"
+                  className="h-16 w-auto object-contain opacity-70 hover:opacity-100 transition"
                 />
               </div>
             ))}

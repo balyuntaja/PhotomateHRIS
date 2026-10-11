@@ -125,7 +125,8 @@ class SessionReportResource extends Resource
                             ->preload()
                             ->live()
                             ->placeholder('Pilih Cabang (Newspaper Janus / Photomate Express)')
-                            ->nullable()
+                            ->required()
+                            ->validationMessages(['required' => 'Cabang Photomate wajib dipilih.'])
                             ->helperText('⚠️ Wajib pilih cabang agar bonus Newspaper Janus terhitung otomatis!')
                             ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire)),
 

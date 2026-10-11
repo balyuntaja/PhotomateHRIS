@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <!-- Primary SEO Meta Tags -->
-    <title>{{ $seo['title'] ?? 'Photomate.id - Jasa Sewa Photobooth Premium Malang & Jawa Timur' }}</title>
-    <meta name="description" content="{{ $seo['description'] ?? 'Photomate.id menyediakan jasa penyewaan photobooth premium di Malang, Jawa Timur. Cetak foto instan kecepatan tinggi dengan template kustom untuk pernikahan, corporate event, ulang tahun, dan wisuda.' }}">
-    <meta name="keywords" content="{{ $seo['keywords'] ?? 'photobooth malang, sewa photobooth malang, photobooth premium jawa timur, souvenir foto instan, cetak foto cepat, photomate, photobooth murah malang, photobooth pernikahan' }}">
+    <title>{{ $seo['title'] ?? 'Photomate.id - Vendor Jasa Sewa Photobooth Premium Malang, Surabaya, dan Jawa Timur' }}</title>
+    <meta name="description" content="{{ $seo['description'] ?? 'Photomate.id menyediakan jasa penyewaan photobooth premium di Malang, Surabaya, dan Jawa Timur. Cetak foto instan kecepatan tinggi dengan template kustom untuk pernikahan, corporate event, gathering event, ulang tahun, dan wisuda.' }}">
+    <meta name="keywords" content="{{ $seo['keywords'] ?? 'photobooth malang, sewa photobooth malang, photobooth premium jawa timur, souvenir foto instan, cetak foto cepat, photomate, photobooth murah malang, photobooth pernikahan, photobooth surabaya, sewa photobooth surabaya, photobooth premium surabaya, vendor photobooth Malang' }}">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="{{ $seo['url'] ?? request()->url() }}">
 

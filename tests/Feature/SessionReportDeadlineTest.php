@@ -25,6 +25,7 @@ class SessionReportDeadlineTest extends TestCase
     protected Karyawan $crew;
     protected Karyawan $supervisor;
     protected Karyawan $admin;
+    protected \App\Models\Cabang $cabang;
 
     protected function setUp(): void
     {
@@ -53,6 +54,14 @@ class SessionReportDeadlineTest extends TestCase
                 'nomor_telepon' => '08123456789',
                 'jam_masuk' => '08:00',
                 'jam_pulang' => '17:00',
+            ]
+        );
+
+        $this->cabang = \App\Models\Cabang::firstOrCreate(
+            ['cabang_id' => 'C-PM'],
+            [
+                'perusahaan_id' => 'P01',
+                'nama_cabang' => 'Photomate',
             ]
         );
 
@@ -122,6 +131,7 @@ class SessionReportDeadlineTest extends TestCase
             'report_date' => $reportDate,
             'status' => $status,
             'submitted_by' => $submitter->karyawan_id,
+            'cabang_id' => $this->cabang->cabang_id,
         ]);
 
         $report->crews()->attach([$this->crew->karyawan_id]);
@@ -166,6 +176,7 @@ class SessionReportDeadlineTest extends TestCase
         Livewire::test(CreateSessionReport::class)
             ->fillForm([
                 'report_date' => '2026-09-23',
+                'cabang_id' => $this->cabang->cabang_id,
                 'crews' => [$this->crew->karyawan_id],
                 'transactions' => [
                     ['payment_method' => 'CASH', 'amount' => 30000],
@@ -215,6 +226,7 @@ class SessionReportDeadlineTest extends TestCase
         Livewire::test(CreateSessionReport::class)
             ->fillForm([
                 'report_date' => '2026-09-23',
+                'cabang_id' => $this->cabang->cabang_id,
                 'crews' => [$this->crew->karyawan_id],
                 'transactions' => [
                     ['payment_method' => 'CASH', 'amount' => 30000],
@@ -344,6 +356,7 @@ class SessionReportDeadlineTest extends TestCase
         Livewire::test(CreateSessionReport::class)
             ->fillForm([
                 'report_date' => '2026-09-23',
+                'cabang_id' => $this->cabang->cabang_id,
                 'crews' => [$this->crew->karyawan_id],
                 'transactions' => [
                     ['payment_method' => 'CASH', 'amount' => 30000],

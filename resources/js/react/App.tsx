@@ -46,9 +46,9 @@ function HomePage() {
       <Navbar />
       <main id="main-content">
         <Hero />
+        <Client />
         <FindUsSection />
         <OfflineBoothsSection />
-        <Client />
         <Pricing />
         <CallToAction />
         <Services />
