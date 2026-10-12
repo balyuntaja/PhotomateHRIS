@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\PenggajianResource\Actions;
 
 use App\Models\Penggajian;
+use App\Utils\RupiahHelper;
 use Filament\Actions\Action;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -288,11 +289,11 @@ class EditGajiKaryawanAction
           'gaji_bersih' => $gajiBersih,
 
           // Display values (formatted)
-          'gaji_pokok_display' => number_format($gajiPokok, 0, ',', '.'),
-          'total_tunjangan_display' => number_format($totalTunjangan, 0, ',', '.'),
-          'penghasilan_bruto_display' => number_format($penghasilanBruto, 0, ',', '.'),
-          'total_potongan_display' => number_format($totalPotongan, 0, ',', '.'),
-          'gaji_bersih_display' => number_format($gajiBersih, 0, ',', '.'),
+          'gaji_pokok_display' => RupiahHelper::number($gajiPokok),
+          'total_tunjangan_display' => RupiahHelper::number($totalTunjangan),
+          'penghasilan_bruto_display' => RupiahHelper::number($penghasilanBruto),
+          'total_potongan_display' => RupiahHelper::number($totalPotongan),
+          'gaji_bersih_display' => RupiahHelper::number($gajiBersih),
 
           // Editable fields
           'total_lembur' => $totalLembur,

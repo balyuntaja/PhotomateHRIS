@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\LaporanKeuanganResource\Widgets;
 
 use App\Services\LaporanKeuanganService;
+use Filament\Support\RawJs;
 use Filament\Widgets\ChartWidget;
 
 class PayrollCostTrendChart extends ChartWidget
@@ -37,6 +38,28 @@ class PayrollCostTrendChart extends ChartWidget
                 ],
             ],
         ];
+    }
+
+    protected function getOptions(): RawJs
+    {
+        return RawJs::make(<<<'JS'
+            {
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.dataset.label}: ${window.formatRupiah(context.parsed.y)}`,
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: (value) => window.formatRupiah(value),
+                        },
+                    },
+                },
+            }
+            JS);
     }
 
     public function getColumnSpan(): int|string|array

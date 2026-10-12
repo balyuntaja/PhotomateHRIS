@@ -2,8 +2,10 @@
 
 namespace App\Filament\Resources\FinancialTransactionResource\Pages;
 
+use App\Filament\Pages\KeuanganInputTransaksi;
 use App\Filament\Resources\FinancialTransactionResource;
 use App\Filament\Resources\Pages\ListRecords;
+use App\Utils\RupiahHelper;
 use Filament\Actions;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -17,13 +19,11 @@ class ListFinancialTransactions extends ListRecords
     protected function getHeaderActions(): array
     {
         $actions = [
-            Actions\CreateAction::make()
+            Actions\Action::make('tambah_transaksi')
                 ->label('Tambah Transaksi')
                 ->icon('heroicon-o-plus')
-                ->modalHeading('Tambah Transaksi')
-                ->modalSubmitActionLabel('Simpan Transaksi')
-                ->createAnother(false)
-                ->successNotificationTitle('Transaksi berhasil disimpan.'),
+                ->url(fn (): string => KeuanganInputTransaksi::getUrl())
+                ->authorize(fn (): bool => FinancialTransactionResource::canCreate()),
         ];
 
         if (Auth::user()?->isSuperAdmin() || Auth::user()?->can('export_keuangan_report')) {
@@ -64,7 +64,7 @@ class ListFinancialTransactions extends ListRecords
                                 $record->transaction_date?->format('Y-m-d') ?? '-',
                                 $record->type_label,
                                 $record->category?->name ?? '-',
-                                (int) $record->amount,
+                                RupiahHelper::format($record->amount),
                                 $record->cabang?->nama_cabang ?? 'Tanpa Cabang',
                                 $record->paymentMethod?->name ?? '-',
                                 $record->description ?: '-',

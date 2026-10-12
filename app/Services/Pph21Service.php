@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Karyawan;
 use App\Models\TarifTer;
+use App\Utils\RupiahHelper;
 use Illuminate\Support\Facades\Log;
 
 class Pph21Service
@@ -50,7 +51,7 @@ class Pph21Service
 
     // Jika tarif tidak ditemukan, catat dan kembalikan 0
     if (!$tarifTer) {
-      Log::warning("PPh21: Tarif TER tidak ditemukan untuk karyawan {$karyawan->karyawan_id} dengan penghasilan Rp " . number_format($penghasilanBruto, 0, ',', '.'));
+      Log::warning("PPh21: Tarif TER tidak ditemukan untuk karyawan {$karyawan->karyawan_id} dengan penghasilan " . RupiahHelper::format($penghasilanBruto));
       return 0;
     }
 

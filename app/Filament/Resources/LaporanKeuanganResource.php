@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\LaporanKeuanganResource\Pages;
 use App\Models\Penggajian;
 use App\Utils\MonthHelper;
+use App\Utils\RupiahHelper;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -54,9 +55,7 @@ class LaporanKeuanganResource extends Resource
 
                 Tables\Columns\TextColumn::make('total_gaji')
                     ->label('Total Biaya Gaji')
-                    ->formatStateUsing(fn(?float $state): string => $state !== null
-                        ? 'Rp ' . number_format($state, 0, ',', '.')
-                        : 'Rp 0')
+                    ->formatStateUsing(fn(?float $state): string => RupiahHelper::format($state))
                     ->alignEnd(),
 
                 Tables\Columns\TextColumn::make('jumlah_karyawan')
@@ -65,9 +64,7 @@ class LaporanKeuanganResource extends Resource
 
                 Tables\Columns\TextColumn::make('total_potongan')
                     ->label('Total Potongan')
-                    ->formatStateUsing(fn(?float $state): string => $state !== null
-                        ? 'Rp ' . number_format($state, 0, ',', '.')
-                        : 'Rp 0')
+                    ->formatStateUsing(fn(?float $state): string => RupiahHelper::format($state))
                     ->alignEnd(),
             ])
             ->filters([

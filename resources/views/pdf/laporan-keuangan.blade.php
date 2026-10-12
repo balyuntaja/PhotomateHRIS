@@ -125,31 +125,31 @@
             <tbody>
                 <tr>
                     <th>Total Biaya Gaji (Bersih)</th>
-                    <td class="text-right">Rp {{ number_format($summary['totals']['total_salary'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['totals']['total_salary']) }}</td>
                 </tr>
                 <tr>
                     <th>Penghasilan Bruto</th>
-                    <td class="text-right">Rp {{ number_format($summary['totals']['gross_income'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['totals']['gross_income']) }}</td>
                 </tr>
 
                                     <tr>
                     <th>Total Tunjangan</th>
-                    <td class="text-right">Rp {{ number_format($summary['totals']['total_allowances'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['totals']['total_allowances']) }}</td>
                 </tr>
 
                                     <tr>
                     <th>Total Lembur</th>
-                    <td class="text-right">Rp {{ number_format($summary['totals']['total_overtime'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['totals']['total_overtime']) }}</td>
                 </tr>
 
                                     <tr>
                     <th>Total Potongan</th>
-                    <td class="text-right">Rp {{ number_format($summary['totals']['total_deductions'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['totals']['total_deductions']) }}</td>
                 </tr>
 
                                     <tr>
                     <th>Rata-rata Gaji Bersih</th>
-                    <td class="text-right">Rp {{ number_format($summary['totals']['average_salary'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['totals']['average_salary']) }}</td>
                 </tr>
             </tbody>
         </table>
@@ -171,7 +171,7 @@
                     <td class="text-center">{{ $index + 1 }}</td>
                     <td>{{ $department['departemen'] }}</td>
                     <td class="text-center">{{ $department['jumlah_karyawan'] }}</td>
-                        <td class="text-right">Rp {{ number_format($department['total_gaji'], 0, ',', '.') }}</td>
+                        <td class="text-right">{{ \App\Utils\RupiahHelper::format($department['total_gaji']) }}</td>
                     <td class="text-center">{{ number_format($department['persentase'], 2, ',', '.') }}%</td>
                 </tr>
             @empty

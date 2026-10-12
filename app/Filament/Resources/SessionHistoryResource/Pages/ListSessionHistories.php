@@ -5,6 +5,7 @@ namespace App\Filament\Resources\SessionHistoryResource\Pages;
 use App\Filament\Resources\SessionHistoryResource;
 use App\Models\SessionReport;
 use App\Services\SessionWorkflowService;
+use App\Utils\RupiahHelper;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Facades\Auth;
@@ -80,9 +81,9 @@ class ListSessionHistories extends ListRecords
                                     $crewNames,
                                     '-',
                                     $report->total_transactions,
-                                    $report->grand_total_amount,
-                                    $bonusAmount,
-                                    $bonusPerCrew,
+                                    RupiahHelper::format($report->grand_total_amount),
+                                    RupiahHelper::format($bonusAmount),
+                                    RupiahHelper::format($bonusPerCrew),
                                     $report->status_label,
                                     $submittedAt,
                                     $approvedAt,
@@ -98,9 +99,9 @@ class ListSessionHistories extends ListRecords
                                         $crewNames,
                                         $trx->payment_method_label,
                                         $trx->session_count,
-                                        $trx->amount,
-                                        $bonusAmount,
-                                        $bonusPerCrew,
+                                        RupiahHelper::format($trx->amount),
+                                        RupiahHelper::format($bonusAmount),
+                                        RupiahHelper::format($bonusPerCrew),
                                         $report->status_label,
                                         $submittedAt,
                                         $approvedAt,
@@ -116,9 +117,9 @@ class ListSessionHistories extends ListRecords
                                     $crewNames,
                                     '-',
                                     $report->total_sessions,
-                                    $report->grand_total_amount,
-                                    $bonusAmount,
-                                    $bonusPerCrew,
+                                    RupiahHelper::format($report->grand_total_amount),
+                                    RupiahHelper::format($bonusAmount),
+                                    RupiahHelper::format($bonusPerCrew),
                                     $report->status_label,
                                     $submittedAt,
                                     $approvedAt,

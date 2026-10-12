@@ -202,9 +202,9 @@
                 <td>{{ $item->service_description }}</td>
                 <td>{{ $item->duration ?: '-' }}</td>
                 <td>{{ $item->time_range ?: '-' }}</td>
-                <td class="right">{{ number_format($item->price, 0, ',', '.') }}</td>
+                <td class="right">{{ \App\Utils\RupiahHelper::number($item->price) }}</td>
                 <td class="right">{{ $item->device_count }}</td>
-                <td class="right">{{ number_format($item->amount, 0, ',', '.') }}</td>
+                <td class="right">{{ \App\Utils\RupiahHelper::number($item->amount) }}</td>
             </tr>
             @endforeach
         </tbody>
@@ -213,26 +213,26 @@
     <table class="summary-table">
         <tr>
             <td class="label">Subtotal:</td>
-            <td class="amount">Rp {{ number_format($invoice->subtotal, 0, ',', '.') }}</td>
+            <td class="amount">{{ \App\Utils\RupiahHelper::format($invoice->subtotal) }}</td>
         </tr>
         @if($invoice->discount > 0)
         <tr>
             <td class="label">Diskon:</td>
-            <td class="amount">- Rp {{ number_format($invoice->discount, 0, ',', '.') }}</td>
+            <td class="amount">- {{ \App\Utils\RupiahHelper::format($invoice->discount) }}</td>
         </tr>
         @endif
         <tr class="total">
             <td class="label">Grand Total:</td>
-            <td class="amount">Rp {{ number_format($invoice->total, 0, ',', '.') }}</td>
+            <td class="amount">{{ \App\Utils\RupiahHelper::format($invoice->total) }}</td>
         </tr>
         @if($invoice->status == 'Sebagian Dibayar' && $invoice->down_payment > 0)
         <tr>
             <td class="label">Down Payment:</td>
-            <td class="amount">Rp {{ number_format($invoice->down_payment, 0, ',', '.') }}</td>
+            <td class="amount">{{ \App\Utils\RupiahHelper::format($invoice->down_payment) }}</td>
         </tr>
         <tr style="border-top: 1px solid #cbd5e0;">
             <td class="label">Sisa Pembayaran:</td>
-            <td class="amount" style="font-weight: bold; color: #dd6b20;">Rp {{ number_format($invoice->total - $invoice->down_payment, 0, ',', '.') }}</td>
+            <td class="amount" style="font-weight: bold; color: #dd6b20;">{{ \App\Utils\RupiahHelper::format($invoice->total - $invoice->down_payment) }}</td>
         </tr>
         @endif
     </table>

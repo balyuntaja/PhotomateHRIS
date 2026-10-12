@@ -24,7 +24,7 @@
                 <x-filament::card>
                     <div class="text-sm text-gray-500 dark:text-gray-400">Total Biaya Gaji</div>
                     <div class="mt-2 text-2xl font-semibold text-primary-600 dark:text-primary-400">
-                        Rp {{ number_format($summary['totals']['total_salary'], 0, ',', '.') }}
+                        {{ \App\Utils\RupiahHelper::format($summary['totals']['total_salary']) }}
                     </div>
                     <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         Menggambarkan total gaji bersih yang dibayarkan.
@@ -34,7 +34,7 @@
                 <x-filament::card>
                     <div class="text-sm text-gray-500 dark:text-gray-400">Penghasilan Bruto</div>
                     <div class="mt-2 text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-                        Rp {{ number_format($summary['totals']['gross_income'], 0, ',', '.') }}
+                        {{ \App\Utils\RupiahHelper::format($summary['totals']['gross_income']) }}
                     </div>
                     <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         Sebelum potongan pajak dan lainnya.
@@ -44,7 +44,7 @@
                 <x-filament::card>
                     <div class="text-sm text-gray-500 dark:text-gray-400">Total Potongan</div>
                     <div class="mt-2 text-2xl font-semibold text-rose-600 dark:text-rose-400">
-                        Rp {{ number_format($summary['totals']['total_deductions'], 0, ',', '.') }}
+                        {{ \App\Utils\RupiahHelper::format($summary['totals']['total_deductions']) }}
                     </div>
                     <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         Termasuk pajak, keterlambatan, dan lainnya.
@@ -54,7 +54,7 @@
                 <x-filament::card>
                     <div class="text-sm text-gray-500 dark:text-gray-400">Rata-rata Gaji Bersih</div>
                     <div class="mt-2 text-2xl font-semibold text-sky-600 dark:text-sky-400">
-                        Rp {{ number_format($summary['totals']['average_salary'], 0, ',', '.') }}
+                        {{ \App\Utils\RupiahHelper::format($summary['totals']['average_salary']) }}
                     </div>
                     <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         Dari {{ $summary['totals']['employee_count'] }} karyawan.
@@ -68,7 +68,7 @@
                         <div>
                             <div class="text-sm text-gray-500 dark:text-gray-400">Total Tunjangan</div>
                             <div class="mt-2 text-2xl font-semibold text-amber-600 dark:text-amber-400">
-                                Rp {{ number_format($summary['totals']['total_allowances'], 0, ',', '.') }}
+                                {{ \App\Utils\RupiahHelper::format($summary['totals']['total_allowances']) }}
                             </div>
                         </div>
                         <x-heroicon-o-gift class="h-10 w-10 text-amber-500 dark:text-amber-300" />
@@ -80,7 +80,7 @@
                         <div>
                             <div class="text-sm text-gray-500 dark:text-gray-400">Total Lembur</div>
                             <div class="mt-2 text-2xl font-semibold text-indigo-600 dark:text-indigo-400">
-                                Rp {{ number_format($summary['totals']['total_overtime'], 0, ',', '.') }}
+                                {{ \App\Utils\RupiahHelper::format($summary['totals']['total_overtime']) }}
                             </div>
                         </div>
                         <x-heroicon-o-clock class="h-10 w-10 text-indigo-500 dark:text-indigo-300" />
@@ -104,7 +104,7 @@
                             <div>
                                 <div class="flex items-center justify-between text-sm font-medium text-gray-700 dark:text-gray-200">
                                     <span>{{ $department['departemen'] }}</span>
-                                    <span>Rp {{ number_format($department['total_gaji'], 0, ',', '.') }}</span>
+                                    <span>{{ \App\Utils\RupiahHelper::format($department['total_gaji']) }}</span>
                                 </div>
                                 <div class="mt-1 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                                     <span>{{ $department['jumlah_karyawan'] }} karyawan</span>

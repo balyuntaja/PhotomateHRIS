@@ -65,11 +65,11 @@ export const pricingPlans: PricingPlan[] = [
 ];
 
 export const selfRunRows = [
-  { duration: "2 Jam", price: "Rp700.000", profit: "Up to Rp1.000.000" },
-  { duration: "3 Jam", price: "Rp1.100.000", profit: "Up to Rp1.250.000" },
-  { duration: "4 Jam", price: "Rp1.350.000", profit: "Up to Rp1.800.000" },
-  { duration: "5 Jam", price: "Rp1.600.000", profit: "Up to Rp2.400.000" },
-  { duration: "6 Jam", price: "Rp1.900.000", profit: "Up to Rp2.800.000" },
+  { duration: "2 Jam", price: "Rp 700.000", profit: "Up to Rp 1.000.000" },
+  { duration: "3 Jam", price: "Rp 1.100.000", profit: "Up to Rp 1.250.000" },
+  { duration: "4 Jam", price: "Rp 1.350.000", profit: "Up to Rp 1.800.000" },
+  { duration: "5 Jam", price: "Rp 1.600.000", profit: "Up to Rp 2.400.000" },
+  { duration: "6 Jam", price: "Rp 1.900.000", profit: "Up to Rp 2.800.000" },
 ];
 
 export const sharingOneDevice = [
@@ -77,13 +77,13 @@ export const sharingOneDevice = [
     schema: "A",
     sessions: "51 – 100",
     split: "Photomate 85% · Panitia 15%",
-    price: "Rp25.000",
+    price: "Rp 25.000",
   },
   {
     schema: "B",
     sessions: "100 – tak hingga",
     split: "Photomate 80% · Panitia 20%",
-    price: "Rp25.000",
+    price: "Rp 25.000",
   },
 ];
 
@@ -92,19 +92,19 @@ export const sharingTwoDevice = [
     schema: "A",
     sessions: "0 – 100",
     split: "Photomate 100% · Panitia 0%",
-    price: "Rp20.000 – Rp25.000",
+    price: "Rp 20.000 – Rp 25.000",
   },
   {
     schema: "B",
     sessions: "101 – 150",
     split: "Photomate 90% · Panitia 10%",
-    price: "Rp20.000 – Rp25.000",
+    price: "Rp 20.000 – Rp 25.000",
   },
   {
     schema: "C",
     sessions: "151 – tak hingga",
     split: "Photomate 80% · Panitia 20%",
-    price: "Rp20.000 – Rp25.000",
+    price: "Rp 20.000 – Rp 25.000",
   },
 ];
 

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\PricingSetting;
 use App\Models\SessionReport;
 use App\Models\SessionTransaction;
+use App\Utils\RupiahHelper;
 use Carbon\Carbon;
 use InvalidArgumentException;
 
@@ -110,7 +111,7 @@ class PricingService
             } else {
                 $sessionCount = $this->calculateSessionsFromPrice($amount);
                 if ($sessionCount < 1) {
-                    $issues[] = "Transaksi #" . ($idx + 1) . ": Nominal Rp " . number_format($amount, 0, ',', '.') . " tidak valid untuk sesi.";
+                    $issues[] = "Transaksi #" . ($idx + 1) . ": Nominal " . RupiahHelper::format($amount) . " tidak valid untuk sesi.";
                 }
             }
 

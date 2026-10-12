@@ -82,10 +82,10 @@
                     Total Omzet
                 </p>
                 <p style="margin:8px 0 0;font-size:24px;font-weight:800;color:#064e3b;">
-                    Rp {{ number_format($report->grand_total_amount, 0, ',', '.') }}
+                    {{ \App\Utils\RupiahHelper::format($report->grand_total_amount) }}
                 </p>
                 <p style="margin:4px 0 0;font-size:11px;color:#10b981;">
-                    Tunai: Rp {{ number_format($report->total_cash_amount, 0, ',', '.') }} | QRIS: Rp {{ number_format($report->total_qris_amount, 0, ',', '.') }}
+                    Tunai: {{ \App\Utils\RupiahHelper::format($report->total_cash_amount) }} | QRIS: {{ \App\Utils\RupiahHelper::format($report->total_qris_amount) }}
                 </p>
             </td>
         </tr>

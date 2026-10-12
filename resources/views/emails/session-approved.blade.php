@@ -66,7 +66,7 @@
         </tr>
         <tr>
             <td style="padding:10px 16px;font-size:13px;color:#64748b;">Total Omzet</td>
-            <td style="padding:10px 16px;font-size:13px;color:#0f172a;font-weight:700;">Rp {{ number_format($report->grand_total_amount, 0, ',', '.') }}</td>
+            <td style="padding:10px 16px;font-size:13px;color:#0f172a;font-weight:700;">{{ \App\Utils\RupiahHelper::format($report->grand_total_amount) }}</td>
         </tr>
     </table>
 
@@ -106,7 +106,7 @@
             <tr style="border-bottom:1px solid #f1f5f9;">
                 <td style="padding:10px 16px;color:#64748b;border-bottom:1px solid #f1f5f9;">Total Bonus Cabang:</td>
                 <td style="padding:10px 16px;color:#4338ca;font-weight:700;text-align:right;border-bottom:1px solid #f1f5f9;">
-                    Rp {{ number_format($bonusDetails['total_bonus'] ?? 0, 0, ',', '.') }}
+                    {{ \App\Utils\RupiahHelper::format($bonusDetails['total_bonus'] ?? 0) }}
                 </td>
             </tr>
 
@@ -122,7 +122,7 @@
                     &bull; {{ $crewBonus['nama_lengkap'] }}
                 </td>
                 <td style="padding:6px 16px;color:#059669;font-weight:700;text-align:right;border-bottom:1px solid #f8fafc;">
-                    Rp {{ number_format($crewBonus['bonus'] ?? 0, 0, ',', '.') }}
+                    {{ \App\Utils\RupiahHelper::format($crewBonus['bonus'] ?? 0) }}
                 </td>
             </tr>
             @endforeach

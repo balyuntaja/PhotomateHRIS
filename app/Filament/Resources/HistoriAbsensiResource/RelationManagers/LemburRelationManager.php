@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\HistoriAbsensiResource\RelationManagers;
 
+use App\Utils\RupiahHelper;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
@@ -31,7 +32,7 @@ class LemburRelationManager extends RelationManager
                     ->formatStateUsing(fn(?string $state) => $state ? "{$state} jam" : '-'),
                 Tables\Columns\TextColumn::make('total_insentif')
                     ->label('Total Insentif')
-                    ->money('IDR', true),
+                    ->formatStateUsing(fn($state): ?string => filled($state) ? RupiahHelper::format($state) : null),
                 Tables\Columns\TextColumn::make('status_lembur')
                     ->label('Status')
                     ->badge()

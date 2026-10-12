@@ -101,17 +101,17 @@
             </div>
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
                 <span class="text-xs text-gray-500 block">Tunai (Cash)</span>
-                <div class="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono">Rp {{ number_format($report->total_cash_amount, 0, ',', '.') }}</div>
+                <div class="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ \App\Utils\RupiahHelper::format($report->total_cash_amount) }}</div>
                 <span class="text-[11px] text-gray-400">{{ $report->total_cash_sessions }} Lembar tunai · {{ $report->total_cash_transactions }} Sesi</span>
             </div>
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
                 <span class="text-xs text-gray-500 block">QRIS</span>
-                <div class="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400 font-mono">Rp {{ number_format($report->total_qris_amount, 0, ',', '.') }}</div>
+                <div class="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400 font-mono">{{ \App\Utils\RupiahHelper::format($report->total_qris_amount) }}</div>
                 <span class="text-[11px] text-gray-400">{{ $report->total_qris_sessions }} Lembar QRIS · {{ $report->total_qris_transactions }} Sesi</span>
             </div>
             <div class="p-3 bg-primary-50 dark:bg-primary-950/40 rounded-xl border border-primary-200 dark:border-primary-800/60">
                 <span class="text-xs text-primary-700 dark:text-primary-300 font-medium block">Total Revenue</span>
-                <div class="text-base sm:text-lg font-bold text-primary-700 dark:text-primary-300 font-mono">Rp {{ number_format($report->grand_total_amount, 0, ',', '.') }}</div>
+                <div class="text-base sm:text-lg font-bold text-primary-700 dark:text-primary-300 font-mono">{{ \App\Utils\RupiahHelper::format($report->grand_total_amount) }}</div>
                 <span class="text-[11px] text-primary-600/80 dark:text-primary-400/80">{{ $report->total_sessions }} Total lembar</span>
             </div>
         </div>
@@ -149,12 +149,12 @@
                 </div>
                 <div class="p-2.5 bg-white/70 dark:bg-gray-900/50 rounded-lg border border-emerald-200 dark:border-emerald-800/40">
                     <span class="text-gray-500 block">Total Bonus Cabang:</span>
-                    <span class="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">Rp {{ number_format($totalBonus, 0, ',', '.') }}</span>
+                    <span class="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">{{ \App\Utils\RupiahHelper::format($totalBonus) }}</span>
                     <span class="text-[10px] text-gray-400 block">Untuk crew bertugas</span>
                 </div>
                 <div class="p-2.5 bg-white/70 dark:bg-gray-900/50 rounded-lg border border-emerald-200 dark:border-emerald-800/40">
                     <span class="text-gray-500 block">Bonus per Crew ({{ $crewCount }} orang):</span>
-                    <span class="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">Rp {{ number_format($bonusPerCrew, 0, ',', '.') }}</span>
+                    <span class="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400">{{ \App\Utils\RupiahHelper::format($bonusPerCrew) }}</span>
                     <span class="text-[10px] text-gray-400 block">
                         @if($crewCount === 1)
                             (1 crew: Rp 50.000)
@@ -186,7 +186,7 @@
                             <tr>
                                 <td class="px-3 py-1.5 font-medium text-gray-900 dark:text-gray-100">{{ $c['nama_lengkap'] }}</td>
                                 <td class="px-3 py-1.5 text-center text-emerald-600 font-semibold">Bertugas</td>
-                                <td class="px-3 py-1.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">Rp {{ number_format($c['bonus'], 0, ',', '.') }}</td>
+                                <td class="px-3 py-1.5 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">{{ \App\Utils\RupiahHelper::format($c['bonus']) }}</td>
                             </tr>
                             @endforeach
                         </tbody>
@@ -241,7 +241,7 @@
                         </td>
                         <td class="px-3 py-2 text-center font-semibold text-gray-900 dark:text-gray-100">{{ $trx->session_count }}</td>
                         <td class="px-3 py-2 text-right font-mono font-medium text-gray-900 dark:text-gray-100">
-                            Rp {{ number_format($trx->amount, 0, ',', '.') }}
+                            {{ \App\Utils\RupiahHelper::format($trx->amount) }}
                         </td>
                         <td class="px-3 py-2 text-gray-500 dark:text-gray-400">{{ $trx->notes ?: '-' }}</td>
                     </tr>
@@ -256,7 +256,7 @@
                         <td colspan="2" class="px-3 py-2.5 text-right">Total:</td>
                         <td class="px-3 py-2.5 text-center text-gray-900 dark:text-gray-100">{{ $report->total_sessions }} Lembar</td>
                         <td class="px-3 py-2.5 text-right font-mono text-primary-600 dark:text-primary-400">
-                            Rp {{ number_format($report->grand_total_amount, 0, ',', '.') }}
+                            {{ \App\Utils\RupiahHelper::format($report->grand_total_amount) }}
                         </td>
                         <td></td>
                     </tr>

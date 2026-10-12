@@ -9,6 +9,7 @@ use App\Notifications\SessionApprovedNotification;
 use App\Notifications\SessionRevisionNotification;
 use App\Notifications\SessionSubmittedNotification;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification as EmailNotification;
 use InvalidArgumentException;
@@ -108,10 +109,14 @@ class SessionWorkflowService
                     $q->whereIn('name', ['Supervisor', 'Admin', 'CEO', 'Manager HRD']);
                 })->get();
 
+            $reportDateFormatted = $report->report_date
+                ? Carbon::parse($report->report_date)->format('d M Y')
+                : '-';
+
             foreach ($supervisors as $supervisor) {
                 Notification::make()
                     ->title($isResubmission ? 'Rekap Sesi Diajukan Ulang' : 'Rekap Sesi Baru Diajukan')
-                    ->body("Rekap sesi #{$report->report_number} untuk tanggal {$report->report_date->format('d M Y')} menunggu pemeriksaan Anda.")
+                    ->body("Rekap sesi #{$report->report_number} untuk tanggal {$reportDateFormatted} menunggu pemeriksaan Anda.")
                     ->warning()
                     ->sendToDatabase($supervisor);
             }

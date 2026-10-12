@@ -8,6 +8,7 @@ use App\Models\FinancialCategory;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
 use App\Services\KeuanganService;
+use App\Utils\RupiahHelper;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -153,6 +154,7 @@ class FinancialTransactionResource extends Resource
             ->stripCharacters(['.', ','])
             ->numeric()
             ->minValue(1)
+            ->formatStateUsing(fn ($state): ?string => filled($state) ? RupiahHelper::number($state) : $state)
             ->validationMessages([
                 'required' => 'Nominal wajib diisi.',
                 'numeric' => 'Nominal harus berupa angka.',

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\KeuanganInputTransaksi;
-use App\Filament\Pages\KeuanganInputTransaksiV2;
 use App\Filament\Pages\KeuanganReport;
 use App\Filament\Resources\FinancialTransactionResource\Pages\ListFinancialTransactions;
 use App\Models\FinancialAccount;
@@ -21,7 +20,7 @@ use Livewire\Livewire;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
-class KeuanganInputTransaksiV2Test extends TestCase
+class KeuanganInputTransaksiTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -84,52 +83,56 @@ class KeuanganInputTransaksiV2Test extends TestCase
         ]);
     }
 
-    public function test_akun_keuangan_v2_tersedia_photomate_express_golio_janus_dan_ekspansi(): void
+    public function test_akun_keuangan_tersedia_photomate_express_golio_janus_dan_ekspansi(): void
     {
         $accounts = FinancialAccount::query()->active()->orderBy('sort_order')->pluck('name')->all();
 
         $this->assertSame(['Photomate Express', 'Golio', 'Janus', 'Ekspansi'], $accounts);
     }
 
-    public function test_menu_dan_halaman_input_transaksi_v2_dapat_diakses_dengan_permission_create(): void
+    public function test_menu_dan_halaman_input_transaksi_dapat_diakses_dengan_permission_create(): void
     {
         $this->actingAs($this->managerFinance);
 
-        $this->assertTrue(KeuanganInputTransaksiV2::canAccess());
-        $this->assertTrue(KeuanganInputTransaksiV2::shouldRegisterNavigation());
+        $this->assertTrue(KeuanganInputTransaksi::canAccess());
+        $this->assertTrue(KeuanganInputTransaksi::shouldRegisterNavigation());
+
+        $this->get('/admin/keuangan-input-transaksi')
+            ->assertOk()
+            ->assertSee('Input Transaksi')
+            ->assertSee('Catat transaksi keuangan dengan cepat dan sederhana.')
+            ->assertDontSee('Input Transaksi V2');
 
         $this->get('/admin/keuangan-input-transaksi-v2')
-            ->assertOk()
-            ->assertSee('Input Transaksi V2')
-            ->assertSee('Catat transaksi keuangan dengan cepat dan sederhana.');
+            ->assertRedirect('/admin/keuangan-input-transaksi');
     }
 
-    public function test_halaman_v2_menolak_user_tanpa_permission_create_transaksi(): void
+    public function test_halaman_input_transaksi_menolak_user_tanpa_permission_create_transaksi(): void
     {
         $staff = $this->makeUser('K0005', 'Staff HRD', 'R02', 'staff.hrd@photomate.id', ['view_any_karyawan']);
 
         $this->actingAs($staff);
 
-        $this->assertFalse(KeuanganInputTransaksiV2::canAccess());
-        $this->assertFalse(KeuanganInputTransaksiV2::shouldRegisterNavigation());
+        $this->assertFalse(KeuanganInputTransaksi::canAccess());
+        $this->assertFalse(KeuanganInputTransaksi::shouldRegisterNavigation());
 
-        $this->get('/admin/keuangan-input-transaksi-v2')->assertForbidden();
+        $this->get('/admin/keuangan-input-transaksi')->assertForbidden();
     }
 
-    public function test_field_nominal_halaman_v2_memakai_mask_ribuan_indonesia(): void
+    public function test_field_nominal_halaman_input_transaksi_memakai_mask_ribuan_indonesia(): void
     {
         $this->actingAs($this->managerFinance);
 
-        Livewire::test(KeuanganInputTransaksiV2::class)
+        Livewire::test(KeuanganInputTransaksi::class)
             ->assertSuccessful()
             ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"');
     }
 
-    public function test_input_v2_menyimpan_transaksi_beserta_akun_periode_dan_pihak(): void
+    public function test_input_transaksi_menyimpan_transaksi_beserta_akun_periode_dan_pihak(): void
     {
         $this->actingAs($this->managerFinance);
 
-        Livewire::test(KeuanganInputTransaksiV2::class)
+        Livewire::test(KeuanganInputTransaksi::class)
             ->fillForm([
                 'account_id' => $this->express->id,
                 'period' => '2026-10',
@@ -165,11 +168,11 @@ class KeuanganInputTransaksiV2Test extends TestCase
         $this->assertSame($this->managerFinance->karyawan_id, $transaction->created_by);
     }
 
-    public function test_input_v2_menyimpan_transaksi_utang_beserta_jatuh_tempo_dan_pihak_kepada(): void
+    public function test_input_transaksi_menyimpan_transaksi_utang_beserta_jatuh_tempo_dan_pihak_kepada(): void
     {
         $this->actingAs($this->managerFinance);
 
-        Livewire::test(KeuanganInputTransaksiV2::class)
+        Livewire::test(KeuanganInputTransaksi::class)
             ->fillForm([
                 'account_id' => $this->golio->id,
                 'period' => '2026-10',
@@ -193,11 +196,11 @@ class KeuanganInputTransaksiV2Test extends TestCase
         $this->assertSame('Supplier ABC', $transaction->counterparty);
     }
 
-    public function test_input_v2_menolak_transaksi_tanpa_akun_kategori_dan_pihak(): void
+    public function test_input_transaksi_menolak_transaksi_tanpa_akun_kategori_dan_pihak(): void
     {
         $this->actingAs($this->managerFinance);
 
-        Livewire::test(KeuanganInputTransaksiV2::class)
+        Livewire::test(KeuanganInputTransaksi::class)
             ->fillForm([
                 'amount' => '100000',
                 'transaction_date' => '2026-10-07',
@@ -212,12 +215,12 @@ class KeuanganInputTransaksiV2Test extends TestCase
         $this->assertDatabaseCount('financial_transactions', 0);
     }
 
-    public function test_input_v2_menolak_nominal_nol_dan_negatif(): void
+    public function test_input_transaksi_menolak_nominal_nol_dan_negatif(): void
     {
         $this->actingAs($this->managerFinance);
 
         foreach ([0, -5000] as $nominal) {
-            Livewire::test(KeuanganInputTransaksiV2::class)
+            Livewire::test(KeuanganInputTransaksi::class)
                 ->fillForm([
                     'account_id' => $this->ekspansi->id,
                     'period' => '2026-10',
@@ -235,11 +238,11 @@ class KeuanganInputTransaksiV2Test extends TestCase
         $this->assertDatabaseCount('financial_transactions', 0);
     }
 
-    public function test_input_v2_mewajibkan_jatuh_tempo_dan_pihak_kepada_saat_status_utang(): void
+    public function test_input_transaksi_mewajibkan_jatuh_tempo_dan_pihak_kepada_saat_status_utang(): void
     {
         $this->actingAs($this->managerFinance);
 
-        Livewire::test(KeuanganInputTransaksiV2::class)
+        Livewire::test(KeuanganInputTransaksi::class)
             ->fillForm([
                 'account_id' => $this->express->id,
                 'period' => '2026-10',
@@ -261,11 +264,11 @@ class KeuanganInputTransaksiV2Test extends TestCase
         $this->assertDatabaseCount('financial_transactions', 0);
     }
 
-    public function test_input_v2_menolak_kategori_yang_tidak_sesuai_jenis_transaksi(): void
+    public function test_input_transaksi_menolak_kategori_yang_tidak_sesuai_jenis_transaksi(): void
     {
         $this->actingAs($this->managerFinance);
 
-        Livewire::test(KeuanganInputTransaksiV2::class)
+        Livewire::test(KeuanganInputTransaksi::class)
             ->fillForm([
                 'account_id' => $this->express->id,
                 'period' => '2026-10',
@@ -282,11 +285,11 @@ class KeuanganInputTransaksiV2Test extends TestCase
         $this->assertDatabaseCount('financial_transactions', 0);
     }
 
-    public function test_input_v2_menolak_akun_jenis_status_dan_pihak_yang_tidak_valid(): void
+    public function test_input_transaksi_menolak_akun_jenis_status_dan_pihak_yang_tidak_valid(): void
     {
         $this->actingAs($this->managerFinance);
 
-        Livewire::test(KeuanganInputTransaksiV2::class)
+        Livewire::test(KeuanganInputTransaksi::class)
             ->fillForm([
                 'account_id' => 99999,
                 'period' => '2026-10',
@@ -308,11 +311,11 @@ class KeuanganInputTransaksiV2Test extends TestCase
         $this->assertDatabaseCount('financial_transactions', 0);
     }
 
-    public function test_halaman_v2_menampilkan_pilihan_akun_dan_label_pihak_dinamis(): void
+    public function test_halaman_input_transaksi_menampilkan_pilihan_akun_dan_label_pihak_dinamis(): void
     {
         $this->actingAs($this->managerFinance);
 
-        Livewire::test(KeuanganInputTransaksiV2::class)
+        Livewire::test(KeuanganInputTransaksi::class)
             ->assertSuccessful()
             ->assertSee('Photomate Express')
             ->assertSee('Golio')
@@ -324,11 +327,11 @@ class KeuanganInputTransaksiV2Test extends TestCase
             ->assertDontSee('Diterima Oleh');
     }
 
-    public function test_input_v2_mempertahankan_akun_periode_dan_jenis_setelah_simpan(): void
+    public function test_input_transaksi_mempertahankan_akun_periode_dan_jenis_setelah_simpan(): void
     {
         $this->actingAs($this->managerFinance);
 
-        Livewire::test(KeuanganInputTransaksiV2::class)
+        Livewire::test(KeuanganInputTransaksi::class)
             ->fillForm([
                 'account_id' => $this->express->id,
                 'period' => '2026-10',
@@ -358,11 +361,11 @@ class KeuanganInputTransaksiV2Test extends TestCase
             ->assertSet('data.evidence_path', []);
     }
 
-    public function test_transaksi_v2_muncul_di_halaman_transaksi_dan_laporan(): void
+    public function test_transaksi_muncul_di_halaman_transaksi_dan_laporan(): void
     {
         $this->actingAs($this->managerFinance);
 
-        Livewire::test(KeuanganInputTransaksiV2::class)
+        Livewire::test(KeuanganInputTransaksi::class)
             ->fillForm([
                 'account_id' => $this->express->id,
                 'period' => Carbon::today()->format('Y-m'),
@@ -404,44 +407,6 @@ class KeuanganInputTransaksiV2Test extends TestCase
         $this->assertNull($transaction->period_month);
         $this->assertNull($transaction->period_year);
         $this->assertSame('September 2026', $transaction->period_label);
-    }
-
-    public function test_halaman_input_transaksi_lama_tetap_berjalan_tanpa_field_v2(): void
-    {
-        $this->actingAs($this->managerFinance);
-
-        Livewire::test(KeuanganInputTransaksi::class)
-            ->assertSuccessful()
-            ->fillForm([
-                'transaction_type' => FinancialTransaction::TYPE_INCOME,
-                'amount' => '2.000.000',
-                'category_id' => $this->incomeCategory->id,
-                'transaction_date' => Carbon::today()->toDateString(),
-                'payment_method_id' => $this->cash->id,
-                'description' => 'Pelunasan Event A',
-            ])
-            ->call('simpan')
-            ->assertHasNoFormErrors()
-            ->assertNotified()
-            ->assertNoRedirect();
-
-        $transaction = FinancialTransaction::firstOrFail();
-
-        $this->assertSame(2000000, $transaction->amount);
-        $this->assertNull($transaction->account_id);
-        $this->assertNull($transaction->party_id);
-        $this->assertSame(FinancialTransaction::PAYMENT_STATUS_LUNAS, $transaction->payment_status);
-    }
-
-    public function test_halaman_input_transaksi_lama_tetap_tersedia_di_menu_keuangan(): void
-    {
-        $this->actingAs($this->managerFinance);
-
-        $this->get('/admin/keuangan-input-transaksi')->assertOk()->assertSee('Input Transaksi');
-        $this->get('/admin/keuangan-input-transaksi-v2')->assertOk()->assertSee('Input Transaksi V2');
-
-        $this->assertTrue(KeuanganInputTransaksi::canAccess());
-        $this->assertTrue(KeuanganInputTransaksi::shouldRegisterNavigation());
     }
 
     /**

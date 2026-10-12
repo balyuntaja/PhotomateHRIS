@@ -6,6 +6,7 @@ use App\Filament\Resources\SessionApprovalResource;
 use App\Filament\Resources\SessionHistoryResource;
 use App\Filament\Resources\SessionReportResource;
 use App\Models\SessionReport;
+use App\Utils\RupiahHelper;
 use Carbon\Carbon;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -94,19 +95,19 @@ class SessionOverviewWidget extends BaseWidget
                 ->color('primary')
                 ->url($historyUrl),
 
-            Stat::make('Total Revenue', 'Rp ' . number_format($data['grandTotalRevenue'], 0, ',', '.'))
+            Stat::make('Total Revenue', RupiahHelper::format($data['grandTotalRevenue']))
                 ->description('Pendapatan sesi approved')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color('success')
                 ->url($historyUrl),
 
-            Stat::make('QRIS', 'Rp ' . number_format($data['qrisRevenue'], 0, ',', '.'))
+            Stat::make('QRIS', RupiahHelper::format($data['qrisRevenue']))
                 ->description(number_format($data['qrisSessions']) . ' Sesi non-tunai')
                 ->descriptionIcon('heroicon-m-qr-code')
                 ->color('info')
                 ->url($historyUrl),
 
-            Stat::make('Tunai', 'Rp ' . number_format($data['cashRevenue'], 0, ',', '.'))
+            Stat::make('Tunai', RupiahHelper::format($data['cashRevenue']))
                 ->description(number_format($data['cashSessions']) . ' Sesi tunai/fisik')
                 ->descriptionIcon('heroicon-m-currency-dollar')
                 ->color('warning')

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Utils\MonthHelper;
+use App\Utils\RupiahHelper;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -114,7 +115,7 @@ class FinancialAuditLog extends Model
     protected function formatValue(string $field, mixed $value): string
     {
         return match ($field) {
-            'amount' => 'Rp ' . number_format((int) $value, 0, ',', '.'),
+            'amount' => RupiahHelper::format($value),
             'transaction_type' => FinancialTransaction::TYPE_LABELS[$value] ?? (string) $value,
             'payment_status' => FinancialTransaction::PAYMENT_STATUS_LABELS[$value] ?? (string) $value,
             'category_id' => $this->lookup('category', $value),

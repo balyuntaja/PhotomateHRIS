@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login as CustomLogin;
+use App\Filament\Pages\KeuanganInputTransaksi;
 use App\Filament\Resources\RoleResource;
 use App\Filament\Widgets\ActivityOverview;
 use App\Filament\Widgets\CutiTodayOverview;
@@ -24,6 +25,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -84,9 +86,18 @@ class AdminPanelProvider extends PanelProvider
                 'Data Master',
                 'Keamanan',
             ])
+            ->authenticatedRoutes(function (Panel $panel): void {
+                // Alamat lama Input Transaksi V2 diarahkan ke halaman Input Transaksi utama.
+                Route::get('keuangan-input-transaksi-v2', fn () => redirect()->to(
+                    KeuanganInputTransaksi::getUrl(panel: $panel->getId())
+                ))->name('keuangan-input-transaksi-v2.redirect');
+            })
             ->renderHook(
                 \Filament\View\PanelsRenderHook::BODY_END,
-                fn (): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString('<script src="' . asset('js/queue-poster.js') . '"></script>')
+                fn (): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString(
+                    '<script src="' . asset('js/queue-poster.js') . '"></script>' .
+                    '<script src="' . asset('js/rupiah.js') . '"></script>'
+                )
             )
         ;
     }

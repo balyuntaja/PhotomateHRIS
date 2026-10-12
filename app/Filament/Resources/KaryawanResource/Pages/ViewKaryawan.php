@@ -3,6 +3,8 @@
 namespace App\Filament\Resources\KaryawanResource\Pages;
 
 use App\Filament\Resources\KaryawanResource;
+use App\Utils\RupiahHelper;
+
 use Filament\Actions;
 use App\Filament\Resources\Pages\ViewRecord;
 use Filament\Infolists;
@@ -100,7 +102,8 @@ class ViewKaryawan extends ViewRecord
                             ->placeholder('-'),
                         Infolists\Components\TextEntry::make('gaji_pokok')
                             ->label('Gaji Pokok')
-                            ->money('IDR')
+                            ->formatStateUsing(fn ($state): ?string => filled($state) ? RupiahHelper::format($state) : null)
+
                             ->default('-'),
                         Infolists\Components\TextEntry::make('golonganPtkp.nama_golongan_ptkp')
                             ->label('Golongan PTKP')

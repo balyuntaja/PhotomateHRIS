@@ -11,6 +11,7 @@ use App\Services\LemburService;
 use App\Services\Pph21Service;
 use App\Services\PotonganService;
 use App\Utils\MonthHelper;
+use App\Utils\RupiahHelper;
 use Filament\Actions;
 use App\Filament\Resources\Pages\ViewRecord;
 use Filament\Infolists;
@@ -240,17 +241,17 @@ class ViewSlipGaji extends ViewRecord
         [
           'label' => 'BPJS Kesehatan',
           'amount' => $bpjsData['bpjs_kesehatan'],
-          'description' => ((float) $bpjsData['breakdown']['persen_kesehatan'] * 100) . '% dari gaji pokok + tunjangan tetap (Rp ' . number_format($bpjsData['breakdown']['dasar_bpjs'], 0, ',', '.') . ')'
+          'description' => ((float) $bpjsData['breakdown']['persen_kesehatan'] * 100) . '% dari gaji pokok + tunjangan tetap (Rp ' . RupiahHelper::format($bpjsData['breakdown']['dasar_bpjs']) . ')'
         ],
         [
           'label' => 'BPJS JHT',
           'amount' => $bpjsData['bpjs_jht'],
-          'description' => ((float) $bpjsData['breakdown']['persen_jht'] * 100) . '% dari gaji pokok (Rp ' . number_format($detail->gaji_pokok, 0, ',', '.') . ')'
+          'description' => ((float) $bpjsData['breakdown']['persen_jht'] * 100) . '% dari gaji pokok (Rp ' . RupiahHelper::format($detail->gaji_pokok) . ')'
         ],
         [
           'label' => 'BPJS JP',
           'amount' => $bpjsData['bpjs_jp'],
-          'description' => ((float) $bpjsData['breakdown']['persen_jp'] * 100) . '% dari gaji pokok + tunjangan tetap (Rp ' . number_format($bpjsData['breakdown']['dasar_bpjs'], 0, ',', '.') . ')'
+          'description' => ((float) $bpjsData['breakdown']['persen_jp'] * 100) . '% dari gaji pokok + tunjangan tetap (Rp ' . RupiahHelper::format($bpjsData['breakdown']['dasar_bpjs']) . ')'
         ],
       ];
 

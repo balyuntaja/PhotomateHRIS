@@ -4,7 +4,9 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\SessionApprovalResource\Pages;
 use App\Models\SessionReport;
+use App\Services\BranchBonusService;
 use App\Services\SessionWorkflowService;
+use App\Utils\RupiahHelper;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -98,13 +100,13 @@ class SessionApprovalResource extends Resource
 
                 Tables\Columns\TextColumn::make('total_qris_amount')
                     ->label('Total QRIS')
-                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : RupiahHelper::format($state))
                     ->alignEnd()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('total_cash_amount')
                     ->label('Total Tunai')
-                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : RupiahHelper::format($state))
                     ->alignEnd()
                     ->sortable(),
 
@@ -116,7 +118,7 @@ class SessionApprovalResource extends Resource
 
                 Tables\Columns\TextColumn::make('grand_total_amount')
                     ->label('Grand Total')
-                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : RupiahHelper::format($state))
                     ->weight('bold')
                     ->alignEnd()
                     ->sortable(),
@@ -131,16 +133,16 @@ class SessionApprovalResource extends Resource
                         $crewCount = $record->crews->count();
                         if ($bonus > 0) {
                             $perCrew = $crewCount > 0 ? (int) round($bonus / $crewCount) : 0;
-                            return 'Rp ' . number_format($bonus, 0, ',', '.') . ($crewCount > 0 ? ' (@ Rp ' . number_format($perCrew, 0, ',', '.') . ')' : '');
+                            return RupiahHelper::format($bonus) . ($crewCount > 0 ? ' (@ ' . RupiahHelper::format($perCrew) . ')' : '');
                         }
-                        return 'Rp 0 (Target 30 sesi)';
+                        return RupiahHelper::format(0) . ' (Target 30 sesi)';
                     })
                     ->badge()
-                    ->color(function (string $state): string {
+                    ->color(function (string $state, SessionReport $record): string {
                         if ($state === '-') {
                             return 'gray';
                         }
-                        return str_contains($state, 'Rp 50.000') ? 'success' : 'warning';
+                        return (int) $record->bonus_amount >= BranchBonusService::TOTAL_BONUS_AMOUNT ? 'success' : 'warning';
                     })
                     ->alignEnd()
                     ->sortable()

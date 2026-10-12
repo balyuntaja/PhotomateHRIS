@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Utils\MonthHelper;
+use App\Utils\RupiahHelper;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -231,12 +232,12 @@ class FinancialTransaction extends Model
 
     public function getFormattedAmountAttribute(): string
     {
-        return 'Rp ' . number_format((int) $this->amount, 0, ',', '.');
+        return RupiahHelper::format($this->amount);
     }
 
     public function getSignedFormattedAmountAttribute(): string
     {
-        return ($this->is_income ? '+ ' : '- ') . $this->formatted_amount;
+        return RupiahHelper::signed($this->amount, (bool) $this->is_income);
     }
 
     public function getTransactionDateLabelAttribute(): string

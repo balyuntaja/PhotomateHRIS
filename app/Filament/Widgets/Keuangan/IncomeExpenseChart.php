@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets\Keuangan;
 
 use App\Services\KeuanganService;
+use Filament\Support\RawJs;
 use Filament\Widgets\ChartWidget;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 
@@ -56,6 +57,28 @@ class IncomeExpenseChart extends ChartWidget
                 ],
             ],
         ];
+    }
+
+    protected function getOptions(): RawJs
+    {
+        return RawJs::make(<<<'JS'
+            {
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.dataset.label}: ${window.formatRupiah(context.parsed.y)}`,
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: (value) => window.formatRupiah(value),
+                        },
+                    },
+                },
+            }
+            JS);
     }
 
     public function getDescription(): ?string

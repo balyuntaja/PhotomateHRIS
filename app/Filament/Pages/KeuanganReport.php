@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\Cabang;
 use App\Models\FinancialTransaction;
 use App\Services\KeuanganService;
+use App\Utils\RupiahHelper;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Forms\Contracts\HasForms;
@@ -251,7 +252,7 @@ class KeuanganReport extends Page implements HasForms, HasTable
                                 $record->transaction_date?->format('Y-m-d') ?? '-',
                                 $record->type_label,
                                 $record->category?->name ?? '-',
-                                (int) $record->amount,
+                                RupiahHelper::format($record->amount),
                                 $record->cabang?->nama_cabang ?? 'Tanpa Cabang',
                                 $record->paymentMethod?->name ?? '-',
                                 $record->description ?: '-',

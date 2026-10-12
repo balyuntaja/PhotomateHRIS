@@ -9,6 +9,38 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property string $report_number
+ * @property Carbon|null $report_date
+ * @property string $status
+ * @property string|null $event_note
+ * @property string|null $cabang_id
+ * @property int|null $invoice_id
+ * @property int|null $event_id
+ * @property int $wedding_total_sessions
+ * @property int $wedding_total_sheets
+ * @property array|null $evidence_files
+ * @property int $total_sessions
+ * @property int $total_transactions
+ * @property int $total_cash_amount
+ * @property int $total_cash_sessions
+ * @property int $total_cash_transactions
+ * @property int $total_qris_amount
+ * @property int $total_qris_sessions
+ * @property int $total_qris_transactions
+ * @property int $grand_total_amount
+ * @property int $bonus_amount
+ * @property string|null $validation_status
+ * @property array|null $validation_issues
+ * @property string|null $submitted_by
+ * @property Carbon|null $submitted_at
+ * @property string|null $approved_by
+ * @property Carbon|null $approved_at
+ * @property string|null $revision_note
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ */
 class SessionReport extends Model
 {
     use HasFactory;

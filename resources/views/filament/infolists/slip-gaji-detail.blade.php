@@ -51,7 +51,7 @@
           <div class="salary-items-compact">
             <div class="salary-item-compact">
               <span class="salary-label-compact">Gaji Pokok:</span>
-              <span class="salary-value-compact">Rp {{ number_format($karyawan['gaji_pokok'], 0, ',', '.') }}</span>
+              <span class="salary-value-compact">{{ \App\Utils\RupiahHelper::format($karyawan['gaji_pokok']) }}</span>
             </div>
 
             @if(isset($karyawan['tunjangan_breakdown']) && !empty($karyawan['tunjangan_breakdown']['breakdown']))
@@ -59,7 +59,7 @@
                 <div class="salary-item-compact">
                   <span class="salary-label-compact">{{ $item['label'] }}:</span>
                   <span class="salary-value-compact salary-positive-compact">Rp
-                    {{ number_format($item['amount'], 0, ',', '.') }}</span>
+                    {{ \App\Utils\RupiahHelper::number($item['amount']) }}</span>
                 </div>
               @endforeach
             @endif
@@ -68,7 +68,7 @@
               <div class="salary-item-compact">
                 <span class="salary-label-compact">Upah Lembur:</span>
                 <span class="salary-value-compact salary-positive-compact">Rp
-                  {{ number_format($karyawan['lembur_pay'], 0, ',', '.') }}</span>
+                  {{ \App\Utils\RupiahHelper::number($karyawan['lembur_pay']) }}</span>
               </div>
               <div class="breakdown-detail-compact">
                 {{ $karyawan['total_lembur'] }} jam ({{ $karyawan['total_lembur_sessions'] }} sesi)
@@ -79,7 +79,7 @@
               style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgb(229 231 235);">
               <span class="salary-label-compact" style="font-weight: 600;">Total Pendapatan:</span>
               <span class="salary-value-compact salary-positive-compact" style="font-weight: 600;">
-                Rp {{ number_format($karyawan['pph21_detail']['penghasilan_bruto'], 0, ',', '.') }}
+                {{ \App\Utils\RupiahHelper::format($karyawan['pph21_detail']['penghasilan_bruto']) }}
               </span>
             </div>
           </div>
@@ -98,12 +98,12 @@
               <div class="salary-item-compact">
                 <span class="salary-label-compact">Potongan Alfa:</span>
                 <span class="salary-value-compact salary-negative-compact">
-                  Rp {{ number_format($karyawan['potongan_detail']['alfa']['total_potongan'], 0, ',', '.') }}
+                  {{ \App\Utils\RupiahHelper::format($karyawan['potongan_detail']['alfa']['total_potongan']) }}
                 </span>
               </div>
               <div class="breakdown-detail-compact">
                 {{ $karyawan['total_alfa'] }} hari × Rp
-                {{ number_format($karyawan['potongan_detail']['alfa']['potongan_per_hari'], 0, ',', '.') }}/hari
+                {{ \App\Utils\RupiahHelper::number($karyawan['potongan_detail']['alfa']['potongan_per_hari']) }}/hari
               </div>
             @endif
 
@@ -111,12 +111,12 @@
               <div class="salary-item-compact">
                 <span class="salary-label-compact">Potongan Terlambat:</span>
                 <span class="salary-value-compact salary-negative-compact">
-                  Rp {{ number_format($karyawan['potongan_detail']['keterlambatan']['total_potongan'], 0, ',', '.') }}
+                  {{ \App\Utils\RupiahHelper::format($karyawan['potongan_detail']['keterlambatan']['total_potongan']) }}
                 </span>
               </div>
               <div class="breakdown-detail-compact">
                 {{ $karyawan['total_tidak_tepat'] }} hari × Rp
-                {{ number_format($karyawan['potongan_detail']['keterlambatan']['potongan_per_hari'], 0, ',', '.') }}/hari
+                {{ \App\Utils\RupiahHelper::number($karyawan['potongan_detail']['keterlambatan']['potongan_per_hari']) }}/hari
               </div>
             @endif
 
@@ -125,7 +125,7 @@
                 <div class="salary-item-compact">
                   <span class="salary-label-compact">{{ $item['label'] }}:</span>
                   <span class="salary-value-compact salary-negative-compact">
-                    Rp {{ number_format($item['amount'], 0, ',', '.') }}
+                    {{ \App\Utils\RupiahHelper::format($item['amount']) }}
                   </span>
                 </div>
                 <div class="breakdown-detail-compact">
@@ -137,12 +137,12 @@
             <div class="salary-item-compact">
               <span class="salary-label-compact">Pajak PPh21:</span>
               <span class="salary-value-compact salary-negative-compact">
-                Rp {{ number_format($karyawan['pph21_detail']['jumlah'], 0, ',', '.') }}
+                {{ \App\Utils\RupiahHelper::format($karyawan['pph21_detail']['jumlah']) }}
               </span>
             </div>
             <div class="breakdown-detail-compact">
               {{ $karyawan['pph21_detail']['tarif_persen'] }} dari penghasilan bruto Rp
-              {{ number_format($karyawan['pph21_detail']['penghasilan_bruto'], 0, ',', '.') }}
+              {{ \App\Utils\RupiahHelper::number($karyawan['pph21_detail']['penghasilan_bruto']) }}
             </div>
             <div class="breakdown-detail-compact">
               PTKP: {{ $karyawan['pph21_detail']['golongan_ptkp'] }} ({{ $karyawan['pph21_detail']['kategori_ter'] }})
@@ -152,7 +152,7 @@
               style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid rgb(229 231 235);">
               <span class="salary-label-compact" style="font-weight: 600;">Total Potongan:</span>
               <span class="salary-value-compact salary-negative-compact" style="font-weight: 600;">
-                Rp {{ number_format($karyawan['potongan_total'], 0, ',', '.') }}
+                {{ \App\Utils\RupiahHelper::format($karyawan['potongan_total']) }}
               </span>
             </div>
           </div>
@@ -174,7 +174,7 @@
                 <span
                   class="salary-value-compact {{ $karyawan['penyesuaian'] >= 0 ? 'salary-positive-compact' : 'salary-negative-compact' }}">
                   {{ $karyawan['penyesuaian'] >= 0 ? '+' : '' }}Rp
-                  {{ number_format($karyawan['penyesuaian'], 0, ',', '.') }}
+                  {{ \App\Utils\RupiahHelper::number($karyawan['penyesuaian']) }}
                 </span>
               </div>
             </div>
@@ -191,7 +191,7 @@
           <div class="total-salary-item-compact">
             <span class="total-salary-label-compact">GAJI BERSIH:</span>
             <span class="total-salary-value-compact">
-              Rp {{ number_format($karyawan['total_gaji'], 0, ',', '.') }}
+              {{ \App\Utils\RupiahHelper::format($karyawan['total_gaji']) }}
             </span>
           </div>
         </div>

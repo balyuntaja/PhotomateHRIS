@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Lembur;
 use App\Models\Karyawan;
+use App\Utils\RupiahHelper;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -79,7 +80,7 @@ class LemburService
       // ROUND TO INTEGER - NO DECIMALS
       $result = round($totalUpahLembur);
 
-      Log::info("LemburService: Karyawan {$karyawan->karyawan_id} - Durasi: {$durasiLembur} ({$totalMenit} menit -> {$jamDihitung} jam), Upah/jam: " . number_format($upahPerJam, 0) . ", Hari Libur: " . ($isHariLibur ? 'Ya' : 'Tidak') . ", Total: " . number_format($result, 0));
+      Log::info("LemburService: Karyawan {$karyawan->karyawan_id} - Durasi: {$durasiLembur} ({$totalMenit} menit -> {$jamDihitung} jam), Upah/jam: " . RupiahHelper::number($upahPerJam) . ", Hari Libur: " . ($isHariLibur ? 'Ya' : 'Tidak') . ", Total: " . RupiahHelper::number($result));
 
       return $result;
 
@@ -155,7 +156,7 @@ class LemburService
    */
   public function formatRupiah(float $insentif): string
   {
-    return 'Rp ' . number_format($insentif, 0, ',', '.');
+      return RupiahHelper::format($insentif);
   }
 
   /**

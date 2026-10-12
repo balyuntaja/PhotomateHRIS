@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets\Keuangan;
 
 use App\Services\KeuanganService;
+use App\Utils\RupiahHelper;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -30,17 +31,17 @@ class KeuanganStatsOverview extends StatsOverviewWidget
         $summary = $service->summary($period['start'], $period['end'], $this->filters['cabang_id'] ?? null);
 
         return [
-            Stat::make('Total Pemasukan', 'Rp ' . number_format($summary['income'], 0, ',', '.'))
+            Stat::make('Total Pemasukan', RupiahHelper::format($summary['income']))
                 ->description('Periode: ' . $period['label'])
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
                 ->color('success'),
 
-            Stat::make('Total Pengeluaran', 'Rp ' . number_format($summary['expense'], 0, ',', '.'))
+            Stat::make('Total Pengeluaran', RupiahHelper::format($summary['expense']))
                 ->description('Periode: ' . $period['label'])
                 ->descriptionIcon('heroicon-m-arrow-trending-down')
                 ->color('danger'),
 
-            Stat::make('Saldo', 'Rp ' . number_format($summary['balance'], 0, ',', '.'))
+            Stat::make('Saldo', RupiahHelper::format($summary['balance']))
                 ->description('Pemasukan dikurangi pengeluaran')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->color($summary['balance'] < 0 ? 'danger' : 'primary'),

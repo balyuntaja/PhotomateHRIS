@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\PricingSettingResource\Pages;
 use App\Models\PricingSetting;
+use App\Utils\RupiahHelper;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -100,12 +101,12 @@ class PricingSettingResource extends Resource
 
                 Tables\Columns\TextColumn::make('base_price')
                     ->label('Sesi Pertama')
-                    ->formatStateUsing(fn ($state) => 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state) => RupiahHelper::format($state))
                     ->alignEnd(),
 
                 Tables\Columns\TextColumn::make('additional_session_price')
                     ->label('Tambahan / Sesi')
-                    ->formatStateUsing(fn ($state) => 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state) => RupiahHelper::format($state))
                     ->alignEnd(),
 
                 Tables\Columns\TextColumn::make('effective_from')

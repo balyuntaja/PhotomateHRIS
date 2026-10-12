@@ -251,25 +251,25 @@
                     <tbody>
                         <tr>
                             <td>Gaji Pokok</td>
-                            <td class="positive" style="text-align:right;">Rp {{ number_format($karyawan['gaji_pokok'], 0, ',', '.') }}</td>
+                            <td class="positive" style="text-align:right;">{{ \App\Utils\RupiahHelper::format($karyawan['gaji_pokok']) }}</td>
                         </tr>
                         @if(isset($karyawan['tunjangan_breakdown']) && !empty($karyawan['tunjangan_breakdown']['breakdown']))
                             @foreach($karyawan['tunjangan_breakdown']['breakdown'] as $item)
                                 <tr>
                                     <td>{{ $item['label'] }}</td>
-                                    <td class="positive" style="text-align:right;">Rp {{ number_format($item['amount'], 0, ',', '.') }}</td>
+                                    <td class="positive" style="text-align:right;">{{ \App\Utils\RupiahHelper::format($item['amount']) }}</td>
                                 </tr>
                             @endforeach
                         @endif
                         @if($karyawan['total_lembur'] > 0)
                             <tr>
                                 <td>Upah Lembur <span class="breakdown-note">({{ $karyawan['total_lembur'] }} jam)</span></td>
-                                <td class="positive" style="text-align:right;">Rp {{ number_format($karyawan['lembur_pay'], 0, ',', '.') }}</td>
+                                <td class="positive" style="text-align:right;">{{ \App\Utils\RupiahHelper::format($karyawan['lembur_pay']) }}</td>
                             </tr>
                         @endif
                         <tr>
                             <td><strong>Total Pendapatan</strong></td>
-                            <td class="positive" style="text-align:right;"><strong>Rp {{ number_format($karyawan['pph21_detail']['penghasilan_bruto'], 0, ',', '.') }}</strong></td>
+                            <td class="positive" style="text-align:right;"><strong>{{ \App\Utils\RupiahHelper::format($karyawan['pph21_detail']['penghasilan_bruto']) }}</strong></td>
                         </tr>
                     </tbody>
                 </table>
@@ -287,30 +287,30 @@
                         @if($karyawan['total_alfa'] > 0)
                             <tr>
                                 <td>Potongan Alfa <span class="breakdown-note">({{ $karyawan['total_alfa'] }} hari)</span></td>
-                                <td class="negative" style="text-align:right;">Rp {{ number_format($karyawan['potongan_detail']['alfa']['total_potongan'], 0, ',', '.') }}</td>
+                                <td class="negative" style="text-align:right;">{{ \App\Utils\RupiahHelper::format($karyawan['potongan_detail']['alfa']['total_potongan']) }}</td>
                             </tr>
                         @endif
                         @if($karyawan['total_tidak_tepat'] > 0)
                             <tr>
                                 <td>Potongan Terlambat <span class="breakdown-note">({{ $karyawan['total_tidak_tepat'] }} hari)</span></td>
-                                <td class="negative" style="text-align:right;">Rp {{ number_format($karyawan['potongan_detail']['keterlambatan']['total_potongan'], 0, ',', '.') }}</td>
+                                <td class="negative" style="text-align:right;">{{ \App\Utils\RupiahHelper::format($karyawan['potongan_detail']['keterlambatan']['total_potongan']) }}</td>
                             </tr>
                         @endif
                         @if(isset($karyawan['bpjs_breakdown']) && !empty($karyawan['bpjs_breakdown']['breakdown']))
                             @foreach($karyawan['bpjs_breakdown']['breakdown'] as $item)
                                 <tr>
                                     <td>{{ $item['label'] }} <span class="breakdown-note">({{ $item['description'] }})</span></td>
-                                    <td class="negative" style="text-align:right;">Rp {{ number_format($item['amount'], 0, ',', '.') }}</td>
+                                    <td class="negative" style="text-align:right;">{{ \App\Utils\RupiahHelper::format($item['amount']) }}</td>
                                 </tr>
                             @endforeach
                         @endif
                         <tr>
                             <td>Pajak PPh21 <span class="breakdown-note">({{ $karyawan['pph21_detail']['tarif_persen'] }})</span></td>
-                            <td class="negative" style="text-align:right;">Rp {{ number_format($karyawan['pph21_detail']['jumlah'], 0, ',', '.') }}</td>
+                            <td class="negative" style="text-align:right;">{{ \App\Utils\RupiahHelper::format($karyawan['pph21_detail']['jumlah']) }}</td>
                         </tr>
                         <tr>
                             <td><strong>Total Potongan</strong></td>
-                            <td class="negative" style="text-align:right;"><strong>Rp {{ number_format($karyawan['potongan_total'], 0, ',', '.') }}</strong></td>
+                            <td class="negative" style="text-align:right;"><strong>{{ \App\Utils\RupiahHelper::format($karyawan['potongan_total']) }}</strong></td>
                         </tr>
                     </tbody>
                 </table>
@@ -324,7 +324,7 @@
                                 <div class="info-label">Jumlah Penyesuaian:</div>
                                 <div class="info-value">
                                     <span class="{{ $karyawan['penyesuaian'] >= 0 ? 'positive' : 'negative' }}">
-                                        {{ $karyawan['penyesuaian'] >= 0 ? '+' : '' }}Rp {{ number_format($karyawan['penyesuaian'], 0, ',', '.') }}
+                                        {{ $karyawan['penyesuaian'] >= 0 ? '+' : '' }}{{ \App\Utils\RupiahHelper::format($karyawan['penyesuaian']) }}
                                     </span>
                                 </div>
                             </div>
@@ -345,7 +345,7 @@
                             <strong>GAJI BERSIH</strong>
                         </td>
                         <td style="text-align: right; font-size: 22px;">
-                            <strong>Rp {{ number_format($karyawan['total_gaji'], 0, ',', '.') }}</strong>
+                            <strong>{{ \App\Utils\RupiahHelper::format($karyawan['total_gaji']) }}</strong>
                         </td>
                     </tr>
                 </table>

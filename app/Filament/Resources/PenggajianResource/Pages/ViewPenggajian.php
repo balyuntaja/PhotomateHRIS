@@ -13,6 +13,7 @@ use App\Services\LemburService;
 use App\Services\Pph21Service;
 use App\Services\PotonganService;
 use App\Utils\MonthHelper;
+use App\Utils\RupiahHelper;
 use Filament\Actions;
 use App\Filament\Resources\Pages\ViewRecord;
 use Filament\Infolists;
@@ -771,7 +772,7 @@ class ViewPenggajian extends ViewRecord
               ->label('Total Gaji')
               ->getStateUsing(function ($record): string {
                 $totalGaji = $this->calculateTotalGajiFromDatabase($record);
-                return 'Rp ' . number_format($totalGaji, 0, ',', '.');
+                return RupiahHelper::format($totalGaji);
               })
               ->weight('bold')
               ->color('success'),
@@ -790,7 +791,7 @@ class ViewPenggajian extends ViewRecord
                   ->label('Total Gaji Pokok')
                   ->getStateUsing(function ($record): string {
                     $total = $this->calculateTotalGajiPokokFromDatabase($record);
-                    return 'Rp ' . number_format($total, 0, ',', '.');
+                    return RupiahHelper::format($total);
                   })
                   ->color('primary'),
 
@@ -798,7 +799,7 @@ class ViewPenggajian extends ViewRecord
                   ->label('Total Tunjangan')
                   ->getStateUsing(function ($record): string {
                     $total = $this->calculateTotalTunjanganFromDatabase($record);
-                    return 'Rp ' . number_format($total, 0, ',', '.');
+                    return RupiahHelper::format($total);
                   })
                   ->color('info'),
 
@@ -806,7 +807,7 @@ class ViewPenggajian extends ViewRecord
                   ->label('Total Upah Lembur')
                   ->getStateUsing(function ($record): string {
                     $total = $this->calculateTotalLemburFromDatabase($record);
-                    return 'Rp ' . number_format($total, 0, ',', '.');
+                    return RupiahHelper::format($total);
                   })
                   ->color('warning'),
 
@@ -814,7 +815,7 @@ class ViewPenggajian extends ViewRecord
                   ->label('Total Potongan')
                   ->getStateUsing(function ($record): string {
                     $total = $this->calculateTotalPotonganFromDatabase($record);
-                    return 'Rp ' . number_format($total, 0, ',', '.');
+                    return RupiahHelper::format($total);
                   })
                   ->color('danger'),
               ]),
@@ -823,7 +824,7 @@ class ViewPenggajian extends ViewRecord
               ->label('GRAND TOTAL PENGGAJIAN')
               ->getStateUsing(function ($record): string {
                 $total = $this->calculateTotalGajiFromDatabase($record);
-                return 'Rp ' . number_format($total, 0, ',', '.');
+                return RupiahHelper::format($total);
               })
               ->size('xl')
               ->weight('bold')
@@ -932,17 +933,17 @@ class ViewPenggajian extends ViewRecord
         [
           'label' => 'BPJS Kesehatan',
           'amount' => $bpjsData['bpjs_kesehatan'],
-          'description' => ((float) $bpjsData['breakdown']['persen_kesehatan'] * 100) . '% dari gaji pokok + tunjangan tetap (Rp ' . number_format($bpjsData['breakdown']['dasar_bpjs'], 0, ',', '.') . ')'
+          'description' => ((float) $bpjsData['breakdown']['persen_kesehatan'] * 100) . '% dari gaji pokok + tunjangan tetap (Rp ' . RupiahHelper::format($bpjsData['breakdown']['dasar_bpjs']) . ')'
         ],
         [
           'label' => 'BPJS JHT',
           'amount' => $bpjsData['bpjs_jht'],
-          'description' => ((float) $bpjsData['breakdown']['persen_jht'] * 100) . '% dari gaji pokok (Rp ' . number_format($detail->gaji_pokok, 0, ',', '.') . ')'
+          'description' => ((float) $bpjsData['breakdown']['persen_jht'] * 100) . '% dari gaji pokok (Rp ' . RupiahHelper::format($detail->gaji_pokok) . ')'
         ],
         [
           'label' => 'BPJS JP',
           'amount' => $bpjsData['bpjs_jp'],
-          'description' => ((float) $bpjsData['breakdown']['persen_jp'] * 100) . '% dari gaji pokok + tunjangan tetap (Rp ' . number_format($bpjsData['breakdown']['dasar_bpjs'], 0, ',', '.') . ')'
+          'description' => ((float) $bpjsData['breakdown']['persen_jp'] * 100) . '% dari gaji pokok + tunjangan tetap (Rp ' . RupiahHelper::format($bpjsData['breakdown']['dasar_bpjs']) . ')'
         ],
       ];
 

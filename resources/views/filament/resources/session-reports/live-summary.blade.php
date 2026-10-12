@@ -33,7 +33,7 @@
         } else {
             $count = $pricingService->calculateSessionsFromPrice($amt);
             if ($count < 1) {
-                $issues[] = "Transaksi #" . ($idx + 1) . ": Nominal Rp " . number_format($amt, 0, ',', '.') . " tidak valid.";
+                $issues[] = "Transaksi #" . ($idx + 1) . ": Nominal " . \App\Utils\RupiahHelper::format($amt) . " tidak valid.";
             }
         }
 
@@ -57,17 +57,17 @@
             ->descriptionIcon('heroicon-m-camera')
             ->color('primary'),
 
-        Stat::make('Tunai', 'Rp ' . number_format($totalCashAmount, 0, ',', '.'))
+        Stat::make('Tunai', \App\Utils\RupiahHelper::format($totalCashAmount))
             ->description($totalCashSessions . ' Lembar tunai')
             ->descriptionIcon('heroicon-m-currency-dollar')
             ->color('warning'),
 
-        Stat::make('QRIS', 'Rp ' . number_format($totalQrisAmount, 0, ',', '.'))
+        Stat::make('QRIS', \App\Utils\RupiahHelper::format($totalQrisAmount))
             ->description($totalQrisSessions . ' Lembar non-tunai')
             ->descriptionIcon('heroicon-m-qr-code')
             ->color('info'),
 
-        Stat::make('Total Revenue', 'Rp ' . number_format($grandTotal, 0, ',', '.'))
+        Stat::make('Total Revenue', \App\Utils\RupiahHelper::format($grandTotal))
             ->description($totalSessions . ' Lembar total')
             ->descriptionIcon('heroicon-m-banknotes')
             ->color('success'),
@@ -119,7 +119,7 @@
                         <div class="mt-1">
                             <span class="text-emerald-700 dark:text-emerald-300">Bonus per Crew:</span>
                             <span class="font-bold font-mono text-sm text-emerald-700 dark:text-emerald-300">
-                                Rp {{ number_format($bonusInfo['bonus_per_crew'], 0, ',', '.') }}
+                                {{ \App\Utils\RupiahHelper::format($bonusInfo['bonus_per_crew']) }}
                             </span>
                             @if($crewCount > 2)
                                 <span class="text-[11px] text-emerald-600 dark:text-emerald-400 font-normal">(Rp 50.000 ÷ {{ $crewCount }})</span>
@@ -136,7 +136,7 @@
                             @foreach($crewModels as $crew)
                             <li class="flex justify-between items-center text-[11px]">
                                 <span>• {{ $crew->nama_lengkap }}</span>
-                                <strong class="font-mono text-emerald-700 dark:text-emerald-300">Rp {{ number_format($bonusInfo['bonus_per_crew'], 0, ',', '.') }}</strong>
+                                <strong class="font-mono text-emerald-700 dark:text-emerald-300">{{ \App\Utils\RupiahHelper::format($bonusInfo['bonus_per_crew']) }}</strong>
                             </li>
                             @endforeach
                         </ul>
@@ -166,7 +166,7 @@
                 @if($crewCount > 0)
                 <div class="mt-2.5 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-1">
                     <span>Estimasi jika target 30 sesi tercapai: masing-masing dari {{ $crewCount }} crew menerima</span>
-                    <strong class="font-mono">Rp {{ number_format(round(50000 / $crewCount), 0, ',', '.') }}</strong>.
+                    <strong class="font-mono">{{ \App\Utils\RupiahHelper::format(round(50000 / $crewCount)) }}</strong>.
                 </div>
                 @endif
             </div>

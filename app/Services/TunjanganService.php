@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Karyawan;
+use App\Utils\RupiahHelper;
 use Illuminate\Support\Facades\Log;
 
 class TunjanganService
@@ -101,7 +102,7 @@ class TunjanganService
                 'type' => 'makan',
                 'label' => 'Tunjangan Makan',
                 'amount' => $data['tunjangan_makan_bulanan'],
-                'description' => 'Rp ' . number_format($harianEquivalent, 0, ',', '.') . '/hari setara × 22 hari kerja'
+                'description' => RupiahHelper::format($harianEquivalent) . '/hari setara × 22 hari kerja'
             ];
         }
 
@@ -112,7 +113,7 @@ class TunjanganService
                 'type' => 'transport',
                 'label' => 'Tunjangan Transport',
                 'amount' => $data['tunjangan_transport_bulanan'],
-                'description' => 'Rp ' . number_format($harianEquivalent, 0, ',', '.') . '/hari setara × 22 hari kerja'
+                'description' => RupiahHelper::format($harianEquivalent) . '/hari setara × 22 hari kerja'
             ];
         }
 

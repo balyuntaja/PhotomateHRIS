@@ -6,8 +6,10 @@ use App\Filament\Resources\SessionReportResource\Pages;
 use App\Models\Invoice;
 use App\Models\Karyawan;
 use App\Models\SessionReport;
+use App\Services\BranchBonusService;
 use App\Services\PricingService;
 use App\Services\SessionWorkflowService;
+use App\Utils\RupiahHelper;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -249,7 +251,7 @@ class SessionReportResource extends Resource
                                 $method = strtoupper($state['payment_method'] ?? 'CASH');
                                 $methodLabel = $method === 'QRIS' ? 'QRIS' : 'Tunai';
                                 $sheets = $pricingService->calculateSessionsFromPrice($amt);
-                                return "{$methodLabel} · Rp " . number_format($amt, 0, ',', '.') . " ({$sheets} Lembar)";
+                                return "{$methodLabel} · " . RupiahHelper::format($amt) . " ({$sheets} Lembar)";
                             })
                             ->collapsible()
                             ->collapseAllAction(fn (\Filament\Forms\Components\Actions\Action $action) => $action->label('Ciutkan Semua')->icon('heroicon-m-chevron-up-down'))
@@ -391,19 +393,19 @@ class SessionReportResource extends Resource
 
                 Tables\Columns\TextColumn::make('total_cash_amount')
                     ->label('Total Tunai')
-                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : RupiahHelper::format($state))
                     ->alignEnd()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('total_qris_amount')
                     ->label('Total QRIS')
-                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : RupiahHelper::format($state))
                     ->alignEnd()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('grand_total_amount')
                     ->label('Grand Total')
-                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : 'Rp ' . number_format($state, 0, ',', '.'))
+                    ->formatStateUsing(fn ($state, SessionReport $record) => $record->usesManualSessionInput() ? '-' : RupiahHelper::format($state))
                     ->weight('bold')
                     ->alignEnd()
                     ->sortable(),
@@ -418,16 +420,16 @@ class SessionReportResource extends Resource
                         $crewCount = $record->crews->count();
                         if ($bonus > 0) {
                             $perCrew = $crewCount > 0 ? (int) round($bonus / $crewCount) : 0;
-                            return 'Rp ' . number_format($bonus, 0, ',', '.') . ($crewCount > 0 ? ' (@ Rp ' . number_format($perCrew, 0, ',', '.') . ')' : '');
+                            return RupiahHelper::format($bonus) . ($crewCount > 0 ? ' (@ ' . RupiahHelper::format($perCrew) . ')' : '');
                         }
-                        return 'Rp 0 (Target 30 sesi)';
+                        return RupiahHelper::format(0) . ' (Target 30 sesi)';
                     })
                     ->badge()
-                    ->color(function (string $state): string {
+                    ->color(function (string $state, SessionReport $record): string {
                         if ($state === '-') {
                             return 'gray';
                         }
-                        return str_contains($state, 'Rp 50.000') ? 'success' : 'warning';
+                        return (int) $record->bonus_amount >= BranchBonusService::TOTAL_BONUS_AMOUNT ? 'success' : 'warning';
                     })
                     ->alignEnd()
                     ->sortable()

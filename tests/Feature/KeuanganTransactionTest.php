@@ -6,8 +6,10 @@ use App\Filament\Pages\KeuanganInputTransaksi;
 use App\Filament\Resources\FinancialTransactionResource;
 use App\Filament\Resources\FinancialTransactionResource\Pages\ListFinancialTransactions;
 use App\Models\Cabang;
+use App\Models\FinancialAccount;
 use App\Models\FinancialAuditLog;
 use App\Models\FinancialCategory;
+use App\Models\FinancialParty;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
 use App\Models\Karyawan;
@@ -89,62 +91,13 @@ class KeuanganTransactionTest extends TestCase
         ]);
     }
 
-    public function test_manager_finance_dapat_membuat_transaksi_pemasukan_via_modal(): void
+    public function test_tombol_tambah_transaksi_mengarah_ke_halaman_input_transaksi(): void
     {
         $this->actingAs($this->managerFinance);
 
         Livewire::test(ListFinancialTransactions::class)
-            ->callAction('create', [
-                'transaction_type' => FinancialTransaction::TYPE_INCOME,
-                'amount' => '2.000.000',
-                'category_id' => $this->incomeCategory->id,
-                'transaction_date' => Carbon::today()->toDateString(),
-                'cabang_id' => 'C0005',
-                'payment_method_id' => $this->cash->id,
-                'description' => 'Pelunasan Event A',
-            ])
-            ->assertHasNoActionErrors();
-
-        $transaction = FinancialTransaction::firstOrFail();
-
-        $this->assertSame(FinancialTransaction::TYPE_INCOME, $transaction->transaction_type);
-        $this->assertSame(2000000, $transaction->amount);
-        $this->assertSame('C0005', $transaction->cabang_id);
-        $this->assertSame('Pelunasan Event A', $transaction->description);
-        $this->assertSame($this->managerFinance->karyawan_id, $transaction->created_by);
-
-        $this->assertDatabaseHas('financial_audit_logs', [
-            'financial_transaction_id' => $transaction->id,
-            'user_id' => $this->managerFinance->karyawan_id,
-            'action' => FinancialTransaction::ACTION_CREATED,
-        ]);
-    }
-
-    public function test_nominal_masked_dari_browser_tersimpan_sebagai_integer(): void
-    {
-        $this->actingAs($this->managerFinance);
-
-        Livewire::test(ListFinancialTransactions::class)
-            ->callAction('create', [
-                'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
-                'amount' => '381.550',
-                'category_id' => $this->expenseCategory->id,
-                'transaction_date' => Carbon::today()->toDateString(),
-                'payment_method_id' => $this->cash->id,
-            ])
-            ->assertHasNoActionErrors();
-
-        $this->assertSame(381550, FinancialTransaction::firstOrFail()->amount);
-        $this->assertSame('integer', FinancialTransaction::firstOrFail()->getCasts()['amount']);
-    }
-
-    public function test_field_nominal_modal_tambah_transaksi_memakai_mask_ribuan_indonesia(): void
-    {
-        $this->actingAs($this->managerFinance);
-
-        Livewire::test(ListFinancialTransactions::class)
-            ->mountAction('create')
-            ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"');
+            ->assertActionVisible('tambah_transaksi')
+            ->assertActionHasUrl('tambah_transaksi', KeuanganInputTransaksi::getUrl());
     }
 
     public function test_field_nominal_modal_edit_transaksi_memakai_mask_ribuan_indonesia(): void
@@ -155,7 +108,7 @@ class KeuanganTransactionTest extends TestCase
 
         Livewire::test(ListFinancialTransactions::class)
             ->mountTableAction('edit', $transaction)
-            ->assertTableActionDataSet(['amount' => 1500000])
+            ->assertTableActionDataSet(['amount' => '1.500.000'])
             ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"');
     }
 
@@ -179,62 +132,6 @@ class KeuanganTransactionTest extends TestCase
             ->assertHasNoTableActionErrors();
 
         $this->assertSame(1250000, $transaction->fresh()->amount);
-    }
-
-    public function test_nominal_harus_lebih_dari_nol(): void
-    {
-        $this->actingAs($this->managerFinance);
-
-        Livewire::test(ListFinancialTransactions::class)
-            ->callAction('create', [
-                'transaction_type' => FinancialTransaction::TYPE_INCOME,
-                'amount' => 0,
-                'category_id' => $this->incomeCategory->id,
-                'transaction_date' => Carbon::today()->toDateString(),
-                'payment_method_id' => $this->cash->id,
-            ])
-            ->assertHasActionErrors(['amount']);
-
-        $this->assertDatabaseCount('financial_transactions', 0);
-    }
-
-    public function test_kategori_wajib_dipilih(): void
-    {
-        $this->actingAs($this->managerFinance);
-
-        Livewire::test(ListFinancialTransactions::class)
-            ->callAction('create', [
-                'transaction_type' => FinancialTransaction::TYPE_INCOME,
-                'amount' => 100000,
-                'category_id' => null,
-                'transaction_date' => Carbon::today()->toDateString(),
-                'payment_method_id' => $this->cash->id,
-            ])
-            ->assertHasActionErrors(['category_id']);
-
-        $this->assertDatabaseCount('financial_transactions', 0);
-    }
-
-    public function test_transaction_date_berbeda_dari_created_at(): void
-    {
-        $this->actingAs($this->managerFinance);
-
-        $tanggalTransaksi = Carbon::today()->subDays(4)->toDateString();
-
-        Livewire::test(ListFinancialTransactions::class)
-            ->callAction('create', [
-                'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
-                'amount' => 100000,
-                'category_id' => $this->expenseCategory->id,
-                'transaction_date' => $tanggalTransaksi,
-                'payment_method_id' => $this->cash->id,
-            ])
-            ->assertHasNoActionErrors();
-
-        $transaction = FinancialTransaction::firstOrFail();
-
-        $this->assertSame($tanggalTransaksi, $transaction->transaction_date->toDateString());
-        $this->assertNotSame($transaction->transaction_date->toDateString(), $transaction->created_at->toDateString());
     }
 
     public function test_edit_transaksi_mencatat_audit_log_perubahan(): void
@@ -320,7 +217,7 @@ class KeuanganTransactionTest extends TestCase
         $transaction = $this->makeTransaction(100000, $this->expenseCategory->id, 'C0005');
 
         Livewire::test(ListFinancialTransactions::class)
-            ->assertActionHidden('create')
+            ->assertActionHidden('tambah_transaksi')
             ->assertTableActionHidden('edit', $transaction)
             ->assertTableActionHidden('delete', $transaction);
     }
@@ -392,14 +289,22 @@ class KeuanganTransactionTest extends TestCase
     {
         $this->actingAs($this->managerFinance);
 
+        $account = FinancialAccount::where('name', 'Photomate Express')->firstOrFail();
+        $party = FinancialParty::where('name', 'Balyun')->firstOrFail();
+        $tanggalTransaksi = Carbon::today()->subDays(1)->toDateString();
+        $periode = Carbon::today()->format('Y-m');
+
         Livewire::test(KeuanganInputTransaksi::class)
             ->assertSuccessful()
             ->fillForm([
+                'account_id' => $account->id,
+                'period' => $periode,
+                'transaction_date' => $tanggalTransaksi,
                 'transaction_type' => FinancialTransaction::TYPE_INCOME,
-                'amount' => '2.000.000',
                 'category_id' => $this->incomeCategory->id,
-                'transaction_date' => Carbon::today()->toDateString(),
-                'payment_method_id' => $this->cash->id,
+                'amount' => '2.000.000',
+                'party_id' => $party->id,
+                'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
                 'description' => 'Pelunasan Event A',
             ])
             ->call('simpan')
@@ -409,12 +314,19 @@ class KeuanganTransactionTest extends TestCase
             ->assertSet('data.amount', null)
             ->assertSet('data.category_id', null)
             ->assertSet('data.description', null)
+            ->assertSet('data.party_id', null)
+            ->assertSet('data.account_id', $account->id)
+            ->assertSet('data.period', $periode)
             ->assertSet('data.transaction_type', FinancialTransaction::TYPE_INCOME);
 
         $transaction = FinancialTransaction::firstOrFail();
 
         $this->assertSame(FinancialTransaction::TYPE_INCOME, $transaction->transaction_type);
         $this->assertSame(2000000, $transaction->amount);
+        $this->assertSame($account->id, $transaction->account_id);
+        $this->assertSame($party->id, $transaction->party_id);
+        $this->assertSame($tanggalTransaksi, $transaction->transaction_date->toDateString());
+        $this->assertNotSame($transaction->transaction_date->toDateString(), $transaction->created_at->toDateString());
         $this->assertSame('Pelunasan Event A', $transaction->description);
         $this->assertSame($this->managerFinance->karyawan_id, $transaction->created_by);
 

@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\InvoiceResource\Pages;
 use App\Models\Invoice;
+use App\Utils\RupiahHelper;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -303,7 +304,7 @@ class InvoiceResource extends Resource
                             ->visible(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
                             ->required(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
                             ->live(onBlur: true)
-                            ->helperText(fn(Get $get) => 'Sisa Pembayaran: Rp ' . number_format(max(0, floatval($get('total') ?? 0) - floatval($get('down_payment') ?? 0)), 0, ',', '.'))
+                            ->helperText(fn(Get $get) => 'Sisa Pembayaran: ' . RupiahHelper::format(max(0, floatval($get('total') ?? 0) - floatval($get('down_payment') ?? 0))))
                             ->maxValue(fn(Get $get) => floatval($get('total') ?? 0))
                             ->minValue(0),
                         DatePicker::make('dp_date')
@@ -361,11 +362,11 @@ class InvoiceResource extends Resource
                     })
                     ->sortable(),
                 TextColumn::make('total')
-                    ->money('IDR', locale: 'id')
+                    ->formatStateUsing(fn($state): string => RupiahHelper::format($state))
                     ->description(
                         fn(Invoice $record): ?string =>
                         $record->status === 'Sebagian Dibayar'
-                        ? 'DP: Rp ' . number_format($record->down_payment, 0, ',', '.') . ' (Sisa: Rp ' . number_format($record->total - $record->down_payment, 0, ',', '.') . ')'
+                        ? 'DP: ' . RupiahHelper::format($record->down_payment) . ' (Sisa: ' . RupiahHelper::format($record->total - $record->down_payment) . ')'
                         : null
                     )
                     ->sortable(),

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Karyawan;
 use App\Models\Perusahaan;
+use App\Utils\RupiahHelper;
 use Illuminate\Support\Facades\Log;
 
 class PotonganService
@@ -132,7 +133,7 @@ class PotonganService
   private function getCalculationMethod(float $potonganSetting): string
   {
     if ($potonganSetting >= 1000) {
-      return "Nominal tetap: Rp " . number_format($potonganSetting, 0, ',', '.') . " per hari";
+      return "Nominal tetap: " . RupiahHelper::format($potonganSetting) . " per hari";
     }
 
     if ($potonganSetting < 1 && $potonganSetting > 0) {

@@ -67,7 +67,7 @@
         </tr>
         <tr>
             <td style="padding:10px 16px;font-size:13px;color:#64748b;">Total Omzet Saat Ini</td>
-            <td style="padding:10px 16px;font-size:13px;color:#0f172a;font-weight:600;">Rp {{ number_format($report->grand_total_amount, 0, ',', '.') }}</td>
+            <td style="padding:10px 16px;font-size:13px;color:#0f172a;font-weight:600;">{{ \App\Utils\RupiahHelper::format($report->grand_total_amount) }}</td>
         </tr>
     </table>
 

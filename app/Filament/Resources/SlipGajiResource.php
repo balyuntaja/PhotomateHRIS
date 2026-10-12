@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\SlipGajiResource\Pages;
 use App\Models\Penggajian;
 use App\Utils\MonthHelper;
+use App\Utils\RupiahHelper;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -78,7 +79,7 @@ class SlipGajiResource extends Resource
                         $total = Penggajian::where('periode_bulan', $record->periode_bulan)
                             ->where('periode_tahun', $record->periode_tahun)
                             ->sum('gaji_bersih');
-                        return 'Rp ' . number_format($total, 0, ',', '.');
+                        return RupiahHelper::format($total);
                     })
                     ->alignRight()
                     ->color('success')

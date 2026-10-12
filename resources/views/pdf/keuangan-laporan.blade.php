@@ -176,15 +176,15 @@
                     <tbody>
                         <tr>
                             <td>Total Pemasukan</td>
-                            <td class="text-right">Rp {{ number_format($summary['income'], 0, ',', '.') }}</td>
+                            <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['income']) }}</td>
                         </tr>
                         <tr>
                             <td>Total Pengeluaran</td>
-                            <td class="text-right">Rp {{ number_format($summary['expense'], 0, ',', '.') }}</td>
+                            <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['expense']) }}</td>
                         </tr>
                         <tr>
                             <td>Saldo</td>
-                            <td class="text-right">Rp {{ number_format($summary['balance'], 0, ',', '.') }}</td>
+                            <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['balance']) }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -229,15 +229,15 @@
                     <tbody>
                         <tr>
                             <th>Total Pemasukan</th>
-                            <td class="text-right text-income">Rp {{ number_format($summary['income'], 0, ',', '.') }}</td>
+                            <td class="text-right text-income">{{ \App\Utils\RupiahHelper::format($summary['income']) }}</td>
                         </tr>
                         <tr>
                             <th>Total Pengeluaran</th>
-                            <td class="text-right text-expense">Rp {{ number_format($summary['expense'], 0, ',', '.') }}</td>
+                            <td class="text-right text-expense">{{ \App\Utils\RupiahHelper::format($summary['expense']) }}</td>
                         </tr>
                         <tr class="balance">
                             <th>Saldo</th>
-                            <td class="text-right">Rp {{ number_format($summary['balance'], 0, ',', '.') }}</td>
+                            <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['balance']) }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -266,15 +266,15 @@
             <tbody>
                 <tr>
                     <td>Total Pemasukan</td>
-                    <td class="text-right">Rp {{ number_format($summary['income'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['income']) }}</td>
                 </tr>
                 <tr>
                     <td>Total Pengeluaran</td>
-                    <td class="text-right">Rp {{ number_format($summary['expense'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['expense']) }}</td>
                 </tr>
                 <tr>
                     <td>Saldo</td>
-                    <td class="text-right">Rp {{ number_format($summary['balance'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['balance']) }}</td>
                 </tr>
             </tbody>
         </table>
@@ -304,15 +304,15 @@
             <tbody>
                 <tr>
                     <th>Total Pemasukan</th>
-                    <td class="text-right text-income">Rp {{ number_format($summary['income'], 0, ',', '.') }}</td>
+                    <td class="text-right text-income">{{ \App\Utils\RupiahHelper::format($summary['income']) }}</td>
                 </tr>
                 <tr>
                     <th>Total Pengeluaran</th>
-                    <td class="text-right text-expense">Rp {{ number_format($summary['expense'], 0, ',', '.') }}</td>
+                    <td class="text-right text-expense">{{ \App\Utils\RupiahHelper::format($summary['expense']) }}</td>
                 </tr>
                 <tr class="balance">
                     <th>Saldo</th>
-                    <td class="text-right">Rp {{ number_format($summary['balance'], 0, ',', '.') }}</td>
+                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['balance']) }}</td>
                 </tr>
             </tbody>
         </table>

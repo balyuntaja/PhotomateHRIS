@@ -9,12 +9,9 @@ import {
   RecommendationResult,
   PackageOption,
 } from "../utils/photoboothRecommendation";
+import { formatRupiah } from "../utils/currency";
 
 const WA_NUMBER = "6287787405280";
-
-const formatRupiah = (num: number) => {
-  return "Rp " + num.toLocaleString("id-ID");
-};
 
 function WhatsAppIcon({ className }: { className?: string }) {
   return (

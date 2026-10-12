@@ -8,6 +8,8 @@ use App\Models\Lembur;
 use App\Models\Karyawan;
 use App\Models\Absensi;
 use App\Services\LemburService;
+use App\Utils\RupiahHelper;
+
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -84,7 +86,7 @@ class LemburResource extends Resource
                             ->placeholder('Akan dihitung otomatis saat disetujui')
                             ->disabled()
                             ->dehydrated(false)
-                            ->formatStateUsing(fn($state) => $state ? number_format($state, 0, ',', '.') : null),
+                            ->formatStateUsing(fn($state) => $state ? RupiahHelper::number($state) : null),
                     ])
                     ->columns(2),
 
@@ -177,7 +179,7 @@ class LemburResource extends Resource
                     ->color('info'),
                 Tables\Columns\TextColumn::make('total_insentif')
                     ->label('Insentif')
-                    ->formatStateUsing(fn($state) => $state ? 'Rp ' . number_format($state, 0, ',', '.') : '-')
+                    ->formatStateUsing(fn($state) => $state ? RupiahHelper::format($state) : '-')
                     ->badge()
                     ->color('success')
                     ->toggleable(),

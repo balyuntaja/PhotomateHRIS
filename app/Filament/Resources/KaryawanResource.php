@@ -8,6 +8,7 @@ use App\Models\Karyawan;
 use App\Models\Role;
 use App\Models\Perusahaan;
 use App\Models\GolonganPtkp;
+use App\Utils\RupiahHelper;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -215,7 +216,7 @@ class KaryawanResource extends Resource
 
                 Tables\Columns\TextColumn::make('gaji_pokok')
                     ->label('Gaji Pokok')
-                    ->money('IDR')
+                    ->formatStateUsing(fn($state): ?string => filled($state) ? RupiahHelper::format($state) : null)
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
