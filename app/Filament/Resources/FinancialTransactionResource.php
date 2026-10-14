@@ -7,7 +7,9 @@ use App\Models\Cabang;
 use App\Models\FinancialCategory;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
+use App\Services\InvoiceFinancialService;
 use App\Services\KeuanganService;
+use App\Services\LuminashImportService;
 use App\Utils\RupiahHelper;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -57,6 +59,41 @@ class FinancialTransactionResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->with(['category', 'account', 'party', 'cabang', 'paymentMethod', 'creator']);
+    }
+
+    public static function sourceLabel(?string $state): string
+    {
+        return match ($state) {
+            LuminashImportService::SOURCE => LuminashImportService::SOURCE_LABEL,
+            InvoiceFinancialService::SOURCE => 'Invoice',
+            default => 'Manual',
+        };
+    }
+
+    public static function sourceColor(?string $state): string
+    {
+        return match ($state) {
+            LuminashImportService::SOURCE => 'info',
+            InvoiceFinancialService::SOURCE => 'primary',
+            default => 'gray',
+        };
+    }
+
+    /**
+     * Tautan ke detail invoice untuk transaksi hasil integrasi invoice,
+     * hanya bila pengguna berhak membuka menu Invoice.
+     */
+    public static function invoiceUrl(FinancialTransaction $record): ?string
+    {
+        if ($record->source_type !== InvoiceFinancialService::SOURCE || blank($record->source_id)) {
+            return null;
+        }
+
+        if (! InvoiceResource::canAccess()) {
+            return null;
+        }
+
+        return InvoiceResource::getUrl('edit', ['record' => $record->source_id]);
     }
 
     public static function form(Form $form): Form
@@ -205,6 +242,19 @@ class FinancialTransactionResource extends Resource
                         ->badge()
                         ->color(fn (FinancialTransaction $record): string => $record->is_utang ? 'warning' : 'success'),
 
+                    Infolists\Components\TextEntry::make('source_type')
+                        ->label('Sumber')
+                        ->badge()
+                        ->formatStateUsing(self::sourceLabel(...))
+                        ->color(self::sourceColor(...)),
+
+                    Infolists\Components\TextEntry::make('source_id')
+                        ->label(fn (FinancialTransaction $record): string => $record->source_type === InvoiceFinancialService::SOURCE
+                            ? 'Referensi Invoice'
+                            : 'Order ID Sumber')
+                        ->placeholder('-')
+                        ->visible(fn (FinancialTransaction $record): bool => filled($record->source_id)),
+
                     Infolists\Components\TextEntry::make('party.name')
                         ->label(fn (FinancialTransaction $record): string => $record->party_label)
                         ->placeholder('-'),
@@ -300,7 +350,9 @@ class FinancialTransactionResource extends Resource
                     ->searchable()
                     ->limit(40)
                     ->placeholder('-')
-                    ->tooltip(fn (FinancialTransaction $record): ?string => $record->description),
+                    ->tooltip(fn (FinancialTransaction $record): ?string => $record->description)
+                    ->url(fn (FinancialTransaction $record): ?string => self::invoiceUrl($record))
+                    ->openUrlInNewTab(),
 
                 Tables\Columns\TextColumn::make('cabang.nama_cabang')
                     ->label('Cabang')
@@ -312,6 +364,12 @@ class FinancialTransactionResource extends Resource
                     ->label('Metode')
                     ->placeholder('-')
                     ->toggleable(),
+
+                Tables\Columns\TextColumn::make('source_type')
+                    ->label('Sumber')
+                    ->badge()
+                    ->formatStateUsing(self::sourceLabel(...))
+                    ->color(self::sourceColor(...)),
 
                 Tables\Columns\TextColumn::make('amount')
                     ->label('Nominal')

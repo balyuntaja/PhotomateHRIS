@@ -75,9 +75,21 @@ class KeuanganServiceTest extends TestCase
 
     public function test_master_data_keuangan_terpasang_dari_migration(): void
     {
-        $this->assertSame(8, FinancialCategory::where('transaction_type', FinancialCategory::TYPE_INCOME)->count());
+        $this->assertSame(10, FinancialCategory::where('transaction_type', FinancialCategory::TYPE_INCOME)->count());
         $this->assertGreaterThanOrEqual(20, FinancialCategory::where('transaction_type', FinancialCategory::TYPE_EXPENSE)->count());
         $this->assertGreaterThanOrEqual(6, FinancialPaymentMethod::count());
+
+        $this->assertDatabaseHas('financial_categories', [
+            'name' => 'Pendapatan Booth',
+            'transaction_type' => FinancialCategory::TYPE_INCOME,
+            'is_active' => true,
+        ]);
+
+        $this->assertDatabaseHas('financial_categories', [
+            'name' => 'Pelunasan Invoice',
+            'transaction_type' => FinancialCategory::TYPE_INCOME,
+            'is_active' => true,
+        ]);
 
         $this->assertDatabaseHas('financial_categories', [
             'name' => 'Tinta',

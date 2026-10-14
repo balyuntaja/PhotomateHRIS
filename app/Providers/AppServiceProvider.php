@@ -33,6 +33,8 @@ class AppServiceProvider extends ServiceProvider
 
         \Illuminate\Support\Facades\Gate::policy(\App\Models\SessionReport::class, \App\Policies\SessionReportPolicy::class);
 
+        \App\Models\Invoice::observe(\App\Observers\InvoiceObserver::class);
+
         DateTimePicker::configureUsing(fn(DateTimePicker $component) => $component->native(false));
 
         FilamentColor::register([

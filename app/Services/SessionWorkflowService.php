@@ -202,6 +202,10 @@ class SessionWorkflowService
 
             $this->logAction($report, $supervisor, 'APPROVED', $note ?: 'Validated.');
 
+            // Catat transaksi keuangan otomatis (kategori Pendapatan Booth, ditentukan backend).
+            // Bila kategori/mapping gagal, seluruh approval ikut dibatalkan dengan pesan jelas.
+            app(SessionReportFinancialService::class)->record($report, $supervisor);
+
             // Notify submitter and crew
             $notifiables = collect([$report->submitter])
                 ->merge($report->crews)

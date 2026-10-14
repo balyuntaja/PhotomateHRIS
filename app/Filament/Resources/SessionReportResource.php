@@ -7,6 +7,7 @@ use App\Models\Invoice;
 use App\Models\Karyawan;
 use App\Models\SessionReport;
 use App\Services\BranchBonusService;
+use App\Services\LuminashImportService;
 use App\Services\PricingService;
 use App\Services\SessionWorkflowService;
 use App\Utils\RupiahHelper;
@@ -70,6 +71,10 @@ class SessionReportResource extends Resource
         $isManualBranch = fn (Get $get): bool => app(\App\Services\BranchInputModeService::class)
             ->usesManualSessionInput(null, $get('cabang_id'));
 
+        // Cabang Golio bersumber penuh dari impor CSV Luminash (tanpa input sesi manual).
+        $isGolioBranch = fn (Get $get): bool => filled($get('cabang_id'))
+            && $get('cabang_id') === LuminashImportService::golioCabangId();
+
         /** @var Karyawan|null $user */
         $user = Auth::user();
         $isCrew = $user instanceof Karyawan && !app(SessionWorkflowService::class)->isSupervisorOrAdmin($user);
@@ -109,12 +114,15 @@ class SessionReportResource extends Resource
                     ')),
 
                 Forms\Components\Section::make('Informasi Rekap')
-                    ->description('Tentukan tanggal event dan pilih crew yang bertugas')
+                    ->description(fn (Get $get) => $isGolioBranch($get)
+                        ? 'Rekap Golio dibuat otomatis dari file CSV Luminash: pilih crew yang bertugas, lalu unggah CSV pada panel di bawah form.'
+                        : 'Tentukan tanggal event dan pilih crew yang bertugas')
                     ->schema([
                         Forms\Components\DatePicker::make('report_date')
                             ->label('Tanggal Sesi')
                             ->default(now())
                             ->required()
+                            ->visible(fn (Get $get): bool => ! $isGolioBranch($get))
                             ->minDate(fn () => $isCrew ? SessionReport::earliestInputDate() : null)
                             ->helperText(fn () => $isCrew ? 'Batas input, edit, dan hapus rekap adalah 2 hari setelah tanggal sesi (pukul 23:59 WIB).' : null)
                             ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
@@ -152,6 +160,7 @@ class SessionReportResource extends Resource
                     ->description(fn (Get $get) => $isManualBranch($get)
                         ? 'Cabang ' . (\App\Models\Cabang::find($get('cabang_id'))?->nama_cabang ?? 'ini') . ': cukup isi total Jumlah Sesi dan Jumlah Lembar.'
                         : 'Input utama adalah nominal harga transaksi, jumlah lembar dihitung otomatis.')
+                    ->visible(fn (Get $get): bool => ! $isGolioBranch($get))
                     ->schema([
                         Forms\Components\Repeater::make('transactions')
                             ->relationship('transactions')
@@ -287,6 +296,7 @@ class SessionReportResource extends Resource
                 Forms\Components\Section::make('Upload Evidence (Opsional)')
                     ->description('Lampirkan foto, screenshot, atau dokumen pendukung. Tidak wajib diisi.')
                     ->icon('heroicon-m-paper-clip')
+                    ->visible(fn (Get $get): bool => ! $isGolioBranch($get))
                     ->schema([
                         Forms\Components\FileUpload::make('evidence_files')
                             ->label('Evidence')
@@ -319,7 +329,7 @@ class SessionReportResource extends Resource
                 Forms\Components\Section::make('Ringkasan Kalkulasi Otomatis')
                     ->description('Dihitung otomatis realtime berdasarkan harga transaksi yang diinput.')
                     ->icon('heroicon-m-calculator')
-                    ->visible(fn (Get $get) => ! $isManualBranch($get))
+                    ->visible(fn (Get $get) => ! $isManualBranch($get) && ! $isGolioBranch($get))
                     ->schema([
                         Forms\Components\Placeholder::make('live_summary')
                             ->hiddenLabel()

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Resources\FinancialTransactionResource;
 use App\Models\Cabang;
 use App\Models\FinancialTransaction;
 use App\Services\KeuanganService;
@@ -175,7 +176,9 @@ class KeuanganReport extends Page implements HasForms, HasTable
                     ->label('Deskripsi')
                     ->placeholder('-')
                     ->limit(50)
-                    ->tooltip(fn (FinancialTransaction $record): ?string => $record->description),
+                    ->tooltip(fn (FinancialTransaction $record): ?string => $record->description)
+                    ->url(fn (FinancialTransaction $record): ?string => FinancialTransactionResource::invoiceUrl($record))
+                    ->openUrlInNewTab(),
 
                 TextColumn::make('cabang.nama_cabang')
                     ->label('Cabang')
