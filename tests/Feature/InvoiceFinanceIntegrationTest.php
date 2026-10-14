@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\FinancialTransactionResource\Pages\ListFinancialTransactions;
+use App\Filament\Resources\InvoiceResource\Pages\ListInvoices;
 use App\Models\Cabang;
 use App\Models\FinancialCategory;
 use App\Models\FinancialTransaction;
@@ -229,6 +230,20 @@ class InvoiceFinanceIntegrationTest extends TestCase
         Livewire::test(ListFinancialTransactions::class)
             ->assertCanSeeTableRecords([$this->invoiceTransaction($invoice)])
             ->assertSee('/admin/invoices/' . $invoice->id . '/edit');
+    }
+
+    public function test_tabel_invoice_diurutkan_dari_invoice_terbaru(): void
+    {
+        // Sengaja dibuat agar urutan tanggal invoice berlawanan dengan urutan ID,
+        // sehingga urutan berdasarkan ID (perilaku lama) tidak lolos pengujian ini.
+        $terlama = $this->makeInvoice(['invoice_date' => '2026-08-01']);
+        $tengah = $this->makeInvoice(['invoice_date' => '2026-09-15']);
+        $terbaru = $this->makeInvoice(['invoice_date' => '2026-10-20']);
+
+        $this->actingAs($this->makeSuperAdmin());
+
+        Livewire::test(ListInvoices::class)
+            ->assertCanSeeTableRecords([$terbaru, $tengah, $terlama], inOrder: true);
     }
 
     protected function makeSuperAdmin(): Karyawan

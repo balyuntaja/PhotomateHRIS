@@ -10,6 +10,7 @@ use App\Models\LuminashImportRow;
 use App\Models\SessionReport;
 use App\Services\LuminashImportService;
 use App\Services\SessionReportFinancialService;
+use App\Utils\RupiahHelper;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -21,7 +22,7 @@ class BackfillRekapSesiKeuangan extends Command
                             {--dry-run : Tampilkan rencana perubahan tanpa menyimpan apa pun}
                             {--actor= : ID karyawan yang dicatat sebagai pembuat transaksi backfill (opsional)}';
 
-    protected $description = 'Sinkronkan rekap sesi yang sudah approved ke laporan keuangan tanpa membuat transaksi ganda, dan samakan kategori Pendapatan Booth pada transaksi hasil integrasi yang lama';
+    protected $description = 'Rekonsiliasi rekap sesi yang sudah approved ke laporan keuangan: satukan transaksi lama per metode pembayaran menjadi satu transaksi Grand Total, catat rekap yang belum tersinkron tanpa membuat transaksi ganda, dan samakan kategori Pendapatan Booth pada transaksi hasil integrasi yang lama';
 
     public function handle(): int
     {
@@ -70,6 +71,7 @@ class BackfillRekapSesiKeuangan extends Command
         $this->newLine();
         $this->table(['Ringkasan', 'Jumlah'], [
             ['Transaksi integrasi ber-kategori lama disamakan', $categoryFixed],
+            ['Transaksi lama per metode digabung' . ($dryRun ? ' (dry-run)' : ''), $stats['merged']],
             ['Rekap approved memenuhi syarat', $stats['eligible']],
             ['Rekap sudah tersinkron', $stats['alreadySynced']],
             ['Rekap akan disinkronkan' . ($dryRun ? ' (dry-run)' : ''), $stats['pending']],
@@ -127,7 +129,7 @@ class BackfillRekapSesiKeuangan extends Command
     }
 
     /**
-     * @return array{eligible: int, alreadySynced: int, pending: int, created: int, failed: int, needsReview: int, skippedNoAmount: int, skippedImport: int, issues: array<int, array<int, string>>}
+     * @return array{eligible: int, alreadySynced: int, pending: int, created: int, merged: int, failed: int, needsReview: int, skippedNoAmount: int, skippedImport: int, issues: array<int, array<int, string>>}
      */
     private function recordApprovedReports(bool $dryRun, ?Karyawan $actor, ?Cabang $cabang): array
     {
@@ -143,6 +145,7 @@ class BackfillRekapSesiKeuangan extends Command
             'alreadySynced' => 0,
             'pending' => 0,
             'created' => 0,
+            'merged' => 0,
             'failed' => 0,
             'needsReview' => 0,
             'skippedNoAmount' => 0,
@@ -174,6 +177,39 @@ class BackfillRekapSesiKeuangan extends Command
 
                 $stats['eligible']++;
 
+                // Rekap dengan pencatatan gabungan (Newspaper Janus) hanya boleh menghasilkan
+                // satu transaksi. Transaksi lama yang telanjur terpisah per metode digabungkan
+                // lebih dulu supaya pendapatan tidak terhitung dua kali.
+                $consolidation = $service->consolidationPlan($report);
+
+                if ($consolidation['status'] === SessionReportFinancialService::CONSOLIDATION_REVIEW) {
+                    $stats['needsReview']++;
+                    $stats['issues'][] = [$report->report_number, 'Rekonsiliasi: ' . $consolidation['reason']];
+
+                    continue;
+                }
+
+                if ($consolidation['status'] === SessionReportFinancialService::CONSOLIDATION_READY) {
+                    $stats['merged']++;
+
+                    if ($dryRun) {
+                        $this->line('  [akan digabung] ' . $report->report_number . ' · ' . $consolidation['transactions']->count() . ' transaksi lama → 1 transaksi ' . RupiahHelper::format($consolidation['amount']));
+
+                        continue;
+                    }
+
+                    try {
+                        $service->consolidateLegacyTransactions($report, $consolidation);
+                        $this->line('  [digabung] ' . $report->report_number . ' · 1 transaksi ' . RupiahHelper::format($consolidation['amount']));
+                    } catch (Throwable $exception) {
+                        $stats['failed']++;
+                        $stats['issues'][] = [$report->report_number, 'Gagal menggabungkan: ' . $exception->getMessage()];
+                        $this->error('  [gagal] ' . $report->report_number . ' · ' . $exception->getMessage());
+
+                        continue;
+                    }
+                }
+
                 $expected = $service->expectedSources($report);
 
                 if ($expected === []) {
@@ -201,8 +237,11 @@ class BackfillRekapSesiKeuangan extends Command
                     }
                 }
 
+                // Transaksi yang sudah di-soft delete bukan duplikat aktif: baris tersebut
+                // memang sengaja ditinggalkan oleh proses penggabungan agar jejaknya tetap ada.
                 $suspects = FinancialTransaction::withTrashed()
                     ->where('source_type', SessionReportFinancialService::SOURCE)
+                    ->whereNull('deleted_at')
                     ->where('description', 'like', '%' . $report->report_number . '%')
                     ->whereNotIn('source_id', array_keys($expected))
                     ->pluck('source_id');

@@ -327,6 +327,7 @@ class InvoiceResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->defaultSort('invoice_date', 'desc')
             ->columns([
                 TextColumn::make('invoice_number')
                     ->searchable()

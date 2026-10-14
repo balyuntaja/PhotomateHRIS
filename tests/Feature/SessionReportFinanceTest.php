@@ -31,6 +31,8 @@ class SessionReportFinanceTest extends TestCase
 
     protected Cabang $express;
 
+    protected Cabang $janus;
+
     protected Cabang $unmappedBranch;
 
     protected function setUp(): void
@@ -53,6 +55,13 @@ class SessionReportFinanceTest extends TestCase
             'alamat' => 'Photomate Express Outlet',
         ]);
 
+        $this->janus = Cabang::create([
+            'cabang_id' => 'C0006',
+            'perusahaan_id' => 'P0001',
+            'nama_cabang' => 'Newspaper Janus',
+            'alamat' => 'Newspaper Janus Outlet',
+        ]);
+
         $this->unmappedBranch = Cabang::create([
             'cabang_id' => 'C0100',
             'perusahaan_id' => 'P0001',
@@ -67,7 +76,7 @@ class SessionReportFinanceTest extends TestCase
         ]);
     }
 
-    public function test_approval_mencatat_transaksi_keuangan_per_metode_dengan_kategori_pendapatan_booth(): void
+    public function test_approval_cabang_selain_newspaper_janus_tetap_mencatat_transaksi_per_metode(): void
     {
         $this->actingAs($this->supervisor);
 
@@ -201,7 +210,7 @@ class SessionReportFinanceTest extends TestCase
         $this->actingAs($this->supervisor);
 
         $wedding = Cabang::create([
-            'cabang_id' => 'C0006',
+            'cabang_id' => 'C0010',
             'perusahaan_id' => 'P0001',
             'nama_cabang' => 'Wedding Photomate',
             'alamat' => 'Wedding Photomate Outlet',
@@ -222,6 +231,151 @@ class SessionReportFinanceTest extends TestCase
 
         $this->assertSame(SessionReport::STATUS_APPROVED, $report->fresh()->status);
         $this->assertDatabaseCount('financial_transactions', 0);
+    }
+
+    public function test_rekap_newspaper_janus_dicatat_satu_transaksi_memakai_grand_total(): void
+    {
+        $this->actingAs($this->supervisor);
+
+        $report = $this->makeReport($this->janus, [
+            ['payment_method' => 'CASH', 'amount' => 60000],
+            ['payment_method' => 'QRIS', 'amount' => 60000],
+        ]);
+
+        app(SessionWorkflowService::class)->approve($report, $this->supervisor);
+
+        $report->refresh();
+
+        $this->assertSame(120000, $report->grand_total_amount);
+        $this->assertSame(1, FinancialTransaction::count());
+
+        $transaction = FinancialTransaction::firstOrFail();
+
+        $this->assertSame((string) $report->id, $transaction->source_id);
+        $this->assertSame(SessionReportFinancialService::SOURCE, $transaction->source_type);
+        $this->assertSame(FinancialTransaction::TYPE_INCOME, $transaction->transaction_type);
+        $this->assertSame(120000, $transaction->amount);
+        $this->assertSame($this->pendapatanBoothCategory()->id, $transaction->category_id);
+        $this->assertSame('Janus', $transaction->account?->name);
+        $this->assertSame('Newspaper Janus', $transaction->cabang?->nama_cabang);
+        $this->assertNull($transaction->payment_method_id);
+        $this->assertSame('2026-10-11', $transaction->transaction_date->toDateString());
+        $this->assertSame(FinancialTransaction::PAYMENT_STATUS_LUNAS, $transaction->payment_status);
+        $this->assertSame('Rekap Sesi ' . $report->report_number . ' · Newspaper Janus', $transaction->description);
+        $this->assertSame($this->supervisor->karyawan_id, $transaction->created_by);
+
+        $this->assertDatabaseMissing('financial_transactions', ['source_id' => $report->id . '-CASH']);
+        $this->assertDatabaseMissing('financial_transactions', ['source_id' => $report->id . '-QRIS']);
+
+        $summary = app(KeuanganService::class)->summary(
+            \Illuminate\Support\Carbon::parse('2026-10-01'),
+            \Illuminate\Support\Carbon::parse('2026-10-31'),
+            $this->janus->cabang_id,
+        );
+
+        $this->assertSame(120000, $summary['income']);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->assertCanSeeTableRecords([$transaction])
+            ->filterTable('category_id', ['value' => $this->pendapatanBoothCategory()->id])
+            ->assertCanSeeTableRecords([$transaction]);
+    }
+
+    public function test_rekap_newspaper_janus_hanya_qris_tetap_satu_transaksi_senilai_grand_total(): void
+    {
+        $this->actingAs($this->supervisor);
+
+        $report = $this->makeReport($this->janus, [
+            ['payment_method' => 'QRIS', 'amount' => 60000],
+        ]);
+
+        app(SessionWorkflowService::class)->approve($report, $this->supervisor);
+
+        $report->refresh();
+
+        $this->assertSame(60000, $report->grand_total_amount);
+        $this->assertSame(0, $report->total_cash_amount);
+        $this->assertSame(1, FinancialTransaction::count());
+        $this->assertSame(60000, FinancialTransaction::firstOrFail()->amount);
+    }
+
+    public function test_rekap_newspaper_janus_hanya_tunai_tetap_satu_transaksi_senilai_grand_total(): void
+    {
+        $this->actingAs($this->supervisor);
+
+        $report = $this->makeReport($this->janus, [
+            ['payment_method' => 'CASH', 'amount' => 60000],
+        ]);
+
+        app(SessionWorkflowService::class)->approve($report, $this->supervisor);
+
+        $report->refresh();
+
+        $this->assertSame(60000, $report->grand_total_amount);
+        $this->assertSame(0, $report->total_qris_amount);
+        $this->assertSame(1, FinancialTransaction::count());
+        $this->assertSame(60000, FinancialTransaction::firstOrFail()->amount);
+    }
+
+    public function test_rekap_newspaper_janus_waiting_approval_tidak_menghasilkan_transaksi(): void
+    {
+        $report = $this->makeReport($this->janus, [
+            ['payment_method' => 'CASH', 'amount' => 60000],
+            ['payment_method' => 'QRIS', 'amount' => 60000],
+        ]);
+
+        $this->assertSame(SessionReport::STATUS_WAITING_APPROVAL, $report->fresh()->status);
+        $this->assertSame(0, FinancialTransaction::count());
+    }
+
+    public function test_rekap_newspaper_janus_yang_diproses_ulang_tidak_menghasilkan_transaksi_duplikat(): void
+    {
+        $this->actingAs($this->supervisor);
+
+        $report = $this->makeReport($this->janus, [
+            ['payment_method' => 'CASH', 'amount' => 60000],
+            ['payment_method' => 'QRIS', 'amount' => 60000],
+        ]);
+
+        app(SessionWorkflowService::class)->approve($report, $this->supervisor);
+
+        $created = app(SessionReportFinancialService::class)->record($report->fresh(), $this->supervisor);
+
+        $this->assertSame(0, $created);
+        $this->assertSame(1, FinancialTransaction::count());
+        $this->assertSame(120000, FinancialTransaction::firstOrFail()->amount);
+
+        $this->expectException(RuntimeException::class);
+        app(SessionWorkflowService::class)->approve($report->fresh(), $this->supervisor);
+    }
+
+    public function test_transaksi_lama_per_metode_menghalangi_pencatatan_transaksi_gabungan(): void
+    {
+        $this->actingAs($this->supervisor);
+
+        $report = $this->makeReport($this->janus, [
+            ['payment_method' => 'CASH', 'amount' => 60000],
+            ['payment_method' => 'QRIS', 'amount' => 60000],
+        ]);
+
+        FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'amount' => 60000,
+            'category_id' => $this->pendapatanBoothCategory()->id,
+            'transaction_date' => '2026-10-11',
+            'source_type' => SessionReportFinancialService::SOURCE,
+            'source_id' => $report->id . '-CASH',
+        ]);
+
+        try {
+            app(SessionReportFinancialService::class)->record($report->fresh(), $this->supervisor);
+
+            $this->fail('Pencatatan ulang seharusnya ditolak selama transaksi lama per metode masih ada.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('keuangan:backfill-rekap-sesi', $exception->getMessage());
+        }
+
+        $this->assertSame(1, FinancialTransaction::count());
     }
 
     protected function makeReport(Cabang $cabang, array $transactions): SessionReport

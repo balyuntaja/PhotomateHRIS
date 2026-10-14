@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Cabang;
 use App\Models\FinancialCategory;
+use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
 use App\Models\LuminashImportBatch;
 use App\Models\LuminashImportRow;
@@ -124,7 +125,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
         $this->assertDatabaseHas('financial_transactions', [
             'source_type' => SessionReportFinancialService::SOURCE,
-            'source_id' => $janusReport->id . '-CASH',
+            'source_id' => (string) $janusReport->id,
             'amount' => 120000,
         ]);
 
@@ -143,7 +144,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
         $this->assertDatabaseHas('financial_transactions', [
             'source_type' => SessionReportFinancialService::SOURCE,
-            'source_id' => $report->id . '-CASH',
+            'source_id' => (string) $report->id,
             'amount' => 120000,
         ]);
     }
@@ -236,6 +237,140 @@ class KeuanganBackfillRekapSesiTest extends TestCase
         $this->assertSame(0, FinancialTransaction::count());
     }
 
+    public function test_transaksi_lama_per_metode_digabung_menjadi_satu_transaksi_grand_total(): void
+    {
+        $janus = $this->makeCabang('C0006', 'Newspaper Janus');
+        $report = $this->makeApprovedReport($janus, cash: 60000, qris: 60000);
+
+        $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
+        $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
+
+        $this->assertSame(120000, (int) FinancialTransaction::sum('amount'));
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        // Tidak ada penghitungan ganda: total pendapatan tetap sama.
+        $this->assertSame(120000, (int) FinancialTransaction::sum('amount'));
+        $this->assertSame(1, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+
+        $merged = FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->firstOrFail();
+
+        $this->assertSame((string) $report->id, $merged->source_id);
+        $this->assertSame(120000, $merged->amount);
+        $this->assertSame('Rekap Sesi ' . $report->report_number . ' · Newspaper Janus', $merged->description);
+        $this->assertNull($merged->payment_method_id);
+        $this->assertSame('Janus', $merged->account?->name);
+        $this->assertSame(60000, $qris->fresh()->amount);
+
+        // Baris kedua tetap tersimpan (soft delete) sebagai jejak audit.
+        $this->assertFalse($cash->fresh()->trashed());
+        $this->assertTrue($qris->fresh()->trashed());
+        $this->assertSame($report->id . '-QRIS', $qris->fresh()->source_id);
+
+        // Idempoten: dijalankan ulang tidak mengubah apa pun lagi.
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $this->assertSame(1, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+        $this->assertSame(120000, (int) FinancialTransaction::sum('amount'));
+    }
+
+    public function test_transaksi_lama_tunggal_yang_sudah_sesuai_grand_total_hanya_dinormalkan(): void
+    {
+        $janus = $this->makeCabang('C0006', 'Newspaper Janus');
+        $report = $this->makeApprovedReport($janus, cash: 120000, qris: 0);
+
+        $legacy = $this->makeLegacyTransaction($report, 'CASH', 120000);
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $legacy->refresh();
+
+        $this->assertSame((string) $report->id, $legacy->source_id);
+        $this->assertSame(120000, $legacy->amount);
+        $this->assertSame('Rekap Sesi ' . $report->report_number . ' · Newspaper Janus', $legacy->description);
+        $this->assertNull($legacy->payment_method_id);
+        $this->assertSame(1, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+        $this->assertSame(120000, (int) FinancialTransaction::sum('amount'));
+    }
+
+    public function test_transaksi_lama_yang_totalnya_tidak_sesuai_grand_total_hanya_dilaporkan(): void
+    {
+        $janus = $this->makeCabang('C0006', 'Newspaper Janus');
+        $report = $this->makeApprovedReport($janus, cash: 60000, qris: 60000);
+
+        $legacy = $this->makeLegacyTransaction($report, 'CASH', 60000);
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $legacy->refresh();
+
+        $this->assertSame($report->id . '-CASH', $legacy->source_id);
+        $this->assertSame(60000, $legacy->amount);
+        $this->assertSame('Rekap Sesi ' . $report->report_number . ' · Newspaper Janus · Tunai', $legacy->description);
+        $this->assertSame(1, FinancialTransaction::count());
+        $this->assertSame(60000, (int) FinancialTransaction::sum('amount'));
+    }
+
+    public function test_transaksi_lama_cabang_lain_tidak_digabung(): void
+    {
+        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+
+        $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
+        $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $this->assertSame(2, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+        $this->assertSame($report->id . '-CASH', $cash->fresh()->source_id);
+        $this->assertSame(60000, $cash->fresh()->amount);
+        $this->assertSame($report->id . '-QRIS', $qris->fresh()->source_id);
+        $this->assertSame(60000, $qris->fresh()->amount);
+    }
+
+    public function test_transaksi_manual_dengan_nominal_dan_tanggal_sama_tidak_ikut_digabung(): void
+    {
+        $janus = $this->makeCabang('C0006', 'Newspaper Janus');
+        $report = $this->makeApprovedReport($janus, cash: 60000, qris: 60000);
+
+        $manual = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'amount' => 60000,
+            'category_id' => $this->pendapatanBoothCategory()->id,
+            'transaction_date' => '2026-10-11',
+            'description' => 'Rekap Sesi ' . $report->report_number . ' · Newspaper Janus · Tunai',
+        ]);
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $manual->refresh();
+
+        $this->assertNull($manual->source_type);
+        $this->assertNull($manual->source_id);
+        $this->assertSame(60000, $manual->amount);
+
+        $merged = FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->firstOrFail();
+
+        $this->assertSame((string) $report->id, $merged->source_id);
+        $this->assertSame(120000, $merged->amount);
+    }
+
+    public function test_dry_run_tidak_menggabungkan_transaksi_lama(): void
+    {
+        $janus = $this->makeCabang('C0006', 'Newspaper Janus');
+        $report = $this->makeApprovedReport($janus, cash: 60000, qris: 60000);
+
+        $this->makeLegacyTransaction($report, 'CASH', 60000);
+        $this->makeLegacyTransaction($report, 'QRIS', 60000);
+
+        $this->artisan('keuangan:backfill-rekap-sesi', ['--dry-run' => true])->assertSuccessful();
+
+        $this->assertEqualsCanonicalizing(
+            [$report->id . '-CASH', $report->id . '-QRIS'],
+            FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->pluck('source_id')->all()
+        );
+        $this->assertSame(120000, (int) FinancialTransaction::sum('amount'));
+    }
+
     protected function makeCabang(string $cabangId, string $nama): Cabang
     {
         return Cabang::create([
@@ -274,6 +409,25 @@ class KeuanganBackfillRekapSesiTest extends TestCase
         }
 
         return $report;
+    }
+
+    protected function makeLegacyTransaction(SessionReport $report, string $method, int $amount): FinancialTransaction
+    {
+        $isCash = $method === 'CASH';
+
+        return FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'amount' => $amount,
+            'category_id' => $this->pendapatanBoothCategory()->id,
+            'payment_method_id' => FinancialPaymentMethod::query()
+                ->where('name', $isCash ? 'Cash' : 'QRIS')
+                ->value('id'),
+            'cabang_id' => $report->cabang_id,
+            'transaction_date' => '2026-10-11',
+            'description' => 'Rekap Sesi ' . $report->report_number . ' · ' . ($report->cabang?->nama_cabang ?? '-') . ' · ' . ($isCash ? 'Tunai' : 'QRIS'),
+            'source_type' => SessionReportFinancialService::SOURCE,
+            'source_id' => $report->id . '-' . $method,
+        ]);
     }
 
     protected function makeLuminashTransaction(string $orderId, int $amount): FinancialTransaction
