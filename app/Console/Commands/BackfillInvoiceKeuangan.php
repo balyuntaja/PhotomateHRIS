@@ -8,7 +8,7 @@ use App\Models\Karyawan;
 use App\Services\InvoiceFinancialService;
 use App\Utils\RupiahHelper;
 use Illuminate\Console\Command;
- 
+
 class BackfillInvoiceKeuangan extends Command
 {
     protected $signature = 'keuangan:backfill-invoice
