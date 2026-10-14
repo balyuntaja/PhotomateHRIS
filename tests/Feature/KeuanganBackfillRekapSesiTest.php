@@ -113,6 +113,139 @@ class KeuanganBackfillRekapSesiTest extends TestCase
         $this->artisan('keuangan:backfill-rekap-sesi')->assertFailed();
     }
 
+    public function test_cabang_option_membatasi_backfill_hanya_pada_cabang_tersebut(): void
+    {
+        $janus = $this->makeCabang('C0006', 'Newspaper Janus');
+
+        $janusReport = $this->makeApprovedReport($janus, cash: 120000, qris: 0);
+        $expressReport = $this->makeApprovedReport($this->express, cash: 30000, qris: 0);
+
+        $this->artisan('keuangan:backfill-rekap-sesi', ['--cabang' => 'Newspaper Janus'])->assertSuccessful();
+
+        $this->assertDatabaseHas('financial_transactions', [
+            'source_type' => SessionReportFinancialService::SOURCE,
+            'source_id' => $janusReport->id . '-CASH',
+            'amount' => 120000,
+        ]);
+
+        $this->assertDatabaseMissing('financial_transactions', [
+            'source_type' => SessionReportFinancialService::SOURCE,
+            'source_id' => $expressReport->id . '-CASH',
+        ]);
+    }
+
+    public function test_cabang_option_menerima_cabang_id(): void
+    {
+        $janus = $this->makeCabang('C0006', 'Newspaper Janus');
+        $report = $this->makeApprovedReport($janus, cash: 120000, qris: 0);
+
+        $this->artisan('keuangan:backfill-rekap-sesi', ['--cabang' => 'C0006'])->assertSuccessful();
+
+        $this->assertDatabaseHas('financial_transactions', [
+            'source_type' => SessionReportFinancialService::SOURCE,
+            'source_id' => $report->id . '-CASH',
+            'amount' => 120000,
+        ]);
+    }
+
+    public function test_cabang_yang_tidak_dikenal_menyebabkan_kegagalan(): void
+    {
+        $this->makeApprovedReport($this->express, cash: 30000, qris: 0);
+
+        $this->artisan('keuangan:backfill-rekap-sesi', ['--cabang' => 'Cabang Tidak Ada'])->assertFailed();
+
+        $this->assertSame(0, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+    }
+
+    public function test_rekap_tersinkron_sebagian_hanya_melengkapi_referensi_yang_hilang(): void
+    {
+        $report = $this->makeApprovedReport($this->express, cash: 30000, qris: 45000);
+
+        FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'amount' => 30000,
+            'category_id' => $this->pendapatanBoothCategory()->id,
+            'transaction_date' => '2026-10-11',
+            'source_type' => SessionReportFinancialService::SOURCE,
+            'source_id' => $report->id . '-CASH',
+        ]);
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $this->assertSame(2, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+        $this->assertDatabaseHas('financial_transactions', [
+            'source_id' => $report->id . '-QRIS',
+            'amount' => 45000,
+        ]);
+    }
+
+    public function test_transaksi_duplikat_dengan_referensi_berbeda_dilaporkan_tanpa_dihapus_dan_tanpa_transaksi_baru(): void
+    {
+        $report = $this->makeApprovedReport($this->express, cash: 30000, qris: 0);
+
+        $suspect = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'amount' => 30000,
+            'category_id' => $this->pendapatanBoothCategory()->id,
+            'transaction_date' => '2026-10-11',
+            'description' => 'Rekap Sesi ' . $report->report_number . ' · Photomate Express · Tunai',
+            'source_type' => SessionReportFinancialService::SOURCE,
+            'source_id' => $report->id . '-GRAND',
+        ]);
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $this->assertNotNull($suspect->fresh());
+        $this->assertSame(1, FinancialTransaction::withTrashed()->where('source_type', SessionReportFinancialService::SOURCE)->count());
+        $this->assertDatabaseMissing('financial_transactions', ['source_id' => $report->id . '-CASH']);
+    }
+
+    public function test_transaksi_yang_dihapus_tidak_dibuat_ulang_dan_dilaporkan(): void
+    {
+        $report = $this->makeApprovedReport($this->express, cash: 30000, qris: 0);
+
+        $trashed = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'amount' => 30000,
+            'category_id' => $this->pendapatanBoothCategory()->id,
+            'transaction_date' => '2026-10-11',
+            'source_type' => SessionReportFinancialService::SOURCE,
+            'source_id' => $report->id . '-CASH',
+        ]);
+
+        $trashed->delete();
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $this->assertTrue($trashed->fresh()->trashed());
+        $this->assertSame(1, FinancialTransaction::withTrashed()->where('source_type', SessionReportFinancialService::SOURCE)->count());
+    }
+
+    public function test_rekap_dengan_grand_total_nol_tidak_diproses(): void
+    {
+        SessionReport::create([
+            'report_date' => '2026-10-11',
+            'cabang_id' => $this->express->cabang_id,
+            'status' => SessionReport::STATUS_APPROVED,
+            'approved_at' => now(),
+            'grand_total_amount' => 0,
+        ]);
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $this->assertSame(0, FinancialTransaction::count());
+    }
+
+    protected function makeCabang(string $cabangId, string $nama): Cabang
+    {
+        return Cabang::create([
+            'cabang_id' => $cabangId,
+            'perusahaan_id' => 'P0001',
+            'nama_cabang' => $nama,
+            'alamat' => $nama . ' Outlet',
+        ]);
+    }
+
     protected function makeApprovedReport(Cabang $cabang, int $cash, int $qris, ?string $orderId = null): SessionReport
     {
         $report = SessionReport::create([

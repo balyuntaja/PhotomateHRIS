@@ -44,7 +44,7 @@ class SessionReportFinancialService
         $created = 0;
 
         foreach ($this->methodAmounts($report) as $method => $amount) {
-            $sourceId = $report->id . '-' . $method;
+            $sourceId = $this->sourceIdFor($report, $method);
 
             $alreadyRecorded = FinancialTransaction::withTrashed()
                 ->where('source_type', self::SOURCE)
@@ -76,6 +76,28 @@ class SessionReportFinancialService
         }
 
         return $created;
+    }
+
+    /**
+     * Referensi sumber (source_id) yang seharusnya dimiliki sebuah rekap sesi beserta nominalnya.
+     * Dipakai proses approval dan backfill agar keduanya selalu memakai format referensi yang sama.
+     *
+     * @return array<string, int>
+     */
+    public function expectedSources(SessionReport $report): array
+    {
+        $sources = [];
+
+        foreach ($this->methodAmounts($report) as $method => $amount) {
+            $sources[$this->sourceIdFor($report, $method)] = $amount;
+        }
+
+        return $sources;
+    }
+
+    private function sourceIdFor(SessionReport $report, string $method): string
+    {
+        return $report->id . '-' . $method;
     }
 
     /**

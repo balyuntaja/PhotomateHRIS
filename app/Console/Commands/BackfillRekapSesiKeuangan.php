@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Cabang;
 use App\Models\FinancialCategory;
 use App\Models\FinancialTransaction;
 use App\Models\Karyawan;
@@ -10,14 +11,17 @@ use App\Models\SessionReport;
 use App\Services\LuminashImportService;
 use App\Services\SessionReportFinancialService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class BackfillRekapSesiKeuangan extends Command
 {
     protected $signature = 'keuangan:backfill-rekap-sesi
+                            {--cabang= : Batasi ke satu cabang (cabang_id atau nama cabang, contoh: C0006 atau "Newspaper Janus")}
                             {--dry-run : Tampilkan rencana perubahan tanpa menyimpan apa pun}
                             {--actor= : ID karyawan yang dicatat sebagai pembuat transaksi backfill (opsional)}';
 
-    protected $description = 'Catat transaksi keuangan untuk rekap sesi yang sudah approved dan samakan kategori Pendapatan Booth pada transaksi hasil integrasi yang lama';
+    protected $description = 'Sinkronkan rekap sesi yang sudah approved ke laporan keuangan tanpa membuat transaksi ganda, dan samakan kategori Pendapatan Booth pada transaksi hasil integrasi yang lama';
 
     public function handle(): int
     {
@@ -46,24 +50,62 @@ class BackfillRekapSesiKeuangan extends Command
             }
         }
 
+        $cabang = $this->resolveCabang();
+
+        if (blank($this->option('cabang')) === false && ! $cabang) {
+            $this->error('Cabang "' . $this->option('cabang') . '" tidak ditemukan.');
+
+            return self::FAILURE;
+        }
+
         if ($dryRun) {
             $this->warn('MODE DRY-RUN: tidak ada perubahan yang disimpan.');
         }
 
+        $this->line('Cabang: ' . ($cabang ? $cabang->nama_cabang . ' (' . $cabang->cabang_id . ')' : 'Semua cabang'));
+
         $categoryFixed = $this->syncIntegrationCategories($category, $dryRun);
-        [$processed, $created, $skippedImport] = $this->recordApprovedReports($dryRun, $actor);
+        $stats = $this->recordApprovedReports($dryRun, $actor, $cabang);
 
         $this->newLine();
         $this->table(['Ringkasan', 'Jumlah'], [
             ['Transaksi integrasi ber-kategori lama disamakan', $categoryFixed],
-            ['Rekap approved diproses', $processed],
-            ['Transaksi keuangan dibuat', $created],
-            ['Rekap dilewati (sudah tercatat via impor Luminash)', $skippedImport],
+            ['Rekap approved memenuhi syarat', $stats['eligible']],
+            ['Rekap sudah tersinkron', $stats['alreadySynced']],
+            ['Rekap akan disinkronkan' . ($dryRun ? ' (dry-run)' : ''), $stats['pending']],
+            ['Transaksi keuangan dibuat', $stats['created']],
+            ['Rekap gagal diproses', $stats['failed']],
+            ['Rekap perlu ditinjau', $stats['needsReview']],
+            ['Rekap dilewati (Grand Total tidak valid)', $stats['skippedNoAmount']],
+            ['Rekap dilewati (sudah tercatat via impor Luminash)', $stats['skippedImport']],
         ]);
+
+        if ($stats['issues'] !== []) {
+            $this->newLine();
+            $this->warn('Perlu ditinjau (tidak ada data yang diubah otomatis):');
+            $this->table(['Rekap', 'Alasan'], $stats['issues']);
+        }
 
         $this->info($dryRun ? 'Dry-run selesai. Jalankan tanpa --dry-run untuk menyimpan.' : 'Backfill selesai.');
 
         return self::SUCCESS;
+    }
+
+    private function resolveCabang(): ?Cabang
+    {
+        $value = $this->option('cabang');
+
+        if (blank($value)) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+
+        return Cabang::query()
+            ->where('cabang_id', $value)
+            ->orWhere('nama_cabang', 'like', '%' . $value . '%')
+            ->orderBy('cabang_id')
+            ->first();
     }
 
     private function syncIntegrationCategories(FinancialCategory $category, bool $dryRun): int
@@ -85,42 +127,129 @@ class BackfillRekapSesiKeuangan extends Command
     }
 
     /**
-     * @return array{0: int, 1: int, 2: int}
+     * @return array{eligible: int, alreadySynced: int, pending: int, created: int, failed: int, needsReview: int, skippedNoAmount: int, skippedImport: int, issues: array<int, array<int, string>>}
      */
-    private function recordApprovedReports(bool $dryRun, ?Karyawan $actor): array
+    private function recordApprovedReports(bool $dryRun, ?Karyawan $actor, ?Cabang $cabang): array
     {
         $importedReportIds = LuminashImportRow::query()
             ->whereNotNull('session_report_id')
             ->pluck('session_report_id')
             ->all();
 
-        $processed = 0;
-        $created = 0;
-        $skippedImport = 0;
+        $service = app(SessionReportFinancialService::class);
 
-        SessionReport::query()
+        $stats = [
+            'eligible' => 0,
+            'alreadySynced' => 0,
+            'pending' => 0,
+            'created' => 0,
+            'failed' => 0,
+            'needsReview' => 0,
+            'skippedNoAmount' => 0,
+            'skippedImport' => 0,
+            'issues' => [],
+        ];
+
+        $query = SessionReport::query()
             ->where('status', SessionReport::STATUS_APPROVED)
-            ->with('cabang')
-            ->chunkById(100, function ($reports) use (&$processed, &$created, &$skippedImport, $importedReportIds, $dryRun, $actor): void {
-                foreach ($reports as $report) {
-                    if (in_array($report->id, $importedReportIds, true)) {
-                        $skippedImport++;
+            ->with('cabang');
 
-                        continue;
-                    }
+        if ($cabang) {
+            $query->where('cabang_id', $cabang->cabang_id);
+        }
 
-                    $processed++;
+        $query->chunkById(100, function ($reports) use (&$stats, $service, $importedReportIds, $dryRun, $actor): void {
+            foreach ($reports as $report) {
+                if (in_array($report->id, $importedReportIds, true)) {
+                    $stats['skippedImport']++;
 
-                    if ($dryRun) {
-                        $this->line('  [dry-run] ' . $report->report_number . ' · ' . ($report->cabang?->nama_cabang ?? 'Tanpa Cabang') . ' · Tunai ' . $report->total_cash_amount . ' · QRIS ' . $report->total_qris_amount);
-
-                        continue;
-                    }
-
-                    $created += app(SessionReportFinancialService::class)->record($report, $actor);
+                    continue;
                 }
-            });
 
-        return [$processed, $created, $skippedImport];
+                if ((int) $report->grand_total_amount <= 0) {
+                    $stats['skippedNoAmount']++;
+
+                    continue;
+                }
+
+                $stats['eligible']++;
+
+                $expected = $service->expectedSources($report);
+
+                if ($expected === []) {
+                    $stats['needsReview']++;
+                    $stats['issues'][] = [$report->report_number, 'Grand Total ' . $report->grand_total_amount . ' tidak dapat dipetakan ke nominal Tunai/QRIS'];
+
+                    continue;
+                }
+
+                $existing = FinancialTransaction::withTrashed()
+                    ->where('source_type', SessionReportFinancialService::SOURCE)
+                    ->whereIn('source_id', array_keys($expected))
+                    ->get()
+                    ->groupBy('source_id');
+
+                $reasons = [];
+
+                foreach ($existing as $sourceId => $rows) {
+                    if ($rows->count() > 1) {
+                        $reasons[] = 'Terdapat ' . $rows->count() . ' transaksi untuk referensi ' . $sourceId;
+                    }
+
+                    if ($rows->contains(fn (FinancialTransaction $row): bool => $row->trashed())) {
+                        $reasons[] = 'Transaksi referensi ' . $sourceId . ' berstatus terhapus (soft delete)';
+                    }
+                }
+
+                $suspects = FinancialTransaction::withTrashed()
+                    ->where('source_type', SessionReportFinancialService::SOURCE)
+                    ->where('description', 'like', '%' . $report->report_number . '%')
+                    ->whereNotIn('source_id', array_keys($expected))
+                    ->pluck('source_id');
+
+                if ($suspects->isNotEmpty()) {
+                    $reasons[] = 'Ada transaksi dengan nomor rekap sama tetapi referensi berbeda: ' . $suspects->implode(', ');
+                }
+
+                $missing = array_values(array_diff(array_keys($expected), $existing->keys()->all()));
+
+                if ($missing === [] && $reasons === []) {
+                    $stats['alreadySynced']++;
+
+                    continue;
+                }
+
+                // Selama masih ada indikasi duplikat atau transaksi yang dihapus manual,
+                // rekap tidak dibuatkan transaksi baru dan hanya dilaporkan untuk ditinjau.
+                if ($reasons !== []) {
+                    $stats['needsReview']++;
+                    $stats['issues'][] = [$report->report_number, implode('; ', $reasons)];
+
+                    continue;
+                }
+
+                if ($dryRun) {
+                    $stats['pending']++;
+                    $this->line('  [akan dibuat] ' . $report->report_number . ' · ' . ($report->cabang?->nama_cabang ?? 'Tanpa Cabang') . ' · ' . implode(', ', $missing));
+
+                    continue;
+                }
+
+                $stats['pending']++;
+
+                try {
+                    $created = DB::transaction(fn (): int => $service->record($report, $actor));
+
+                    $stats['created'] += $created;
+                    $this->line('  [dibuat] ' . $report->report_number . ' · ' . $created . ' transaksi');
+                } catch (Throwable $exception) {
+                    $stats['failed']++;
+                    $stats['issues'][] = [$report->report_number, 'Gagal: ' . $exception->getMessage()];
+                    $this->error('  [gagal] ' . $report->report_number . ' · ' . $exception->getMessage());
+                }
+            }
+        });
+
+        return $stats;
     }
 }

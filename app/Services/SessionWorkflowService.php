@@ -200,6 +200,10 @@ class SessionWorkflowService
             $report->approved_at = now();
             $report->saveQuietly();
 
+            // Bonus harian Janus dihitung dari seluruh rekap approved pada hari yang sama,
+            // sehingga angka bonus semua rekap hari itu diselaraskan setelah status berubah.
+            app(BranchBonusService::class)->syncDailyBonusAmounts($report);
+
             $this->logAction($report, $supervisor, 'APPROVED', $note ?: 'Validated.');
 
             // Catat transaksi keuangan otomatis (kategori Pendapatan Booth, ditentukan backend).

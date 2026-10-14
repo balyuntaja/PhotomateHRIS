@@ -76,7 +76,12 @@
     // Check Newspaper Janus Bonus Eligibility
     $isJanus = $bonusService->isEligibleBranch(null, $cabangId);
     $crewCount = is_array($selectedCrews) ? count($selectedCrews) : 0;
-    $bonusInfo = $bonusService->calculateDailyBonus($trxCount, $crewCount, null, $cabangId);
+
+    // Total sesi harian memakai sumber data backend yang sama dengan halaman detail rekap:
+    // sesi dari rekap berstatus APPROVED pada cabang & tanggal ini, ditambah input form saat ini.
+    $dayTotalSessions = $bonusService->dailySessionTotalFor($cabangId, $reportDate, $trxCount);
+
+    $bonusInfo = $bonusService->calculateDailyBonus($dayTotalSessions, $crewCount, null, $cabangId);
 
     $crewModels = collect();
     if ($isJanus && $crewCount > 0) {
@@ -103,7 +108,7 @@
                                 BONUS CREW NEWSPAPER JANUS: RP 50.000 AKTIF!
                             </span>
                             <p class="text-xs text-emerald-700 dark:text-emerald-300">
-                                Target &ge; 30 sesi harian tercapai (Total: <strong>{{ $trxCount }} sesi</strong>). Bonus Rp 50.000 otomatis aktif.
+                                Target &ge; 30 sesi harian tercapai (Total: <strong>{{ $dayTotalSessions }} sesi</strong>). Bonus Rp 50.000 otomatis aktif.
                             </p>
                         </div>
                     </div>
@@ -151,15 +156,18 @@
                         <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500 text-white font-bold text-sm">!</span>
                         <div>
                             <span class="font-bold text-sm sm:text-base text-amber-900 dark:text-amber-200">
-                                Target Bonus Harian Newspaper Janus: {{ $trxCount }} / 30 Sesi
+                                Target Bonus Harian Newspaper Janus: {{ $dayTotalSessions }} / 30 Sesi
                             </span>
                             <p class="text-xs text-amber-700 dark:text-amber-300">
                                 Kurang <strong>{{ $bonusInfo['remaining_sessions'] }} sesi lagi</strong> untuk mendapatkan bonus Rp 50.000 untuk crew bertugas hari ini.
+                                @if($dayTotalSessions !== $trxCount)
+                                    <span class="block text-[11px] text-amber-600 dark:text-amber-400">({{ $trxCount }} sesi dari rekap ini + {{ $dayTotalSessions - $trxCount }} sesi dari rekap lain yang sudah disetujui)</span>
+                                @endif
                             </p>
                         </div>
                     </div>
                     <span class="px-2.5 py-1 bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 text-xs font-semibold rounded-full">
-                        {{ $trxCount }}/30 Sesi
+                        {{ $dayTotalSessions }}/30 Sesi
                     </span>
                 </div>
 

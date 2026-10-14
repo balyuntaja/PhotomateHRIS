@@ -200,15 +200,32 @@
             <div class="flex items-center justify-between flex-wrap gap-2">
                 <div class="flex items-center gap-1.5 font-bold text-amber-800 dark:text-amber-200">
                     <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-400 text-amber-900 font-bold text-xs">!</span>
-                    <span>BELUM MENCAPAI TARGET BONUS ({{ $report->total_transactions }} / 30 SESI)</span>
+                    <span>BELUM MENCAPAI TARGET BONUS ({{ $bonusDetails['day_total_sessions'] }} / 30 SESI)</span>
                 </div>
                 <span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
                     Bonus: Rp 0
                 </span>
             </div>
             <p class="text-amber-700 dark:text-amber-300">
-                Target 30 sesi belum terpenuhi (kurang <strong>{{ max(0, 30 - $report->total_transactions) }} sesi lagi</strong>). Bonus total Rp 50.000 hanya aktif apabila sesi pada hari tersebut mencapai minimal 30 sesi.
+                Target 30 sesi belum terpenuhi (kurang <strong>{{ $bonusDetails['remaining_sessions'] }} sesi lagi</strong>). Bonus total Rp 50.000 hanya aktif apabila sesi pada hari tersebut mencapai minimal 30 sesi.
             </p>
+        </div>
+        @endif
+
+        @if(($bonusDetails['day_report_count'] ?? 0) > 1)
+        <div class="mt-2 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
+            <span class="text-[11px] font-semibold text-gray-600 dark:text-gray-300 block mb-1.5">
+                Rekap yang dihitung pada {{ $report->report_date?->translatedFormat('d F Y') }} ({{ $bonusDetails['day_total_sessions'] }} sesi):
+            </span>
+            <ul class="space-y-0.5">
+                @foreach($bonusDetails['day_reports'] as $dayReport)
+                <li class="text-[11px] text-gray-600 dark:text-gray-400 flex justify-between gap-3">
+                    <span class="font-mono">{{ $dayReport['report_number'] }}</span>
+                    <span>{{ $dayReport['sessions'] }} sesi{{ $dayReport['is_current'] ? ' · rekap ini' : '' }}</span>
+                </li>
+                @endforeach
+            </ul>
+            <span class="text-[10px] text-gray-400 dark:text-gray-500 block mt-1.5">Hanya rekap berstatus APPROVED yang dihitung ke target harian.</span>
         </div>
         @endif
     </div>
