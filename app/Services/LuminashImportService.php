@@ -536,6 +536,24 @@ class LuminashImportService
                 ]);
             }
 
+            // Fase 4: satukan transaksi Luminash Golio (Pendapatan Booth) menjadi
+            // satu rekap per tanggal agar laporan menampilkan rekap harian.
+            $importedDates = [];
+
+            foreach ($outcomes as $index => $outcome) {
+                if ($outcome['result'] !== LuminashImportRow::RESULT_IMPORTED) {
+                    continue;
+                }
+
+                $transactionAt = $analysis['rows'][$index]['transaction_at'] ?? null;
+
+                if ($transactionAt !== null) {
+                    $importedDates[$transactionAt->toDateString()] = true;
+                }
+            }
+
+            app(LuminashRekapService::class)->consolidateDates(array_keys($importedDates), $user);
+
             $batch->update([
                 'imported_count' => $counts[LuminashImportRow::RESULT_IMPORTED],
                 'excluded_incomplete_count' => $counts[LuminashImportRow::RESULT_EXCLUDED_INCOMPLETE],

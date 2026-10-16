@@ -10,6 +10,7 @@ use App\Models\FinancialTransaction;
 use App\Services\InvoiceFinancialService;
 use App\Services\KeuanganService;
 use App\Services\LuminashImportService;
+use App\Services\LuminashRekapService;
 use App\Utils\RupiahHelper;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -435,6 +436,23 @@ class FinancialTransactionResource extends Resource
                 Tables\Actions\ViewAction::make()
                     ->label('Detail')
                     ->modalHeading('Detail Transaksi')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Tutup'),
+
+                Tables\Actions\Action::make('rincian')
+                    ->label('Lihat Rincian')
+                    ->icon('heroicon-o-list-bullet')
+                    ->color('info')
+                    ->visible(fn (FinancialTransaction $record): bool => app(LuminashRekapService::class)->isRekap($record))
+                    ->modalHeading('Rincian Rekap Pendapatan Booth Luminash')
+                    ->modalWidth('2xl')
+                    ->modalContent(fn (FinancialTransaction $record) => view(
+                        'filament.resources.financial-transaction-resource.rekap-detail',
+                        [
+                            'rekap' => $record,
+                            'components' => app(LuminashRekapService::class)->constituents($record),
+                        ]
+                    ))
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Tutup'),
 

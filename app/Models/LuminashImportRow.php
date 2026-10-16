@@ -97,7 +97,7 @@ class LuminashImportRow extends Model
 
     public function financialTransaction(): BelongsTo
     {
-        return $this->belongsTo(FinancialTransaction::class, 'financial_transaction_id');
+        return $this->belongsTo(FinancialTransaction::class, 'financial_transaction_id')->withTrashed();
     }
 
     public function sessionReport(): BelongsTo

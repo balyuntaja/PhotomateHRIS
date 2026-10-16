@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
 use App\Models\FinancialTransaction;
 use App\Models\Invoice;
 use App\Models\Karyawan;
 use App\Models\SessionReport;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class InvoiceFinancialService
 {
@@ -16,6 +18,8 @@ class InvoiceFinancialService
     public const SOURCE = 'invoice';
 
     public const STATUS_LUNAS = 'Lunas';
+
+    public const ACCOUNT_NAME = 'Photomate Express';
 
     /**
      * Selaraskan pencatatan pemasukan dengan kondisi invoice terkini:
@@ -49,6 +53,7 @@ class InvoiceFinancialService
                 'transaction_type' => FinancialTransaction::TYPE_INCOME,
                 'amount' => (int) round((float) $invoice->total),
                 'category_id' => $this->incomeCategory()->id,
+                'account_id' => $this->incomeAccount()->id,
                 'cabang_id' => $this->resolveCabangId($invoice),
                 'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
                 'transaction_date' => $invoice->event_date->toDateString(),
@@ -116,6 +121,23 @@ class InvoiceFinancialService
                 'is_active' => true,
             ],
         );
+    }
+
+    /**
+     * Akun keuangan penerima pendapatan invoice (Photomate Express).
+     */
+    private function incomeAccount(): FinancialAccount
+    {
+        $account = FinancialAccount::query()->where('name', self::ACCOUNT_NAME)->first();
+
+        if (! $account) {
+            throw new RuntimeException(
+                'Akun "' . self::ACCOUNT_NAME . '" tidak ditemukan pada master akun keuangan. '
+                . 'Tambahkan akun tersebut terlebih dahulu.'
+            );
+        }
+
+        return $account;
     }
 
     /**

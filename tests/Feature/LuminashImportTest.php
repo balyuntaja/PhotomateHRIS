@@ -96,7 +96,9 @@ class LuminashImportTest extends TestCase
         $this->assertSame($this->managerFinance->karyawan_id, $batch->imported_by);
         $this->assertSame('Golio', $batch->cabang?->nama_cabang);
 
-        $transaction = FinancialTransaction::firstOrFail();
+        $transaction = FinancialTransaction::withTrashed()
+            ->where('source_id', '20261011213012034')
+            ->firstOrFail();
 
         $this->assertSame(FinancialTransaction::TYPE_INCOME, $transaction->transaction_type);
         $this->assertSame(25000, $transaction->amount);
@@ -175,7 +177,9 @@ class LuminashImportTest extends TestCase
         $this->assertSame(90000, $batch->total_imported_amount);
 
         $this->assertDatabaseCount('session_reports', 2);
-        $this->assertDatabaseCount('financial_transactions', 3);
+        // 3 komponen per-order (soft delete) + 2 baris rekap (satu per tanggal).
+        $this->assertDatabaseCount('financial_transactions', 5);
+        $this->assertSame(2, FinancialTransaction::count());
 
         $firstDay = SessionReport::whereDate('report_date', '2026-10-11')->firstOrFail();
         $secondDay = SessionReport::whereDate('report_date', '2026-10-10')->firstOrFail();
@@ -353,7 +357,9 @@ class LuminashImportTest extends TestCase
 
         $this->assertSame(1, $batch->imported_count);
 
-        $transaction = FinancialTransaction::firstOrFail();
+        $transaction = FinancialTransaction::withTrashed()
+            ->where('source_id', '20261011213012034')
+            ->firstOrFail();
         $this->assertSame(25000, $transaction->amount);
         $this->assertSame('2026-10-11', $transaction->transaction_date->toDateString());
         $this->assertSame('20261011213012034', $transaction->source_id);
@@ -398,7 +404,8 @@ class LuminashImportTest extends TestCase
         $this->assertSame(0, $second->session_report_count);
         $this->assertSame(2, $second->duplicate_count);
         $this->assertSame(0, $second->total_imported_amount);
-        $this->assertDatabaseCount('financial_transactions', 2);
+        // 2 komponen per-order (soft delete) + 1 baris rekap.
+        $this->assertDatabaseCount('financial_transactions', 3);
         $this->assertDatabaseCount('session_reports', 1);
     }
 
@@ -424,7 +431,8 @@ class LuminashImportTest extends TestCase
         $this->assertSame(1, $batch->duplicate_count);
         $this->assertSame(1, $batch->session_report_count);
         $this->assertSame(25000, $batch->total_imported_amount);
-        $this->assertDatabaseCount('financial_transactions', 2);
+        // 2 komponen per-order (soft delete) + 1 baris rekap untuk tanggal yang sama.
+        $this->assertDatabaseCount('financial_transactions', 3);
         $this->assertDatabaseCount('session_reports', 2);
 
         // Rekap tanggal tersebut sudah final (immutable), sehingga baris baru dicatat
@@ -466,13 +474,14 @@ class LuminashImportTest extends TestCase
         $this->assertSame($expected['count'], $batch->imported_count);
         $this->assertSame($expected['dates'], $batch->session_report_count);
         $this->assertSame($expected['total'], $batch->total_imported_amount);
-        $this->assertDatabaseCount('financial_transactions', $expected['count']);
+        // Komponen per-order (soft delete) + satu baris rekap per tanggal.
+        $this->assertDatabaseCount('financial_transactions', $expected['count'] + $expected['dates']);
         $this->assertDatabaseCount('session_reports', $expected['dates']);
 
         $golio = Cabang::where('nama_cabang', 'Golio')->firstOrFail();
 
         $this->assertSame(
-            $expected['count'],
+            $expected['dates'],
             FinancialTransaction::where('cabang_id', $golio->cabang_id)->count()
         );
 
@@ -555,7 +564,8 @@ class LuminashImportTest extends TestCase
             ->assertSee('Impor berhasil')
             ->assertNotified();
 
-        $this->assertDatabaseCount('financial_transactions', 2);
+        // 2 komponen per-order (soft delete) + 1 baris rekap.
+        $this->assertDatabaseCount('financial_transactions', 3);
         $this->assertDatabaseCount('session_reports', 1);
 
         $batch = LuminashImportBatch::firstOrFail();
@@ -639,7 +649,8 @@ class LuminashImportTest extends TestCase
             ->assertNotified();
 
         $this->assertSame(1, FinancialTransaction::count());
-        $this->assertSame('20261010225503199', FinancialTransaction::firstOrFail()->source_id);
+        $this->assertSame('REKAP-2026-10-10', FinancialTransaction::firstOrFail()->source_id);
+        $this->assertTrue(FinancialTransaction::withTrashed()->where('source_id', '20261010225503199')->exists());
         $this->assertSame('file-b.csv', LuminashImportBatch::firstOrFail()->file_name);
     }
 

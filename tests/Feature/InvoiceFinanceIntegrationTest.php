@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\FinancialTransactionResource\Pages\ListFinancialTransactions;
 use App\Filament\Resources\InvoiceResource\Pages\ListInvoices;
 use App\Models\Cabang;
+use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
 use App\Models\FinancialTransaction;
 use App\Models\Invoice;
@@ -64,6 +65,11 @@ class InvoiceFinanceIntegrationTest extends TestCase
         $this->assertSame(FinancialTransaction::TYPE_INCOME, $transaction->transaction_type);
         $this->assertSame(2599000, $transaction->amount);
         $this->assertSame($this->pelunasanInvoiceCategory()->id, $transaction->category_id);
+        $this->assertSame('Photomate Express', $transaction->account?->name);
+        $this->assertSame(
+            FinancialAccount::where('name', InvoiceFinancialService::ACCOUNT_NAME)->value('id'),
+            $transaction->account_id
+        );
         $this->assertSame('2026-10-12', $transaction->transaction_date->toDateString());
         $this->assertSame(10, $transaction->period_month);
         $this->assertSame(2026, $transaction->period_year);
