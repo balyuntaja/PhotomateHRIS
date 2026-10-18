@@ -62,9 +62,10 @@ class SessionReportResource extends Resource
 
         $isApproved = fn ($record = null, $livewire = null): bool => (bool) $resolveReport($record, $livewire)?->isApproved();
 
-        // Crew (Karyawan) terkunci jika APPROVED atau sudah lewat batas waktu input rekap
+        // Crew (Karyawan) terkunci jika APPROVED atau sudah lewat batas waktu input rekap.
+        // Rekap berstatus REVISION tetap dapat diedit meskipun H+2 sudah lewat.
         $isLocked = fn ($record = null, $livewire = null): bool => $isApproved($record, $livewire)
-            || app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $resolveReport($record, $livewire)?->report_date);
+            || app(SessionWorkflowService::class)->isInputClosedForReport(Auth::user(), $resolveReport($record, $livewire));
 
         // Cabang mode manual (Wedding Photomate, Express Sewa, Express Self Run)
         // memakai input total Jumlah Sesi + Jumlah Lembar
@@ -123,8 +124,14 @@ class SessionReportResource extends Resource
                             ->default(now())
                             ->required()
                             ->visible(fn (Get $get): bool => ! $isGolioBranch($get))
-                            ->minDate(fn () => $isCrew ? SessionReport::earliestInputDate() : null)
-                            ->helperText(fn () => $isCrew ? 'Batas input, edit, dan hapus rekap adalah 2 hari setelah tanggal sesi (pukul 23:59 WIB).' : null)
+                            ->minDate(fn ($record = null) => $isCrew && ! ($record instanceof SessionReport && $record->isRevision())
+                                ? SessionReport::earliestInputDate()
+                                : null)
+                            ->helperText(fn ($record = null) => $isCrew
+                                ? ($record instanceof SessionReport && $record->isRevision()
+                                    ? 'Status revisi: batas H+2 dikecualikan sampai rekap dikirim ulang ke Supervisor.'
+                                    : 'Batas input, edit, dan hapus rekap adalah 2 hari setelah tanggal sesi (pukul 23:59 WIB).')
+                                : null)
                             ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
                             ->native(false),
 
@@ -456,9 +463,15 @@ class SessionReportResource extends Resource
                     ->label('Batas Input')
                     ->visible($isCrew)
                     ->badge()
-                    ->state(fn (SessionReport $record): string => $record->isPastInputDeadline() ? 'Ditutup' : 'Terbuka')
-                    ->color(fn (SessionReport $record): string => $record->isPastInputDeadline() ? 'danger' : 'success')
-                    ->description(fn (SessionReport $record): string => 's/d ' . ($record->inputDeadlineDescription() ?? '-'))
+                    ->state(fn (SessionReport $record): string => $record->isRevision()
+                        ? 'Dikecualikan'
+                        : ($record->isPastInputDeadline() ? 'Ditutup' : 'Terbuka'))
+                    ->color(fn (SessionReport $record): string => $record->isRevision()
+                        ? 'warning'
+                        : ($record->isPastInputDeadline() ? 'danger' : 'success'))
+                    ->description(fn (SessionReport $record): string => $record->isRevision()
+                        ? 'Revisi: batas H+2 tidak berlaku sampai dikirim ulang'
+                        : 's/d ' . ($record->inputDeadlineDescription() ?? '-'))
                     ->tooltip('Batas input, edit, dan hapus rekap untuk role Karyawan'),
 
                 Tables\Columns\TextColumn::make('updated_at')
@@ -495,13 +508,14 @@ class SessionReportResource extends Resource
 
                 Tables\Actions\EditAction::make()
                     ->visible(fn (SessionReport $record) => in_array($record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION])
-                        && !app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $record->report_date)),
+                        && ! app(SessionWorkflowService::class)->isInputClosedForReport(Auth::user(), $record)),
 
                 Tables\Actions\Action::make('submit_rekap')
                     ->label(fn (SessionReport $record) => $record->status === SessionReport::STATUS_REVISION ? 'Submit Ulang' : 'Submit')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('warning')
-                    ->visible(fn (SessionReport $record) => in_array($record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION]))
+                    ->visible(fn (SessionReport $record) => in_array($record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION])
+                        && ! app(SessionWorkflowService::class)->isInputClosedForReport(Auth::user(), $record))
                     ->requiresConfirmation()
                     ->modalHeading(fn (SessionReport $record) => $record->status === SessionReport::STATUS_REVISION ? 'Submit Ulang Rekap Sesi?' : 'Submit Rekap Sesi?')
                     ->modalDescription('Rekap sesi akan dikirimkan ke Supervisor untuk diperiksa. Pastikan semua data transaksi sudah benar.')

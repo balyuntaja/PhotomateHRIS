@@ -129,6 +129,11 @@ class SessionReport extends Model
                 }
             }
 
+            // Rekap berstatus REVISION dikecualikan dari batas H+2 agar crew dapat memperbaiki.
+            if ($model->getOriginal('status') === self::STATUS_REVISION) {
+                return;
+            }
+
             static::assertInputWindowOpen($model);
         });
 

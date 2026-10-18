@@ -59,8 +59,8 @@ class SessionReportPolicy
             return false;
         }
 
-        // Crew tidak boleh mengubah rekap yang sudah melewati batas waktu input
-        if ($this->isInputClosed($user, $report)) {
+        // Crew boleh memperbaiki rekap revisi tanpa batas H+2.
+        if (! $report->isRevision() && $this->isInputClosed($user, $report)) {
             return false;
         }
 

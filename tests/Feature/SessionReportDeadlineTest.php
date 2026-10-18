@@ -12,6 +12,7 @@ use App\Models\PricingSetting;
 use App\Models\Role;
 use App\Models\SessionReport;
 use App\Models\SessionTransaction;
+use App\Services\SessionWorkflowService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
@@ -143,6 +144,25 @@ class SessionReportDeadlineTest extends TestCase
         ]);
 
         return $report;
+    }
+
+    protected function makeRevisionReportPastDeadline(string $reportDate = '2026-09-23'): SessionReport
+    {
+        $this->freezeAt('2026-09-25 22:00:00');
+        $report = $this->makeReport($reportDate);
+
+        $this->actingAs($this->crew);
+        app(SessionWorkflowService::class)->submit($report, $this->crew);
+
+        $this->freezeAt('2026-09-26 08:00:00');
+        $this->actingAs($this->supervisor);
+        app(SessionWorkflowService::class)->requestRevision(
+            $report->fresh(),
+            $this->supervisor,
+            'Perbaiki data transaksi.'
+        );
+
+        return $report->fresh();
     }
 
     /**
@@ -393,5 +413,204 @@ class SessionReportDeadlineTest extends TestCase
         $view = $this->view('filament.resources.session-reports.review-modal', ['record' => $report]);
         $view->assertDontSee('Rekap Sudah Ditutup');
         $view->assertDontSee('Periode Input Rekap Masih Terbuka');
+    }
+
+    public function test_supervisor_can_request_revision_past_deadline(): void
+    {
+        $this->freezeAt('2026-09-25 22:00:00');
+        $report = $this->makeReport('2026-09-23');
+
+        $this->actingAs($this->crew);
+        app(SessionWorkflowService::class)->submit($report, $this->crew);
+
+        $this->freezeAt('2026-09-26 08:00:00');
+        $this->actingAs($this->supervisor);
+
+        $updated = app(SessionWorkflowService::class)->requestRevision(
+            $report->fresh(),
+            $this->supervisor,
+            'Nominal QRIS belum sesuai.'
+        );
+
+        $this->assertSame(SessionReport::STATUS_REVISION, $updated->status);
+        $this->assertSame('Nominal QRIS belum sesuai.', $updated->revision_note);
+        $this->assertDatabaseHas('approval_logs', [
+            'session_report_id' => $report->id,
+            'user_id' => $this->supervisor->karyawan_id,
+            'action' => 'REVISION_REQUESTED',
+        ]);
+    }
+
+    public function test_crew_can_edit_revision_report_past_deadline(): void
+    {
+        $report = $this->makeRevisionReportPastDeadline();
+        $this->actingAs($this->crew);
+
+        $this->assertTrue(Gate::allows('update', $report));
+        $this->assertFalse(Gate::allows('delete', $report));
+
+        Livewire::test(ListSessionReports::class)
+            ->assertTableActionVisible('edit', $report)
+            ->assertTableActionVisible('submit_rekap', $report);
+
+        Livewire::test(ViewSessionReport::class, ['record' => $report->getKey()])
+            ->assertSuccessful()
+            ->assertActionVisible('edit');
+
+        Livewire::test(EditSessionReport::class, ['record' => $report->getKey()])
+            ->assertSuccessful()
+            ->fillForm(['report_date' => '2026-09-22'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('2026-09-22', $report->fresh()->report_date->toDateString());
+
+        $report->update(['event_note' => 'Update langsung setelah deadline.']);
+        $this->assertSame('Update langsung setelah deadline.', $report->fresh()->event_note);
+    }
+
+    public function test_crew_can_resubmit_revision_report_past_deadline(): void
+    {
+        $report = $this->makeRevisionReportPastDeadline();
+        $this->actingAs($this->crew);
+
+        app(SessionWorkflowService::class)->submit($report, $this->crew);
+        $report->refresh();
+
+        $this->assertSame(SessionReport::STATUS_WAITING_APPROVAL, $report->status);
+        $this->assertDatabaseHas('approval_logs', [
+            'session_report_id' => $report->id,
+            'user_id' => $this->crew->karyawan_id,
+            'action' => 'RESUBMITTED',
+        ]);
+
+        $this->assertFalse(Gate::allows('update', $report));
+
+        try {
+            $report->update(['event_note' => 'Tidak boleh setelah submit ulang.']);
+            $this->fail('Update setelah submit ulang seharusnya ditolak.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Rekap sudah ditutup', $e->getMessage());
+        }
+    }
+
+    public function test_crew_cannot_edit_approved_report_past_deadline(): void
+    {
+        $report = $this->makeReport('2026-09-23', SessionReport::STATUS_APPROVED);
+        $this->freezeAt('2026-09-26 08:00:00');
+        $this->actingAs($this->crew);
+
+        $this->assertFalse(Gate::allows('update', $report));
+
+        Livewire::test(ListSessionReports::class)
+            ->assertTableActionHidden('edit', $report);
+
+        try {
+            $report->update(['event_note' => 'Bypass approved.']);
+            $this->fail('Update rekap APPROVED seharusnya ditolak.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('APPROVED', $e->getMessage());
+        }
+    }
+
+    public function test_crew_cannot_submit_non_revision_report_past_deadline(): void
+    {
+        $this->freezeAt('2026-09-25 22:00:00');
+        $report = $this->makeReport('2026-09-23');
+
+        $this->freezeAt('2026-09-26 08:00:00');
+        $this->actingAs($this->crew);
+
+        Livewire::test(ListSessionReports::class)
+            ->assertTableActionHidden('submit_rekap', $report);
+
+        try {
+            app(SessionWorkflowService::class)->submit($report, $this->crew);
+            $this->fail('Submit rekap non-revisi setelah deadline seharusnya ditolak.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Rekap sudah ditutup', $e->getMessage());
+        }
+
+        $this->assertSame(SessionReport::STATUS_DRAFT, $report->fresh()->status);
+    }
+
+    public function test_second_revision_cycle_past_deadline_still_allowed(): void
+    {
+        $report = $this->makeRevisionReportPastDeadline();
+        $this->actingAs($this->crew);
+
+        app(SessionWorkflowService::class)->submit($report, $this->crew);
+
+        $this->actingAs($this->supervisor);
+        app(SessionWorkflowService::class)->requestRevision(
+            $report->fresh(),
+            $this->supervisor,
+            'Masih ada selisih pada transaksi QRIS.'
+        );
+
+        $this->freezeAt('2026-10-10 08:00:00');
+        $this->actingAs($this->crew);
+        $report->refresh();
+
+        $this->assertSame(SessionReport::STATUS_REVISION, $report->status);
+        $this->assertTrue(Gate::allows('update', $report));
+
+        $report->update(['event_note' => 'Perbaikan revisi kedua.']);
+        app(SessionWorkflowService::class)->submit($report->fresh(), $this->crew);
+
+        $this->assertSame(SessionReport::STATUS_WAITING_APPROVAL, $report->fresh()->status);
+        $this->assertSame(
+            2,
+            \App\Models\ApprovalLog::where('session_report_id', $report->id)
+                ->where('action', 'REVISION_REQUESTED')
+                ->count()
+        );
+        $this->assertSame(
+            2,
+            \App\Models\ApprovalLog::where('session_report_id', $report->id)
+                ->where('action', 'RESUBMITTED')
+                ->count()
+        );
+    }
+
+    public function test_revision_edit_page_save_works_when_deadline_passes_while_page_is_open(): void
+    {
+        $this->freezeAt('2026-09-25 22:00:00');
+        $report = $this->makeReport('2026-09-23');
+
+        $this->actingAs($this->crew);
+        app(SessionWorkflowService::class)->submit($report, $this->crew);
+
+        $this->actingAs($this->supervisor);
+        app(SessionWorkflowService::class)->requestRevision(
+            $report->fresh(),
+            $this->supervisor,
+            'Perbaiki data.'
+        );
+
+        $this->actingAs($this->crew);
+        $component = Livewire::test(EditSessionReport::class, ['record' => $report->getKey()])
+            ->assertSuccessful();
+
+        $this->freezeAt('2026-09-26 00:00:01');
+
+        $component
+            ->fillForm(['report_date' => '2026-09-22'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('2026-09-22', $report->fresh()->report_date->toDateString());
+    }
+
+    public function test_review_modal_shows_revision_deadline_exemption_for_crew(): void
+    {
+        $report = $this->makeRevisionReportPastDeadline();
+        $this->actingAs($this->crew);
+
+        $view = $this->view('filament.resources.session-reports.review-modal', ['record' => $report]);
+
+        $view->assertSee('Batas H+2 Dikecualikan untuk Revisi');
+        $view->assertSee('Crew dapat mengedit dan mengirim ulang rekap tanpa batas H+2', false);
+        $view->assertDontSee('Rekap Sudah Ditutup');
     }
 }

@@ -6,8 +6,10 @@
     $viewer = \Illuminate\Support\Facades\Auth::user();
     $viewerIsCrew = $viewer instanceof \App\Models\Karyawan
         && !app(\App\Services\SessionWorkflowService::class)->isSupervisorOrAdmin($viewer);
+    $isRevision = $report?->isRevision() ?? false;
     $inputDeadline = $report && $viewerIsCrew ? $report->inputDeadlineDescription() : null;
-    $inputClosed = $inputDeadline && $report->isPastInputDeadline();
+    $inputClosed = $inputDeadline && ! $isRevision && $report->isPastInputDeadline();
+    $revisionExempt = $inputDeadline && $isRevision && $report->isPastInputDeadline();
 @endphp
 
 @if($report)
@@ -46,7 +48,19 @@
         </div>
     </div>
 
-    @if($inputDeadline)
+    @if($revisionExempt)
+    <div class="p-3.5 border-l-4 rounded-r-lg bg-amber-50 dark:bg-amber-950/40 border-amber-500">
+        <h4 class="font-bold flex items-center gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+            <svg class="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
+            </svg>
+            Batas H+2 Dikecualikan untuk Revisi
+        </h4>
+        <p class="mt-1 text-xs font-medium text-amber-700 dark:text-amber-200">
+            Rekap ini sedang dalam status revisi. Crew dapat mengedit dan mengirim ulang rekap tanpa batas H+2 sampai dikirim ulang ke Supervisor.
+        </p>
+    </div>
+    @elseif($inputDeadline)
     <div class="p-3.5 border-l-4 rounded-r-lg {{ $inputClosed ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-500' : 'bg-sky-50 dark:bg-sky-950/40 border-sky-500' }}">
         <h4 class="font-bold flex items-center gap-1.5 text-xs {{ $inputClosed ? 'text-rose-800 dark:text-rose-300' : 'text-sky-800 dark:text-sky-300' }}">
             <svg class="w-4 h-4 shrink-0 {{ $inputClosed ? 'text-rose-600 dark:text-rose-400' : 'text-sky-600 dark:text-sky-400' }}" fill="currentColor" viewBox="0 0 20 20">

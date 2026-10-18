@@ -20,7 +20,7 @@ class ViewSessionReport extends ViewRecord
         return [
             Actions\EditAction::make()
                 ->visible(fn () => in_array($this->record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION])
-                    && !app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $this->record->report_date)),
+                    && ! app(SessionWorkflowService::class)->isInputClosedForReport(Auth::user(), $this->record)),
             Actions\DeleteAction::make()
                 ->visible(fn () => (bool) \Illuminate\Support\Facades\Auth::user()?->isSuperAdmin()),
         ];

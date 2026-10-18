@@ -59,7 +59,7 @@ class EditSessionReport extends EditRecord
 
     public function save(bool $shouldRedirect = true, bool $shouldSendSavedNotification = true): void
     {
-        if (app(SessionWorkflowService::class)->isInputClosed(Auth::user(), $this->getRecord()->report_date)) {
+        if (app(SessionWorkflowService::class)->isInputClosedForReport(Auth::user(), $this->getRecord())) {
             Notification::make()
                 ->title('Rekap Sesi Sudah Ditutup')
                 ->body($this->getRecord()->inputClosedMessage())

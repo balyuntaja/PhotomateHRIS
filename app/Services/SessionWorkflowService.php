@@ -60,6 +60,23 @@ class SessionWorkflowService
     }
 
     /**
+     * Batas waktu untuk mengedit sebuah rekap. Rekap berstatus REVISION dikecualikan
+     * agar crew dapat memperbaiki dan mengirim ulang tanpa batas H+2.
+     */
+    public function isInputClosedForReport(?Karyawan $user, ?SessionReport $report): bool
+    {
+        if (! $report) {
+            return false;
+        }
+
+        if ($report->isRevision()) {
+            return false;
+        }
+
+        return $this->isInputClosed($user, $report->report_date);
+    }
+
+    /**
      * Log an action to approval_logs table.
      */
     public function logAction(SessionReport $report, Karyawan $user, string $action, ?string $note = null): ApprovalLog
@@ -80,6 +97,11 @@ class SessionWorkflowService
     {
         if ($report->status === SessionReport::STATUS_APPROVED) {
             throw new RuntimeException('Rekap sesi yang sudah disetujui tidak dapat disubmit kembali.');
+        }
+
+        // Submit rekap baru tetap dibatasi H+2; rekap REVISION boleh dikirim ulang.
+        if ($this->isInputClosedForReport($user, $report)) {
+            throw new RuntimeException($report->inputClosedMessage());
         }
 
         return DB::transaction(function () use ($report, $user, $note) {

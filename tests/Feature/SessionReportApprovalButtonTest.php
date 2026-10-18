@@ -96,7 +96,7 @@ class SessionReportApprovalButtonTest extends TestCase
     protected function makeReport(string $status = SessionReport::STATUS_WAITING_APPROVAL): SessionReport
     {
         $report = SessionReport::create([
-            'report_date' => '2026-05-23',
+            'report_date' => now()->toDateString(),
             'status' => SessionReport::STATUS_DRAFT,
             'submitted_by' => $this->crew->karyawan_id,
         ]);

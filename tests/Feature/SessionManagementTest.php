@@ -176,10 +176,10 @@ class SessionManagementTest extends TestCase
     public function test_section_38_example_end_to_end_workflow(): void
     {
         // Step 1: Create session report
-        // Tanggal: 23 Mei 2026
+        // Tanggal: hari ini (agar submit awal masih dalam batas H+2)
         // Crew: Kia, Shasha
         $report = SessionReport::create([
-            'report_date' => '2026-05-23',
+            'report_date' => Carbon::today()->toDateString(),
             'status' => SessionReport::STATUS_DRAFT,
             'submitted_by' => $this->crewKia->karyawan_id,
             'event_note' => 'Event Photobooth Wedding Test',
@@ -286,7 +286,7 @@ class SessionManagementTest extends TestCase
     public function test_audit_logs_record_complete_trail(): void
     {
         $report = SessionReport::create([
-            'report_date' => '2026-05-23',
+            'report_date' => Carbon::today()->toDateString(),
             'status' => SessionReport::STATUS_DRAFT,
             'submitted_by' => $this->crewKia->karyawan_id,
         ]);
