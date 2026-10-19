@@ -5,7 +5,7 @@ namespace App\Filament\Resources\FinancialTransactionResource\Pages;
 use App\Filament\Pages\KeuanganInputTransaksi;
 use App\Filament\Resources\FinancialTransactionResource;
 use App\Filament\Resources\Pages\ListRecords;
-use App\Utils\RupiahHelper;
+use App\Services\KeuanganService;
 use Filament\Actions;
 use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -33,45 +33,23 @@ class ListFinancialTransactions extends ListRecords
                 ->color('success')
                 ->action(function (): StreamedResponse {
                     $records = $this->getFilteredTableQuery()
-                        ->with(['category', 'cabang', 'paymentMethod', 'creator'])
+                        ->with(['category', 'account', 'paymentMethod', 'submitter', 'creator'])
                         ->get();
+
+                    $service = app(KeuanganService::class);
 
                     $filename = 'transaksi-keuangan-photomate-' . now()->format('Ymd-His') . '.csv';
 
-                    return response()->streamDownload(function () use ($records): void {
+                    return response()->streamDownload(function () use ($records, $service): void {
                         $handle = fopen('php://output', 'w');
 
                         // UTF-8 BOM agar terbaca otomatis oleh Microsoft Excel
                         fputs($handle, "\xEF\xBB\xBF");
 
-                        fputcsv($handle, [
-                            'ID',
-                            'Tanggal',
-                            'Jenis',
-                            'Kategori',
-                            'Nominal',
-                            'Cabang',
-                            'Metode Pembayaran',
-                            'Deskripsi',
-                            'Dibuat Oleh',
-                            'Created At',
-                            'Updated At',
-                        ]);
+                        fputcsv($handle, KeuanganService::EXPORT_HEADERS);
 
                         foreach ($records as $record) {
-                            fputcsv($handle, [
-                                $record->id,
-                                $record->transaction_date?->format('Y-m-d') ?? '-',
-                                $record->type_label,
-                                $record->category?->name ?? '-',
-                                RupiahHelper::format($record->amount),
-                                $record->cabang?->nama_cabang ?? 'Tanpa Cabang',
-                                $record->paymentMethod?->name ?? '-',
-                                $record->description ?: '-',
-                                $record->creator?->nama_lengkap ?? '-',
-                                $record->created_at?->format('Y-m-d H:i:s') ?? '-',
-                                $record->updated_at?->format('Y-m-d H:i:s') ?? '-',
-                            ]);
+                            fputcsv($handle, $service->exportRow($record));
                         }
 
                         fclose($handle);

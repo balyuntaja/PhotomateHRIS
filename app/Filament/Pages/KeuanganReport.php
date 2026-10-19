@@ -3,10 +3,9 @@
 namespace App\Filament\Pages;
 
 use App\Filament\Resources\FinancialTransactionResource;
-use App\Models\Cabang;
+use App\Models\FinancialAccount;
 use App\Models\FinancialTransaction;
 use App\Services\KeuanganService;
-use App\Utils\RupiahHelper;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Forms\Contracts\HasForms;
@@ -60,7 +59,7 @@ class KeuanganReport extends Page implements HasForms, HasTable
     {
         $this->form->fill([
             'periode' => KeuanganService::DEFAULT_PRESET,
-            'cabang_id' => null,
+            'account_id' => null,
         ]);
     }
 
@@ -87,13 +86,14 @@ class KeuanganReport extends Page implements HasForms, HasTable
                     ->required(fn (Get $get): bool => $get('periode') === KeuanganService::PRESET_CUSTOM)
                     ->live(),
 
-                Forms\Components\Select::make('cabang_id')
-                    ->label('Cabang')
-                    ->options(fn (): array => Cabang::query()
-                        ->orderBy('nama_cabang')
-                        ->pluck('nama_cabang', 'cabang_id')
+                Forms\Components\Select::make('account_id')
+                    ->label('Akun')
+                    ->options(fn (): array => FinancialAccount::query()
+                        ->orderBy('sort_order')
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
                         ->all())
-                    ->placeholder('Semua Cabang')
+                    ->placeholder('Semua Akun')
                     ->live(),
             ])
             ->statePath('data')
@@ -101,7 +101,7 @@ class KeuanganReport extends Page implements HasForms, HasTable
     }
 
     /**
-     * @return array{period: array{preset: string, start: \Illuminate\Support\Carbon, end: \Illuminate\Support\Carbon, label: string}, cabangId: ?string, cabangName: string}
+     * @return array{period: array{preset: string, start: \Illuminate\Support\Carbon, end: \Illuminate\Support\Carbon, label: string}, accountId: ?int, accountName: string}
      */
     protected function resolveReportFilters(): array
     {
@@ -113,14 +113,17 @@ class KeuanganReport extends Page implements HasForms, HasTable
             $this->data['sampai'] ?? null,
         );
 
-        $cabangId = filled($this->data['cabang_id'] ?? null) ? $this->data['cabang_id'] : null;
+        $requestedAccountId = $this->data['account_id'] ?? null;
+        $accountId = is_scalar($requestedAccountId) && filled($requestedAccountId)
+            ? FinancialAccount::query()->whereKey($requestedAccountId)->value('id')
+            : null;
 
         return [
             'period' => $period,
-            'cabangId' => $cabangId,
-            'cabangName' => $cabangId
-                ? (Cabang::find($cabangId)?->nama_cabang ?? 'Semua Cabang')
-                : 'Semua Cabang',
+            'accountId' => $accountId,
+            'accountName' => $accountId
+                ? (FinancialAccount::find($accountId)?->name ?? 'Semua Akun')
+                : 'Semua Akun',
         ];
     }
 
@@ -133,12 +136,13 @@ class KeuanganReport extends Page implements HasForms, HasTable
 
         return [
             'period' => $filters['period'],
-            'cabangId' => $filters['cabangId'],
-            'cabangName' => $filters['cabangName'],
+            'accountId' => $filters['accountId'],
+            'accountName' => $filters['accountName'],
             'summary' => app(KeuanganService::class)->summary(
                 $filters['period']['start'],
                 $filters['period']['end'],
-                $filters['cabangId'],
+                null,
+                $filters['accountId'],
             ),
         ];
     }
@@ -168,6 +172,10 @@ class KeuanganReport extends Page implements HasForms, HasTable
                     ->formatStateUsing(fn (string $state): string => FinancialTransaction::TYPE_LABELS[$state] ?? $state)
                     ->color(fn (string $state): string => $state === FinancialTransaction::TYPE_INCOME ? 'success' : 'danger'),
 
+                TextColumn::make('account.name')
+                    ->label('Akun')
+                    ->placeholder('Tanpa Akun'),
+
                 TextColumn::make('category.name')
                     ->label('Kategori')
                     ->placeholder('-'),
@@ -180,10 +188,6 @@ class KeuanganReport extends Page implements HasForms, HasTable
                     ->url(fn (FinancialTransaction $record): ?string => FinancialTransactionResource::invoiceUrl($record))
                     ->openUrlInNewTab(),
 
-                TextColumn::make('cabang.nama_cabang')
-                    ->label('Cabang')
-                    ->placeholder('Tanpa Cabang'),
-
                 TextColumn::make('paymentMethod.name')
                     ->label('Metode Pembayaran')
                     ->placeholder('-'),
@@ -195,10 +199,13 @@ class KeuanganReport extends Page implements HasForms, HasTable
                     ->weight('semibold')
                     ->alignEnd()
                     ->sortable(),
+
+                TextColumn::make('submitted_by_label')
+                    ->label('Disubmit Oleh'),
             ])
             ->defaultSort('transaction_date', 'desc')
             ->emptyStateHeading('Belum ada transaksi pada periode ini.')
-            ->emptyStateDescription('Ubah periode atau cabang pada filter di atas untuk melihat transaksi lainnya.')
+            ->emptyStateDescription('Ubah periode atau akun pada filter di atas untuk melihat transaksi lainnya.')
             ->emptyStateIcon('heroicon-o-wallet');
     }
 
@@ -207,8 +214,8 @@ class KeuanganReport extends Page implements HasForms, HasTable
         $filters = $this->resolveReportFilters();
 
         return app(KeuanganService::class)
-            ->baseQuery($filters['period']['start'], $filters['period']['end'], $filters['cabangId'])
-            ->with(['category', 'cabang', 'paymentMethod']);
+            ->baseQuery($filters['period']['start'], $filters['period']['end'], null, $filters['accountId'])
+            ->with(['category', 'account', 'paymentMethod', 'submitter']);
     }
 
     protected function getHeaderActions(): array
@@ -222,47 +229,30 @@ class KeuanganReport extends Page implements HasForms, HasTable
                 ->action(function (): StreamedResponse {
                     $report = $this->reportData();
 
-                    $records = app(KeuanganService::class)
-                        ->transactionsForExport($report['period']['start'], $report['period']['end'], $report['cabangId'])
+                    $service = app(KeuanganService::class);
+
+                    $records = $service
+                        ->transactionsForExport(
+                            $report['period']['start'],
+                            $report['period']['end'],
+                            null,
+                            $report['accountId'],
+                        )
                         ->get();
 
                     $filename = 'laporan-keuangan-photomate-'
                         . $report['period']['start']->format('Ymd') . '-'
                         . $report['period']['end']->format('Ymd') . '.csv';
 
-                    return response()->streamDownload(function () use ($records): void {
+                    return response()->streamDownload(function () use ($records, $service): void {
                         $handle = fopen('php://output', 'w');
 
                         fputs($handle, "\xEF\xBB\xBF");
 
-                        fputcsv($handle, [
-                            'ID',
-                            'Tanggal',
-                            'Jenis',
-                            'Kategori',
-                            'Nominal',
-                            'Cabang',
-                            'Metode Pembayaran',
-                            'Deskripsi',
-                            'Dibuat Oleh',
-                            'Created At',
-                            'Updated At',
-                        ]);
+                        fputcsv($handle, KeuanganService::EXPORT_HEADERS);
 
                         foreach ($records as $record) {
-                            fputcsv($handle, [
-                                $record->id,
-                                $record->transaction_date?->format('Y-m-d') ?? '-',
-                                $record->type_label,
-                                $record->category?->name ?? '-',
-                                RupiahHelper::format($record->amount),
-                                $record->cabang?->nama_cabang ?? 'Tanpa Cabang',
-                                $record->paymentMethod?->name ?? '-',
-                                $record->description ?: '-',
-                                $record->creator?->nama_lengkap ?? '-',
-                                $record->created_at?->format('Y-m-d H:i:s') ?? '-',
-                                $record->updated_at?->format('Y-m-d H:i:s') ?? '-',
-                            ]);
+                            fputcsv($handle, $service->exportRow($record));
                         }
 
                         fclose($handle);
@@ -281,7 +271,7 @@ class KeuanganReport extends Page implements HasForms, HasTable
                     'periode' => $this->data['periode'] ?? KeuanganService::DEFAULT_PRESET,
                     'dari' => $this->data['dari'] ?? null,
                     'sampai' => $this->data['sampai'] ?? null,
-                    'cabang_id' => $this->data['cabang_id'] ?? null,
+                    'account_id' => $this->data['account_id'] ?? null,
                 ]))
                 ->openUrlInNewTab(),
         ];

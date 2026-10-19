@@ -28,7 +28,11 @@
                 <div style="font-size: 16px; font-weight:bold; text-align:center; border-top: 1px solid #222; border-bottom: 1px solid #222; padding: 5px 0; margin: 5px 0;">
                     {{ $judulDokumen }} - {{ $periode }}
                 </div>
-                @if (filled($cabangName ?? null))
+                @if (filled($accountName ?? null))
+                    <div style="font-size: 10px; text-align:center; color: #555;">
+                        Akun: {{ $accountName }}
+                    </div>
+                @elseif (filled($cabangName ?? null))
                     <div style="font-size: 10px; text-align:center; color: #555;">
                         Cabang: {{ $cabangName }}
                     </div>

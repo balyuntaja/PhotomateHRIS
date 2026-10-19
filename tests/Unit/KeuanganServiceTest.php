@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Models\Cabang;
+use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
@@ -29,6 +30,10 @@ class KeuanganServiceTest extends TestCase
     protected Cabang $express;
 
     protected Cabang $janus;
+
+    protected FinancialAccount $expressAccount;
+
+    protected FinancialAccount $janusAccount;
 
     protected function setUp(): void
     {
@@ -71,6 +76,8 @@ class KeuanganServiceTest extends TestCase
             ->firstOrFail();
 
         $this->paymentMethod = FinancialPaymentMethod::where('name', 'Transfer')->firstOrFail();
+        $this->expressAccount = FinancialAccount::where('name', 'Photomate Express')->firstOrFail();
+        $this->janusAccount = FinancialAccount::where('name', 'Janus')->firstOrFail();
     }
 
     public function test_master_data_keuangan_terpasang_dari_migration(): void
@@ -128,6 +135,51 @@ class KeuanganServiceTest extends TestCase
         $this->assertSame(0, $janus['income']);
         $this->assertSame(381550, $janus['expense']);
         $this->assertSame(-381550, $janus['balance']);
+    }
+
+    public function test_summary_hanya_menghitung_akun_terpilih(): void
+    {
+        $this->seedContohTransaksi();
+
+        $period = $this->service->resolvePeriod(null);
+
+        $express = $this->service->summary($period['start'], $period['end'], null, $this->expressAccount->id);
+        $this->assertSame(2000000, $express['income']);
+        $this->assertSame(100000, $express['expense']);
+        $this->assertSame(1900000, $express['balance']);
+
+        $janus = $this->service->summary($period['start'], $period['end'], null, $this->janusAccount->id);
+        $this->assertSame(0, $janus['income']);
+        $this->assertSame(381550, $janus['expense']);
+        $this->assertSame(-381550, $janus['balance']);
+    }
+
+    public function test_export_memakai_akun_dan_disubmit_oleh_tanpa_cabang(): void
+    {
+        $this->assertNotContains('Cabang', KeuanganService::EXPORT_HEADERS);
+        $this->assertContains('Akun', KeuanganService::EXPORT_HEADERS);
+        $this->assertContains('Disubmit Oleh', KeuanganService::EXPORT_HEADERS);
+
+        $transaction = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            100000,
+            $this->incomeCategory->id,
+            null,
+            Carbon::today()->toDateString(),
+            $this->expressAccount->id
+        );
+
+        $row = $this->service->exportRow($transaction);
+        $headers = KeuanganService::EXPORT_HEADERS;
+
+        $this->assertSame(
+            'Photomate Express',
+            $row[array_search('Akun', $headers, true)]
+        );
+        $this->assertSame(
+            FinancialTransaction::SUBMITTER_LEGACY_LABEL,
+            $row[array_search('Disubmit Oleh', $headers, true)]
+        );
     }
 
     public function test_transaksi_terhapus_tidak_dihitung_dalam_laporan(): void
@@ -243,9 +295,30 @@ class KeuanganServiceTest extends TestCase
     {
         $today = Carbon::today()->toDateString();
 
-        $this->makeTransaction(FinancialTransaction::TYPE_INCOME, 2000000, $this->incomeCategory->id, 'C0005', $today);
-        $this->makeTransaction(FinancialTransaction::TYPE_EXPENSE, 381550, $this->tintaCategory->id, 'C0004', $today);
-        $this->makeTransaction(FinancialTransaction::TYPE_EXPENSE, 100000, $this->bensinCategory->id, 'C0005', $today);
+        $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            2000000,
+            $this->incomeCategory->id,
+            'C0005',
+            $today,
+            $this->expressAccount->id
+        );
+        $this->makeTransaction(
+            FinancialTransaction::TYPE_EXPENSE,
+            381550,
+            $this->tintaCategory->id,
+            'C0004',
+            $today,
+            $this->janusAccount->id
+        );
+        $this->makeTransaction(
+            FinancialTransaction::TYPE_EXPENSE,
+            100000,
+            $this->bensinCategory->id,
+            'C0005',
+            $today,
+            $this->expressAccount->id
+        );
     }
 
     protected function makeTransaction(
@@ -253,12 +326,14 @@ class KeuanganServiceTest extends TestCase
         int $amount,
         int $categoryId,
         ?string $cabangId,
-        string $date
+        string $date,
+        ?int $accountId = null
     ): FinancialTransaction {
         return FinancialTransaction::create([
             'transaction_type' => $type,
             'amount' => $amount,
             'category_id' => $categoryId,
+            'account_id' => $accountId,
             'cabang_id' => $cabangId,
             'payment_method_id' => $this->paymentMethod->id,
             'transaction_date' => $date,

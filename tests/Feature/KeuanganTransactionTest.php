@@ -36,6 +36,10 @@ class KeuanganTransactionTest extends TestCase
 
     protected FinancialPaymentMethod $cash;
 
+    protected FinancialAccount $expressAccount;
+
+    protected FinancialAccount $janusAccount;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -70,6 +74,8 @@ class KeuanganTransactionTest extends TestCase
             ->firstOrFail();
 
         $this->cash = FinancialPaymentMethod::where('name', 'Cash')->firstOrFail();
+        $this->expressAccount = FinancialAccount::where('name', 'Photomate Express')->firstOrFail();
+        $this->janusAccount = FinancialAccount::where('name', 'Janus')->firstOrFail();
 
         $this->managerFinance = $this->makeUser('K0001', 'Manager Finance', 'R04', 'manager.finance@photomate.id', [
             'view_any_keuangan_transaction',
@@ -272,17 +278,37 @@ class KeuanganTransactionTest extends TestCase
             ->assertCanNotSeeTableRecords([$bulanLalu]);
     }
 
-    public function test_filter_cabang_dan_jenis_transaksi(): void
+    public function test_tabel_transaksi_memakai_filter_akun_bukan_cabang(): void
     {
         $this->actingAs($this->managerFinance);
 
-        $express = $this->makeTransaction(2000000, $this->incomeCategory->id, 'C0005');
-        $janus = $this->makeTransaction(381550, $this->expenseCategory->id, 'C0004');
+        $express = $this->makeTransaction(
+            2000000,
+            $this->incomeCategory->id,
+            'C0005',
+            null,
+            null,
+            $this->expressAccount->id
+        );
+        $janus = $this->makeTransaction(
+            381550,
+            $this->expenseCategory->id,
+            'C0004',
+            null,
+            null,
+            $this->janusAccount->id
+        );
 
-        Livewire::test(ListFinancialTransactions::class)
-            ->filterTable('cabang_id', ['value' => 'C0005'])
+        $component = Livewire::test(ListFinancialTransactions::class)
+            ->assertTableColumnExists('account.name')
+            ->assertTableColumnExists('submitted_by_label')
+            ->assertTableColumnDoesNotExist('cabang.nama_cabang')
+            ->assertTableFilterExists('account_id')
+            ->filterTable('account_id', ['value' => $this->expressAccount->id])
             ->assertCanSeeTableRecords([$express])
             ->assertCanNotSeeTableRecords([$janus]);
+
+        $this->assertNull($component->instance()->getTable()->getFilter('cabang_id'));
     }
 
     public function test_input_transaksi_menyimpan_transaksi_tanpa_redirect_dan_reset_form(): void
@@ -329,6 +355,8 @@ class KeuanganTransactionTest extends TestCase
         $this->assertNotSame($transaction->transaction_date->toDateString(), $transaction->created_at->toDateString());
         $this->assertSame('Pelunasan Event A', $transaction->description);
         $this->assertSame($this->managerFinance->karyawan_id, $transaction->created_by);
+        $this->assertSame($this->managerFinance->karyawan_id, $transaction->submitted_by);
+        $this->assertSame($this->managerFinance->nama_lengkap, $transaction->submitted_by_name);
 
         $this->assertDatabaseHas('financial_audit_logs', [
             'financial_transaction_id' => $transaction->id,
@@ -359,12 +387,41 @@ class KeuanganTransactionTest extends TestCase
         $this->get('/admin/keuangan-input-transaksi')->assertOk();
     }
 
+    public function test_edit_transaksi_dapat_mengubah_akun_tanpa_mengubah_submitter(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $transaction = $this->makeTransaction(100000, $this->expenseCategory->id);
+
+        $this->assertSame($this->expressAccount->id, $transaction->account_id);
+        $this->assertSame($this->managerFinance->karyawan_id, $transaction->submitted_by);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountTableAction('edit', $transaction)
+            ->assertTableActionDataSet([
+                'account_id' => $this->expressAccount->id,
+            ]);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->callTableAction('edit', $transaction, [
+                'account_id' => $this->janusAccount->id,
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $transaction->refresh();
+
+        $this->assertSame($this->janusAccount->id, $transaction->account_id);
+        $this->assertSame($this->managerFinance->karyawan_id, $transaction->submitted_by);
+        $this->assertSame($this->managerFinance->nama_lengkap, $transaction->submitted_by_name);
+    }
+
     protected function makeTransaction(
         int $amount,
         int $categoryId,
         ?string $cabangId = null,
         ?string $createdBy = null,
-        ?string $date = null
+        ?string $date = null,
+        ?int $accountId = null
     ): FinancialTransaction {
         return FinancialTransaction::create([
             'transaction_type' => $categoryId === $this->incomeCategory->id
@@ -372,6 +429,7 @@ class KeuanganTransactionTest extends TestCase
                 : FinancialTransaction::TYPE_EXPENSE,
             'amount' => $amount,
             'category_id' => $categoryId,
+            'account_id' => $accountId ?? $this->expressAccount->id,
             'cabang_id' => $cabangId,
             'payment_method_id' => $this->cash->id,
             'transaction_date' => $date ?? Carbon::today()->toDateString(),

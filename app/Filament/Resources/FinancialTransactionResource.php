@@ -3,7 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\FinancialTransactionResource\Pages;
-use App\Models\Cabang;
+use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
@@ -59,7 +59,7 @@ class FinancialTransactionResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['category', 'account', 'party', 'cabang', 'paymentMethod', 'creator']);
+        return parent::getEloquentQuery()->with(['category', 'account', 'party', 'paymentMethod', 'creator', 'submitter']);
     }
 
     public static function sourceLabel(?string $state): string
@@ -140,14 +140,20 @@ class FinancialTransactionResource extends Resource
                         ->required()
                         ->validationMessages(['required' => 'Tanggal transaksi wajib diisi.']),
 
-                    Forms\Components\Select::make('cabang_id')
-                        ->label('Cabang')
-                        ->options(fn (): array => Cabang::query()
-                            ->orderBy('nama_cabang')
-                            ->pluck('nama_cabang', 'cabang_id')
+                    Forms\Components\Select::make('account_id')
+                        ->label('Akun')
+                        ->options(fn (): array => FinancialAccount::query()
+                            ->orderBy('sort_order')
+                            ->orderBy('name')
+                            ->pluck('name', 'id')
                             ->all())
                         ->searchable()
-                        ->placeholder('— Tanpa cabang —'),
+                        ->required()
+                        ->exists('financial_accounts', 'id')
+                        ->validationMessages([
+                            'required' => 'Akun wajib dipilih.',
+                            'exists' => 'Akun tidak valid.',
+                        ]),
 
                     Forms\Components\Select::make('payment_method_id')
                         ->label('Metode Pembayaran')
@@ -223,10 +229,6 @@ class FinancialTransactionResource extends Resource
                     Infolists\Components\TextEntry::make('transaction_date_label')
                         ->label('Tanggal'),
 
-                    Infolists\Components\TextEntry::make('cabang.nama_cabang')
-                        ->label('Cabang')
-                        ->placeholder('Tanpa Cabang'),
-
                     Infolists\Components\TextEntry::make('paymentMethod.name')
                         ->label('Metode Pembayaran')
                         ->placeholder('-'),
@@ -295,6 +297,9 @@ class FinancialTransactionResource extends Resource
 
             Infolists\Components\Section::make('Informasi Pencatatan')
                 ->schema([
+                    Infolists\Components\TextEntry::make('submitted_by_label')
+                        ->label('Disubmit Oleh'),
+
                     Infolists\Components\TextEntry::make('creator.nama_lengkap')
                         ->label('Dibuat Oleh')
                         ->placeholder('-'),
@@ -341,6 +346,10 @@ class FinancialTransactionResource extends Resource
                     ->placeholder('Tanpa Akun')
                     ->toggleable(),
 
+                Tables\Columns\TextColumn::make('submitted_by_label')
+                    ->label('Disubmit Oleh')
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('category.name')
                     ->label('Kategori')
                     ->searchable()
@@ -354,12 +363,6 @@ class FinancialTransactionResource extends Resource
                     ->tooltip(fn (FinancialTransaction $record): ?string => $record->description)
                     ->url(fn (FinancialTransaction $record): ?string => self::invoiceUrl($record))
                     ->openUrlInNewTab(),
-
-                Tables\Columns\TextColumn::make('cabang.nama_cabang')
-                    ->label('Cabang')
-                    ->searchable()
-                    ->placeholder('Tanpa Cabang')
-                    ->toggleable(),
 
                 Tables\Columns\TextColumn::make('paymentMethod.name')
                     ->label('Metode')
@@ -408,12 +411,6 @@ class FinancialTransactionResource extends Resource
                 Tables\Filters\SelectFilter::make('account_id')
                     ->label('Akun')
                     ->relationship('account', 'name')
-                    ->searchable()
-                    ->preload(),
-
-                Tables\Filters\SelectFilter::make('cabang_id')
-                    ->label('Cabang')
-                    ->relationship('cabang', 'nama_cabang')
                     ->searchable()
                     ->preload(),
 

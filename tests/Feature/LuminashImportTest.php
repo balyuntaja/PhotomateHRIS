@@ -111,6 +111,8 @@ class LuminashImportTest extends TestCase
         $this->assertSame('QRIS', $transaction->paymentMethod?->name);
         $this->assertSame($this->category->id, $transaction->category_id);
         $this->assertSame($this->managerFinance->karyawan_id, $transaction->created_by);
+        $this->assertSame($this->managerFinance->karyawan_id, $transaction->submitted_by);
+        $this->assertSame($this->managerFinance->nama_lengkap, $transaction->submitted_by_name);
         $this->assertSame(LuminashImportService::SOURCE, $transaction->source_type);
         $this->assertSame('20261011213012034', $transaction->source_id);
         $this->assertNull($transaction->party_id);
@@ -649,7 +651,11 @@ class LuminashImportTest extends TestCase
             ->assertNotified();
 
         $this->assertSame(1, FinancialTransaction::count());
-        $this->assertSame('REKAP-2026-10-10', FinancialTransaction::firstOrFail()->source_id);
+
+        $rekap = FinancialTransaction::firstOrFail();
+        $this->assertSame('REKAP-2026-10-10', $rekap->source_id);
+        $this->assertSame($this->managerFinance->karyawan_id, $rekap->submitted_by);
+        $this->assertSame($this->managerFinance->nama_lengkap, $rekap->submitted_by_name);
         $this->assertTrue(FinancialTransaction::withTrashed()->where('source_id', '20261010225503199')->exists());
         $this->assertSame('file-b.csv', LuminashImportBatch::firstOrFail()->file_name);
     }

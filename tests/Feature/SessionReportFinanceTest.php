@@ -103,6 +103,9 @@ class SessionReportFinanceTest extends TestCase
         $this->assertSame(FinancialTransaction::PAYMENT_STATUS_LUNAS, $cash->payment_status);
         $this->assertSame(SessionReportFinancialService::SOURCE, $cash->source_type);
         $this->assertSame($this->supervisor->karyawan_id, $cash->created_by);
+        $this->assertSame($this->crew->karyawan_id, $cash->submitted_by);
+        $this->assertSame($this->crew->nama_lengkap, $cash->submitted_by_name);
+        $this->assertSame($this->crew->nama_lengkap, $cash->submitted_by_label);
         $this->assertStringContainsString($report->report_number, (string) $cash->description);
 
         $qris = FinancialTransaction::where('source_id', $report->id . '-QRIS')->firstOrFail();
@@ -263,6 +266,8 @@ class SessionReportFinanceTest extends TestCase
         $this->assertSame(FinancialTransaction::PAYMENT_STATUS_LUNAS, $transaction->payment_status);
         $this->assertSame('Rekap Sesi ' . $report->report_number . ' · Newspaper Janus', $transaction->description);
         $this->assertSame($this->supervisor->karyawan_id, $transaction->created_by);
+        $this->assertSame($this->crew->karyawan_id, $transaction->submitted_by);
+        $this->assertSame($this->crew->nama_lengkap, $transaction->submitted_by_name);
 
         $this->assertDatabaseMissing('financial_transactions', ['source_id' => $report->id . '-CASH']);
         $this->assertDatabaseMissing('financial_transactions', ['source_id' => $report->id . '-QRIS']);

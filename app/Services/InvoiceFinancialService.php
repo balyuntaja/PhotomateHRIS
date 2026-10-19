@@ -76,6 +76,8 @@ class InvoiceFinancialService
                 'source_type' => self::SOURCE,
                 'source_id' => (string) $invoice->id,
                 'created_by' => $actor?->karyawan_id,
+                'submitted_by' => $actor?->karyawan_id,
+                'submitted_by_name' => $actor?->nama_lengkap,
             ]);
         });
     }

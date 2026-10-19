@@ -4,6 +4,7 @@ namespace App\Observers;
 
 use App\Models\Invoice;
 use App\Services\InvoiceFinancialService;
+use Illuminate\Support\Facades\Auth;
 
 class InvoiceObserver
 {
@@ -13,7 +14,7 @@ class InvoiceObserver
      */
     public function saved(Invoice $invoice): void
     {
-        app(InvoiceFinancialService::class)->sync($invoice);
+        app(InvoiceFinancialService::class)->sync($invoice, Auth::user());
     }
 
     /**

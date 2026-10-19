@@ -264,6 +264,8 @@ class KeuanganInputTransaksi extends Page implements HasForms
 
         $data['period_year'] = (int) $year;
         $data['period_month'] = (int) $month;
+        $data['submitted_by'] = Auth::id();
+        $data['submitted_by_name'] = Auth::user()?->nama_lengkap;
 
         try {
             $transaction = FinancialTransaction::create($data);

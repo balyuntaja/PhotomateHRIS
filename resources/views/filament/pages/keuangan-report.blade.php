@@ -7,7 +7,7 @@
         <div class="text-sm text-gray-500 dark:text-gray-400">
             Periode: <span class="font-medium text-gray-700 dark:text-gray-200">{{ $report['period']['label'] }}</span>
             &middot;
-            Cabang: <span class="font-medium text-gray-700 dark:text-gray-200">{{ $report['cabangName'] }}</span>
+            Akun: <span class="font-medium text-gray-700 dark:text-gray-200">{{ $report['accountName'] }}</span>
         </div>
 
         {{-- Ringkasan --}}
@@ -34,7 +34,7 @@
             </x-filament::card>
         </div>
 
-        {{-- Rincian transaksi (mengikuti filter periode & cabang) --}}
+        {{-- Rincian transaksi (mengikuti filter periode & akun) --}}
         {{ $this->table }}
 
         {{-- Total dari transaksi yang sedang ditampilkan --}}

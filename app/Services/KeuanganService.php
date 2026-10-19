@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\FinancialTransaction;
 use App\Utils\MonthHelper;
+use App\Utils\RupiahHelper;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -22,6 +23,21 @@ class KeuanganService
     public const PRESET_CUSTOM = 'custom';
 
     public const DEFAULT_PRESET = self::PRESET_THIS_MONTH;
+
+    public const EXPORT_HEADERS = [
+        'ID',
+        'Tanggal',
+        'Jenis',
+        'Akun',
+        'Kategori',
+        'Deskripsi',
+        'Metode Pembayaran',
+        'Nominal',
+        'Disubmit Oleh',
+        'Dibuat Oleh',
+        'Created At',
+        'Updated At',
+    ];
 
     /**
      * Opsi preset periode untuk filter.
@@ -86,19 +102,28 @@ class KeuanganService
         return $start->format('d/m/Y') . ' - ' . $end->format('d/m/Y');
     }
 
-    public function baseQuery(CarbonInterface $start, CarbonInterface $end, ?string $cabangId = null): Builder
-    {
+    public function baseQuery(
+        CarbonInterface $start,
+        CarbonInterface $end,
+        ?string $cabangId = null,
+        ?int $accountId = null
+    ): Builder {
         return FinancialTransaction::query()
             ->periode($start, $end)
-            ->forCabang($cabangId);
+            ->forCabang($cabangId)
+            ->forAccount($accountId);
     }
 
     /**
      * @return array{income: int, expense: int, balance: int}
      */
-    public function summary(CarbonInterface $start, CarbonInterface $end, ?string $cabangId = null): array
-    {
-        $totals = $this->baseQuery($start, $end, $cabangId)
+    public function summary(
+        CarbonInterface $start,
+        CarbonInterface $end,
+        ?string $cabangId = null,
+        ?int $accountId = null
+    ): array {
+        $totals = $this->baseQuery($start, $end, $cabangId, $accountId)
             ->selectRaw(
                 'COALESCE(SUM(CASE WHEN transaction_type = ? THEN amount ELSE 0 END), 0) as total_income',
                 [FinancialTransaction::TYPE_INCOME]
@@ -281,10 +306,11 @@ class KeuanganService
     public function transactionsForExport(
         CarbonInterface $start,
         CarbonInterface $end,
-        ?string $cabangId = null
+        ?string $cabangId = null,
+        ?int $accountId = null
     ): Builder {
-        return $this->baseQuery($start, $end, $cabangId)
-            ->with(['category', 'cabang', 'paymentMethod', 'creator'])
+        return $this->baseQuery($start, $end, $cabangId, $accountId)
+            ->with(['category', 'account', 'paymentMethod', 'submitter', 'creator'])
             ->orderBy('transaction_date')
             ->orderBy('id');
     }
@@ -296,13 +322,37 @@ class KeuanganService
     public function transactionsForReport(
         CarbonInterface $start,
         CarbonInterface $end,
-        ?string $cabangId = null
+        ?string $cabangId = null,
+        ?int $accountId = null
     ): Builder {
-        return $this->baseQuery($start, $end, $cabangId)
-            ->with(['category', 'cabang', 'paymentMethod'])
+        return $this->baseQuery($start, $end, $cabangId, $accountId)
+            ->with(['category', 'account', 'paymentMethod', 'submitter'])
             ->orderByDesc('transaction_date')
             ->orderByDesc('created_at')
             ->orderByDesc('id');
+    }
+
+    /**
+     * Baris CSV yang dipakai bersama oleh halaman Transaksi dan Laporan.
+     *
+     * @return array<int, string|int>
+     */
+    public function exportRow(FinancialTransaction $transaction): array
+    {
+        return [
+            $transaction->id,
+            $transaction->transaction_date?->format('Y-m-d') ?? '-',
+            $transaction->type_label,
+            $transaction->account?->name ?? 'Tanpa Akun',
+            $transaction->category?->name ?? '-',
+            $transaction->description ?: '-',
+            $transaction->paymentMethod?->name ?? '-',
+            RupiahHelper::format($transaction->amount),
+            $transaction->submitted_by_label,
+            $transaction->creator?->nama_lengkap ?? '-',
+            $transaction->created_at?->format('Y-m-d H:i:s') ?? '-',
+            $transaction->updated_at?->format('Y-m-d H:i:s') ?? '-',
+        ];
     }
 
     /**

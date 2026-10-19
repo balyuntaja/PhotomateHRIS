@@ -44,6 +44,10 @@ class FinancialTransaction extends Model
 
     public const ACTION_RESTORED = 'RESTORED';
 
+    public const SUBMITTER_LEGACY_LABEL = 'Data Lama';
+
+    public const SUBMITTER_SYSTEM_LABEL = 'Otomatis';
+
     protected $table = 'financial_transactions';
 
     protected $fillable = [
@@ -66,6 +70,8 @@ class FinancialTransaction extends Model
         'source_id',
         'created_by',
         'updated_by',
+        'submitted_by',
+        'submitted_by_name',
     ];
 
     protected $casts = [
@@ -87,6 +93,16 @@ class FinancialTransaction extends Model
     {
         static::creating(function (self $transaction): void {
             $transaction->created_by ??= auth()->id();
+
+            if (blank($transaction->source_type)) {
+                $transaction->submitted_by ??= auth()->id();
+            }
+
+            if (filled($transaction->submitted_by) && blank($transaction->submitted_by_name)) {
+                $transaction->submitted_by_name = Karyawan::withTrashed()
+                    ->whereKey($transaction->submitted_by)
+                    ->value('nama_lengkap');
+            }
         });
 
         static::created(function (self $transaction): void {
@@ -158,6 +174,11 @@ class FinancialTransaction extends Model
         return $this->belongsTo(Karyawan::class, 'updated_by', 'karyawan_id');
     }
 
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(Karyawan::class, 'submitted_by', 'karyawan_id')->withTrashed();
+    }
+
     public function auditLogs(): HasMany
     {
         return $this->hasMany(FinancialAuditLog::class, 'financial_transaction_id');
@@ -171,6 +192,11 @@ class FinancialTransaction extends Model
     public function scopeForCabang(Builder $query, ?string $cabangId): Builder
     {
         return $query->when(filled($cabangId), fn (Builder $q): Builder => $q->where('cabang_id', $cabangId));
+    }
+
+    public function scopeForAccount(Builder $query, ?int $accountId): Builder
+    {
+        return $query->when(filled($accountId), fn (Builder $q): Builder => $q->where('account_id', $accountId));
     }
 
     public function scopeOfType(Builder $query, ?string $type): Builder
@@ -233,6 +259,27 @@ class FinancialTransaction extends Model
     public function getFormattedAmountAttribute(): string
     {
         return RupiahHelper::format($this->amount);
+    }
+
+    /**
+     * Nama pengguna yang menyubmit transaksi. Relasi diutamakan, snapshot
+     * dipakai bila relasi tidak tersedia; transaksi lama memakai penanda sumber.
+     */
+    public function getSubmittedByLabelAttribute(): string
+    {
+        $name = $this->submitter?->nama_lengkap;
+
+        if (filled($name)) {
+            return $name;
+        }
+
+        if (filled($this->submitted_by_name)) {
+            return $this->submitted_by_name;
+        }
+
+        return filled($this->source_type)
+            ? self::SUBMITTER_SYSTEM_LABEL
+            : self::SUBMITTER_LEGACY_LABEL;
     }
 
     public function getSignedFormattedAmountAttribute(): string

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Cabang;
+use App\Models\FinancialAccount;
 use App\Models\FinancialTransaction;
 use App\Services\KeuanganService;
 use App\Utils\MonthHelper;
@@ -32,10 +32,17 @@ class KeuanganLaporanController extends Controller
                 $request->query('sampai'),
             );
 
-            $cabangId = filled($request->query('cabang_id')) ? $request->query('cabang_id') : null;
+            $requestedAccountId = $request->query('account_id');
+            $accountId = is_scalar($requestedAccountId) && filled($requestedAccountId)
+                ? FinancialAccount::query()->whereKey($requestedAccountId)->value('id')
+                : null;
+
+            $accountName = $accountId
+                ? (FinancialAccount::find($accountId)?->name ?? 'Semua Akun')
+                : 'Semua Akun';
 
             $transactions = $service
-                ->transactionsForReport($period['start'], $period['end'], $cabangId)
+                ->transactionsForReport($period['start'], $period['end'], null, $accountId)
                 ->get();
 
             $income = (int) $transactions
@@ -48,9 +55,7 @@ class KeuanganLaporanController extends Controller
 
             $pdf = Pdf::loadView('pdf.keuangan-laporan', [
                 'period' => $period,
-                'cabangName' => $cabangId
-                    ? (Cabang::find($cabangId)?->nama_cabang ?? 'Semua Cabang')
-                    : 'Semua Cabang',
+                'accountName' => $accountName,
                 'summary' => [
                     'income' => $income,
                     'expense' => $expense,
@@ -63,7 +68,7 @@ class KeuanganLaporanController extends Controller
                     . MonthHelper::formatPeriod((int) now()->month, (int) now()->year),
             ]);
 
-            $pdf->setPaper('A4', 'portrait');
+            $pdf->setPaper('A4', 'landscape');
             $pdf->setOptions([
                 'dpi' => 150,
                 'defaultFont' => 'sans-serif',
@@ -82,7 +87,7 @@ class KeuanganLaporanController extends Controller
         } catch (\Throwable $th) {
             Log::error('Gagal mencetak laporan keuangan Photomate: ' . $th->getMessage(), [
                 'periode' => $request->query('periode'),
-                'cabang_id' => $request->query('cabang_id'),
+                'account_id' => $request->query('account_id'),
             ]);
 
             abort(500, 'Terjadi kesalahan saat membuat PDF laporan keuangan.');

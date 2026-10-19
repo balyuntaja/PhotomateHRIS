@@ -6,7 +6,7 @@
     <title>{{ $judulDokumen }} - {{ $periode }}</title>
     <style>
         @page {
-            margin: 40px 36px 80px 36px;
+            margin: 30px 30px 65px 30px;
         }
 
         body {
@@ -102,6 +102,8 @@
         }
 
         .transactions-table {
+            width: 100%;
+            table-layout: fixed;
             font-size: 9px;
             margin-bottom: 0;
         }
@@ -138,8 +140,9 @@
 <body>
     @php
         $transactions = $transactions ?? collect();
-        $firstPageRows = 12;
-        $nextPageRows = 16;
+        $accountName = $accountName ?? 'Semua Akun';
+        $firstPageRows = 8;
+        $nextPageRows = 12;
         $rowNumber = 0;
 
         $pages = collect();
@@ -156,13 +159,13 @@
             @include('pdf.partials.laporan-header', [
                 'judulDokumen' => $judulDokumen,
                 'periode' => $periode,
-                'cabangName' => $cabangName,
+                'accountName' => $accountName,
             ])
 
             @if ($loop->first)
                 <div class="meta-info">
                     <strong>Periode:</strong> {{ $period['label'] }}<br>
-                    <strong>Cabang:</strong> {{ $cabangName }}
+                    <strong>Akun:</strong> {{ $accountName }}
                 </div>
 
                 <h2>Ringkasan</h2>
@@ -196,13 +199,14 @@
                 <thead>
                     <tr>
                         <th class="text-center" style="width: 4%;">No</th>
-                        <th style="width: 10%;">Tanggal</th>
-                        <th style="width: 9%;">Jenis</th>
-                        <th style="width: 13%;">Kategori</th>
-                        <th style="width: 25%;">Deskripsi</th>
-                        <th style="width: 12%;">Cabang</th>
-                        <th style="width: 11%;">Metode</th>
-                        <th class="text-right" style="width: 16%;">Nominal</th>
+                        <th style="width: 9%;">Tanggal</th>
+                        <th style="width: 8%;">Jenis</th>
+                        <th style="width: 12%;">Akun</th>
+                        <th style="width: 12%;">Kategori</th>
+                        <th style="width: 18%;">Deskripsi</th>
+                        <th style="width: 10%;">Metode</th>
+                        <th class="text-right" style="width: 12%;">Nominal</th>
+                        <th style="width: 15%;">Disubmit Oleh</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -212,13 +216,14 @@
                             <td class="text-center">{{ $rowNumber }}</td>
                             <td>{{ $transaction->transaction_date?->format('d M Y') ?? '-' }}</td>
                             <td>{{ $transaction->type_label }}</td>
+                            <td>{{ $transaction->account?->name ?? 'Tanpa Akun' }}</td>
                             <td>{{ $transaction->category?->name ?? '-' }}</td>
-                            <td>{{ \Illuminate\Support\Str::limit($transaction->description, 70) ?: '-' }}</td>
-                            <td>{{ $transaction->cabang?->nama_cabang ?? 'Tanpa Cabang' }}</td>
+                            <td>{{ filled($transaction->description) ? \Illuminate\Support\Str::limit($transaction->description, 70) : '-' }}</td>
                             <td>{{ $transaction->paymentMethod?->name ?? '-' }}</td>
                             <td class="text-right {{ $transaction->is_income ? 'text-income' : 'text-expense' }}">
                                 {{ $transaction->signed_formatted_amount }}
                             </td>
+                            <td>{{ $transaction->submitted_by_label }}</td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -247,12 +252,12 @@
         @include('pdf.partials.laporan-header', [
             'judulDokumen' => $judulDokumen,
             'periode' => $periode,
-            'cabangName' => $cabangName,
+            'accountName' => $accountName,
         ])
 
         <div class="meta-info">
             <strong>Periode:</strong> {{ $period['label'] }}<br>
-            <strong>Cabang:</strong> {{ $cabangName }}
+            <strong>Akun:</strong> {{ $accountName }}
         </div>
 
         <h2>Ringkasan</h2>
@@ -284,18 +289,19 @@
             <thead>
                 <tr>
                     <th class="text-center" style="width: 4%;">No</th>
-                    <th style="width: 10%;">Tanggal</th>
-                    <th style="width: 9%;">Jenis</th>
-                    <th style="width: 13%;">Kategori</th>
-                    <th style="width: 25%;">Deskripsi</th>
-                    <th style="width: 12%;">Cabang</th>
-                    <th style="width: 11%;">Metode</th>
-                    <th class="text-right" style="width: 16%;">Nominal</th>
+                    <th style="width: 9%;">Tanggal</th>
+                    <th style="width: 8%;">Jenis</th>
+                    <th style="width: 12%;">Akun</th>
+                    <th style="width: 12%;">Kategori</th>
+                    <th style="width: 18%;">Deskripsi</th>
+                    <th style="width: 10%;">Metode</th>
+                    <th class="text-right" style="width: 12%;">Nominal</th>
+                    <th style="width: 15%;">Disubmit Oleh</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td colspan="8" class="text-center">Belum ada transaksi pada periode ini.</td>
+                    <td colspan="9" class="text-center">Belum ada transaksi pada periode ini.</td>
                 </tr>
             </tbody>
         </table>
@@ -323,7 +329,7 @@
         if (isset($pdf)) {
             $font = $fontMetrics->getFont('DejaVu Sans');
             $color = [0.42, 0.45, 0.50];
-            $y = 800;
+            $y = $pdf->get_height() - 35;
 
             $pdf->page_text(36, $y, {!! json_encode('Laporan Keuangan Photomate - ' . $periode) !!}, $font, 8, $color);
 

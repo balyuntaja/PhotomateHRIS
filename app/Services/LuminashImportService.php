@@ -405,6 +405,8 @@ class LuminashImportService
                             'source_type' => self::SOURCE,
                             'source_id' => (string) $row['order_id'],
                             'created_by' => $user->karyawan_id,
+                            'submitted_by' => $user->karyawan_id,
+                            'submitted_by_name' => $user->nama_lengkap,
                         ]);
 
                         $transactionId = $transaction->id;

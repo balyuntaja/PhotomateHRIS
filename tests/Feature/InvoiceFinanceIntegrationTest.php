@@ -80,6 +80,43 @@ class InvoiceFinanceIntegrationTest extends TestCase
             'Pelunasan Invoice ' . $invoice->invoice_number . ' - Keluarga Uji',
             $transaction->description
         );
+        $this->assertNull($transaction->submitted_by);
+        $this->assertSame(FinancialTransaction::SUBMITTER_SYSTEM_LABEL, $transaction->submitted_by_label);
+    }
+
+    public function test_invoice_lunas_mencatat_submitter_dan_tidak_menimpanya_saat_disimpan_user_lain(): void
+    {
+        $pertama = $this->makeSuperAdmin();
+
+        $this->actingAs($pertama);
+
+        $invoice = $this->makeInvoice(['status' => 'Lunas']);
+        $transaction = $this->invoiceTransaction($invoice);
+
+        $this->assertSame($pertama->karyawan_id, $transaction->submitted_by);
+        $this->assertSame($pertama->nama_lengkap, $transaction->submitted_by_name);
+
+        $kedua = Karyawan::create([
+            'karyawan_id' => 'K0002',
+            'role_id' => 'R01',
+            'perusahaan_id' => 'P0001',
+            'nik' => '888888888888',
+            'nama_lengkap' => 'Admin Kedua Uji',
+            'email' => 'admin.kedua@photomate.id',
+            'password' => bcrypt('password'),
+            'tanggal_lahir' => '1990-01-01',
+            'jenis_kelamin' => 'Laki-laki',
+            'alamat' => 'Malang',
+        ]);
+
+        $this->actingAs($kedua);
+
+        $invoice->update(['notes' => 'Disimpan oleh user lain']);
+
+        $transaction->refresh();
+
+        $this->assertSame($pertama->karyawan_id, $transaction->submitted_by);
+        $this->assertSame($pertama->nama_lengkap, $transaction->submitted_by_name);
     }
 
     public function test_acara_multi_hari_dicatat_sekali_pada_tanggal_mulai(): void

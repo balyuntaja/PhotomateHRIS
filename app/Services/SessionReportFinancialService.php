@@ -48,6 +48,7 @@ class SessionReportFinancialService
     {
         $category = $this->pendapatanBoothCategory();
         $accountId = $this->resolveAccountId($report);
+        $submitter = $report->submitter;
         $created = 0;
 
         if ($this->hasLegacySplitTransactions($report)) {
@@ -83,6 +84,8 @@ class SessionReportFinancialService
                 'source_type' => self::SOURCE,
                 'source_id' => $plan['source_id'],
                 'created_by' => $actor?->karyawan_id,
+                'submitted_by' => $report->submitted_by,
+                'submitted_by_name' => $submitter?->nama_lengkap,
             ]);
 
             $created++;

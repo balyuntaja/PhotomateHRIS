@@ -98,7 +98,11 @@ class LuminashRekapService
                     $rekap->fill($attributes)->save();
                     $stats['updated']++;
                 } else {
-                    FinancialTransaction::create($attributes + ['created_by' => $actor?->karyawan_id]);
+                    FinancialTransaction::create($attributes + [
+                        'created_by' => $actor?->karyawan_id,
+                        'submitted_by' => $actor?->karyawan_id,
+                        'submitted_by_name' => $actor?->nama_lengkap,
+                    ]);
                     $stats['created']++;
                 }
 

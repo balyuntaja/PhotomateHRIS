@@ -166,6 +166,9 @@ class KeuanganInputTransaksiTest extends TestCase
         $this->assertSame('Pembelian tinta printer Janus', $transaction->description);
         $this->assertNull($transaction->evidence_path);
         $this->assertSame($this->managerFinance->karyawan_id, $transaction->created_by);
+        $this->assertSame($this->managerFinance->karyawan_id, $transaction->submitted_by);
+        $this->assertSame($this->managerFinance->nama_lengkap, $transaction->submitted_by_name);
+        $this->assertSame($this->managerFinance->nama_lengkap, $transaction->submitted_by_label);
     }
 
     public function test_input_transaksi_menyimpan_transaksi_utang_beserta_jatuh_tempo_dan_pihak_kepada(): void

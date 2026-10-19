@@ -8,6 +8,7 @@ use App\Filament\Widgets\Keuangan\IncomeExpenseChart;
 use App\Filament\Widgets\Keuangan\KeuanganStatsOverview;
 use App\Filament\Widgets\Keuangan\LatestTransactionsWidget;
 use App\Models\Cabang;
+use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
@@ -38,6 +39,10 @@ class KeuanganDashboardReportTest extends TestCase
     protected FinancialCategory $bensinCategory;
 
     protected FinancialPaymentMethod $paymentMethod;
+
+    protected FinancialAccount $expressAccount;
+
+    protected FinancialAccount $janusAccount;
 
     protected function setUp(): void
     {
@@ -77,6 +82,8 @@ class KeuanganDashboardReportTest extends TestCase
             ->firstOrFail();
 
         $this->paymentMethod = FinancialPaymentMethod::where('name', 'Transfer')->firstOrFail();
+        $this->expressAccount = FinancialAccount::where('name', 'Photomate Express')->firstOrFail();
+        $this->janusAccount = FinancialAccount::where('name', 'Janus')->firstOrFail();
 
         $this->financeUser = $this->makeUser('K0001', 'Manager Finance', 'R04', 'manager.finance@photomate.id', [
             'view_keuangan_dashboard',
@@ -164,11 +171,24 @@ class KeuanganDashboardReportTest extends TestCase
             ->assertSee('+ Rp 2.000.000')
             ->assertSee('- Rp 381.550')
             ->assertSee('- Rp 100.000')
-            ->assertSee('Newspaper Janus')
+            ->assertSee('Disubmit Oleh')
+            ->assertSee('Janus')
             ->assertSee('Photomate Express');
     }
 
-    public function test_rincian_transaksi_mengikuti_filter_cabang(): void
+    public function test_halaman_laporan_memakai_filter_dan_kolom_akun_tanpa_cabang(): void
+    {
+        $this->actingAs($this->financeUser);
+
+        Livewire::test(KeuanganReport::class)
+            ->assertFormFieldExists('account_id')
+            ->assertFormFieldDoesNotExist('cabang_id')
+            ->assertTableColumnExists('account.name')
+            ->assertTableColumnExists('submitted_by_label')
+            ->assertTableColumnDoesNotExist('cabang.nama_cabang');
+    }
+
+    public function test_rincian_transaksi_mengikuti_filter_akun(): void
     {
         $this->seedContohTransaksi();
 
@@ -180,7 +200,7 @@ class KeuanganDashboardReportTest extends TestCase
 
         Livewire::test(KeuanganReport::class)
             ->assertCanSeeTableRecords([$pelunasan, $tinta, $bensin])
-            ->set('data.cabang_id', 'C0005')
+            ->set('data.account_id', $this->expressAccount->id)
             ->assertCanSeeTableRecords([$pelunasan, $bensin])
             ->assertCanNotSeeTableRecords([$tinta]);
     }
@@ -333,24 +353,31 @@ class KeuanganDashboardReportTest extends TestCase
 
         Livewire::test(KeuanganReport::class)
             ->assertSee('Rp 1.518.450')
-            ->set('data.cabang_id', 'C0005')
+            ->set('data.account_id', $this->expressAccount->id)
             ->assertSee('Rp 1.900.000')
             ->assertDontSee('Rp 1.518.450');
     }
 
-    public function test_export_query_mengikuti_filter_periode_dan_cabang(): void
+    public function test_export_query_mengikuti_filter_periode_dan_akun(): void
     {
         $this->seedContohTransaksi();
 
         $service = app(KeuanganService::class);
         $period = $service->resolvePeriod(KeuanganService::PRESET_THIS_MONTH);
 
-        $semuaCabang = $service->transactionsForExport($period['start'], $period['end'])->get();
-        $this->assertCount(3, $semuaCabang);
+        $semuaAkun = $service->transactionsForExport($period['start'], $period['end'])->get();
+        $this->assertCount(3, $semuaAkun);
 
-        $express = $service->transactionsForExport($period['start'], $period['end'], 'C0005')->get();
+        $express = $service->transactionsForExport(
+            $period['start'],
+            $period['end'],
+            null,
+            $this->expressAccount->id
+        )->get();
         $this->assertCount(2, $express);
-        $this->assertTrue($express->every(fn (FinancialTransaction $transaction): bool => $transaction->cabang_id === 'C0005'));
+        $this->assertTrue($express->every(
+            fn (FinancialTransaction $transaction): bool => $transaction->account_id === $this->expressAccount->id
+        ));
 
         $bulanLalu = $service->resolvePeriod(KeuanganService::PRESET_LAST_MONTH);
         $this->assertCount(0, $service->transactionsForExport($bulanLalu['start'], $bulanLalu['end'])->get());
@@ -382,12 +409,12 @@ class KeuanganDashboardReportTest extends TestCase
         $this->get('/keuangan/laporan/cetak')->assertForbidden();
     }
 
-    public function test_cetak_pdf_mengikuti_filter_cabang(): void
+    public function test_cetak_pdf_mengikuti_filter_akun(): void
     {
         $this->seedContohTransaksi();
 
         $this->actingAs($this->financeUser)
-            ->get('/keuangan/laporan/cetak?periode=this_month&cabang_id=C0005')
+            ->get('/keuangan/laporan/cetak?periode=this_month&account_id=' . $this->expressAccount->id)
             ->assertOk()
             ->assertHeader('content-type', 'application/pdf')
             ->assertDownload();
@@ -401,10 +428,11 @@ class KeuanganDashboardReportTest extends TestCase
 
         $this->assertStringContainsString('Laporan Keuangan Photomate', $html);
         $this->assertStringContainsString('Periode:', $html);
-        $this->assertStringContainsString('Cabang:', $html);
+        $this->assertStringContainsString('Akun:', $html);
         $this->assertStringContainsString('Ringkasan', $html);
         $this->assertStringContainsString('Keterangan', $html);
         $this->assertStringContainsString('Rincian Transaksi', $html);
+        $this->assertStringContainsString('Disubmit Oleh', $html);
 
         $this->assertStringContainsString('Pelunasan Event A', $html);
         $this->assertStringContainsString('Pembelian tinta printer Janus', $html);
@@ -412,11 +440,26 @@ class KeuanganDashboardReportTest extends TestCase
         $this->assertStringContainsString('+ Rp 2.000.000', $html);
         $this->assertStringContainsString('- Rp 381.550', $html);
         $this->assertStringContainsString('- Rp 100.000', $html);
-        $this->assertStringContainsString('Newspaper Janus', $html);
+        $this->assertStringContainsString('Janus', $html);
         $this->assertStringContainsString('Photomate Express', $html);
 
         $this->assertStringContainsString('Halaman {PAGE_NUM} dari {PAGE_COUNT}', $html);
         $this->assertStringContainsString('Dicetak pada:', $html);
+    }
+
+    public function test_template_pdf_mengikuti_filter_akun_yang_dipilih(): void
+    {
+        $this->seedContohTransaksi();
+
+        $html = $this->renderPdfTemplate(['accountId' => $this->expressAccount->id]);
+
+        $this->assertStringContainsString('Akun: Photomate Express', $html);
+        $this->assertStringContainsString('Pelunasan Event A', $html);
+        $this->assertStringContainsString('Bensin operasional', $html);
+        $this->assertStringNotContainsString('Pembelian tinta printer Janus', $html);
+        $this->assertStringContainsString('Rp 2.000.000', $html);
+        $this->assertStringContainsString('Rp 100.000', $html);
+        $this->assertStringContainsString('Rp 1.900.000', $html);
     }
 
     public function test_template_pdf_tidak_lagi_menampilkan_agregasi_dan_identitas_lama(): void
@@ -429,6 +472,7 @@ class KeuanganDashboardReportTest extends TestCase
         $this->assertStringNotContainsString('Rincian Pengeluaran', $html);
         $this->assertStringNotContainsString('Kontribusi', $html);
         $this->assertStringNotContainsString('Selisih Kas', $html);
+        $this->assertStringNotContainsString('Cabang:', $html);
         $this->assertStringNotContainsString('PT.QUANTA', $html);
         $this->assertStringNotContainsString('smartcool', $html);
         $this->assertStringNotContainsString('Logo not found', $html);
@@ -459,16 +503,16 @@ class KeuanganDashboardReportTest extends TestCase
 
         $html = $this->renderPdfTemplate(['transactions' => $transactions]);
 
-        // 45 transaksi -> 12 + 16 + 16 + 1 = 4 halaman, tiap halaman punya header sendiri.
-        $this->assertSame(4, substr_count($html, '<table class="transactions-table"'));
-        $this->assertSame(4, substr_count($html, '<table class="table-no-border"'));
-        $this->assertSame(3, substr_count($html, 'Rincian Transaksi (lanjutan)'));
+        // 45 transaksi -> 8 + 12 + 12 + 12 + 1 = 5 halaman, tiap halaman punya header sendiri.
+        $this->assertSame(5, substr_count($html, '<table class="transactions-table"'));
+        $this->assertSame(5, substr_count($html, '<table class="table-no-border"'));
+        $this->assertSame(4, substr_count($html, 'Rincian Transaksi (lanjutan)'));
         $this->assertSame(45, substr_count($html, '<td class="text-center">'));
         $this->assertStringContainsString('<td class="text-center">45</td>', $html);
 
         $dompdf = new Dompdf();
         $dompdf->loadHtml($html);
-        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->setPaper('A4', 'landscape');
         $dompdf->setOptions(new Options([
             'dpi' => 150,
             'defaultFont' => 'sans-serif',
@@ -477,7 +521,7 @@ class KeuanganDashboardReportTest extends TestCase
         ]));
         $dompdf->render();
 
-        $this->assertSame(4, $dompdf->getCanvas()->get_page_count());
+        $this->assertSame(5, $dompdf->getCanvas()->get_page_count());
     }
 
     public function test_pdf_menggunakan_filter_dan_urutan_transaksi_yang_sama_dengan_halaman_laporan(): void
@@ -494,9 +538,16 @@ class KeuanganDashboardReportTest extends TestCase
         $this->assertSame('Bensin operasional', $semua->first()->description);
         $this->assertSame('Pelunasan Event A', $semua->last()->description);
 
-        $express = $service->transactionsForReport($periode['start'], $periode['end'], 'C0005')->get();
+        $express = $service->transactionsForReport(
+            $periode['start'],
+            $periode['end'],
+            null,
+            $this->expressAccount->id
+        )->get();
         $this->assertCount(2, $express);
-        $this->assertTrue($express->every(fn (FinancialTransaction $transaction): bool => $transaction->cabang_id === 'C0005'));
+        $this->assertTrue($express->every(
+            fn (FinancialTransaction $transaction): bool => $transaction->account_id === $this->expressAccount->id
+        ));
 
         $bulanLalu = $service->resolvePeriod(KeuanganService::PRESET_LAST_MONTH);
         $this->assertCount(0, $service->transactionsForReport($bulanLalu['start'], $bulanLalu['end'])->get());
@@ -519,25 +570,25 @@ class KeuanganDashboardReportTest extends TestCase
     }
 
     /**
-     * @param  array{transactions?: \Illuminate\Support\Collection<int, FinancialTransaction>, cabangId?: ?string}  $overrides
+     * @param  array{transactions?: \Illuminate\Support\Collection<int, FinancialTransaction>, accountId?: ?int}  $overrides
      */
     protected function renderPdfTemplate(array $overrides = []): string
     {
         $service = app(KeuanganService::class);
         $period = $service->resolvePeriod(KeuanganService::PRESET_THIS_MONTH);
-        $cabangId = $overrides['cabangId'] ?? null;
+        $accountId = $overrides['accountId'] ?? null;
 
         $transactions = $overrides['transactions']
-            ?? $service->transactionsForReport($period['start'], $period['end'], $cabangId)->get();
+            ?? $service->transactionsForReport($period['start'], $period['end'], null, $accountId)->get();
 
         $income = (int) $transactions->where('transaction_type', FinancialTransaction::TYPE_INCOME)->sum('amount');
         $expense = (int) $transactions->where('transaction_type', FinancialTransaction::TYPE_EXPENSE)->sum('amount');
 
         return view('pdf.keuangan-laporan', [
             'period' => $period,
-            'cabangName' => $cabangId
-                ? (Cabang::find($cabangId)?->nama_cabang ?? 'Semua Cabang')
-                : 'Semua Cabang',
+            'accountName' => $accountId
+                ? (FinancialAccount::find($accountId)?->name ?? 'Semua Akun')
+                : 'Semua Akun',
             'summary' => [
                 'income' => $income,
                 'expense' => $expense,
@@ -560,7 +611,8 @@ class KeuanganDashboardReportTest extends TestCase
             $this->incomeCategory->id,
             'C0005',
             $today,
-            'Pelunasan Event A'
+            'Pelunasan Event A',
+            $this->expressAccount->id
         );
 
         $this->makeTransaction(
@@ -569,7 +621,8 @@ class KeuanganDashboardReportTest extends TestCase
             $this->tintaCategory->id,
             'C0004',
             $today,
-            'Pembelian tinta printer Janus'
+            'Pembelian tinta printer Janus',
+            $this->janusAccount->id
         );
 
         $this->makeTransaction(
@@ -578,7 +631,8 @@ class KeuanganDashboardReportTest extends TestCase
             $this->bensinCategory->id,
             'C0005',
             $today,
-            'Bensin operasional'
+            'Bensin operasional',
+            $this->expressAccount->id
         );
     }
 
@@ -588,12 +642,14 @@ class KeuanganDashboardReportTest extends TestCase
         int $categoryId,
         ?string $cabangId,
         string $date,
-        string $description = 'Transaksi uji'
+        string $description = 'Transaksi uji',
+        ?int $accountId = null
     ): FinancialTransaction {
         return FinancialTransaction::create([
             'transaction_type' => $type,
             'amount' => $amount,
             'category_id' => $categoryId,
+            'account_id' => $accountId,
             'cabang_id' => $cabangId,
             'payment_method_id' => $this->paymentMethod->id,
             'transaction_date' => $date,
