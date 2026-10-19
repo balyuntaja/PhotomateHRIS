@@ -18,11 +18,11 @@ use Throwable;
 class BackfillRekapSesiKeuangan extends Command
 {
     protected $signature = 'keuangan:backfill-rekap-sesi
-                            {--cabang= : Batasi ke satu cabang (cabang_id atau nama cabang, contoh: C0006 atau "Newspaper Janus")}
+                            {--cabang= : Batasi ke satu cabang (cabang_id atau nama cabang, contoh: C0006, "Newspaper Janus", atau "Express Sharing Profit")}
                             {--dry-run : Tampilkan rencana perubahan tanpa menyimpan apa pun}
                             {--actor= : ID karyawan yang dicatat sebagai pembuat transaksi backfill (opsional)}';
 
-    protected $description = 'Rekonsiliasi rekap sesi yang sudah approved ke laporan keuangan: satukan transaksi lama per metode pembayaran menjadi satu transaksi gabungan per rekap (Newspaper Janus / Photomate Express), catat rekap yang belum tersinkron tanpa membuat transaksi ganda, dan samakan kategori Pendapatan Booth pada transaksi hasil integrasi yang lama';
+    protected $description = 'Rekonsiliasi rekap sesi yang sudah approved ke laporan keuangan: satukan transaksi lama per metode pembayaran menjadi satu transaksi gabungan per rekap (Newspaper Janus / Express Sharing Profit), catat rekap yang belum tersinkron tanpa membuat transaksi ganda, dan samakan kategori Pendapatan Booth pada transaksi hasil integrasi yang lama';
 
     public function handle(): int
     {
@@ -54,7 +54,11 @@ class BackfillRekapSesiKeuangan extends Command
         $cabang = $this->resolveCabang();
 
         if (blank($this->option('cabang')) === false && ! $cabang) {
-            $this->error('Cabang "' . $this->option('cabang') . '" tidak ditemukan.');
+            $this->error(
+                'Cabang "' . $this->option('cabang') . '" tidak ditemukan. '
+                . 'Cabang yang tersedia: '
+                . Cabang::query()->orderBy('nama_cabang')->pluck('nama_cabang')->implode(', ')
+            );
 
             return self::FAILURE;
         }

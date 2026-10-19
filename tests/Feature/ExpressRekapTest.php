@@ -30,6 +30,8 @@ class ExpressRekapTest extends TestCase
 
     protected Cabang $expressSelfRun;
 
+    protected Cabang $expressSharingProfit;
+
     protected Cabang $janus;
 
     protected FinancialCategory $pendapatanBooth;
@@ -75,6 +77,12 @@ class ExpressRekapTest extends TestCase
             'nama_cabang' => 'Express Self Run',
         ]);
 
+        $this->expressSharingProfit = Cabang::create([
+            'cabang_id' => 'C0008',
+            'perusahaan_id' => 'P0001',
+            'nama_cabang' => 'Express Sharing Profit',
+        ]);
+
         $this->janus = Cabang::create([
             'cabang_id' => 'C0004',
             'perusahaan_id' => 'P0001',
@@ -110,11 +118,12 @@ class ExpressRekapTest extends TestCase
         ]);
     }
 
-    public function test_hanya_branch_photomate_express_yang_dikenali(): void
+    public function test_hanya_branch_express_sharing_profit_yang_dikenali(): void
     {
         $service = app(ExpressRekapService::class);
 
-        $this->assertTrue($service->isExpressBranch($this->reportForBranch($this->express)));
+        $this->assertTrue($service->isExpressBranch($this->reportForBranch($this->expressSharingProfit)));
+        $this->assertFalse($service->isExpressBranch($this->reportForBranch($this->express)));
         $this->assertFalse($service->isExpressBranch($this->reportForBranch($this->expressSewa)));
         $this->assertFalse($service->isExpressBranch($this->reportForBranch($this->expressSelfRun)));
         $this->assertFalse($service->isExpressBranch($this->reportForBranch($this->janus)));
@@ -122,7 +131,7 @@ class ExpressRekapTest extends TestCase
 
     public function test_label_metode_gabungan_hanya_untuk_consolidated_express(): void
     {
-        $report = $this->makeReport($this->express);
+        $report = $this->makeReport($this->expressSharingProfit);
 
         $consolidated = $this->makeTransaction($report, [
             'account_id' => $this->expressAccount->id,
@@ -134,6 +143,13 @@ class ExpressRekapTest extends TestCase
             'account_id' => $this->expressAccount->id,
             'payment_method_id' => $this->qris->id,
             'source_id' => $report->id . '-QRIS',
+        ]);
+
+        $sharingReport = $this->makeReport($this->expressSharingProfit);
+        $sharingConsolidated = $this->makeTransaction($sharingReport, [
+            'account_id' => $this->expressAccount->id,
+            'payment_method_id' => null,
+            'source_id' => (string) $sharingReport->id,
         ]);
 
         $janusReport = $this->makeReport($this->janus);
@@ -157,20 +173,30 @@ class ExpressRekapTest extends TestCase
             'source_id' => null,
         ]);
 
+        $photomateReport = $this->makeReport($this->express);
+        $photomateConsolidated = $this->makeTransaction($photomateReport, [
+            'account_id' => $this->expressAccount->id,
+            'payment_method_id' => null,
+            'source_id' => (string) $photomateReport->id,
+        ]);
+
         $this->assertSame('Gabungan', $consolidated->payment_method_label);
+        $this->assertSame('Gabungan', $sharingConsolidated->payment_method_label);
         $this->assertSame('QRIS', $singleMethod->payment_method_label);
         $this->assertSame('-', $janusConsolidated->payment_method_label);
         $this->assertSame('-', $luminashRekap->payment_method_label);
         $this->assertSame('-', $manual->payment_method_label);
+        $this->assertSame('-', $photomateConsolidated->payment_method_label);
 
         $this->assertTrue(app(ExpressRekapService::class)->isConsolidated($consolidated));
+        $this->assertTrue(app(ExpressRekapService::class)->isConsolidated($sharingConsolidated));
         $this->assertFalse(app(ExpressRekapService::class)->isConsolidated($singleMethod));
         $this->assertFalse(app(ExpressRekapService::class)->isConsolidated($janusConsolidated));
     }
 
     public function test_detail_rows_menampilkan_tunai_dan_qris(): void
     {
-        $report = $this->makeReport($this->express);
+        $report = $this->makeReport($this->expressSharingProfit);
 
         $transaction = $this->makeTransaction($report, [
             'account_id' => $this->expressAccount->id,
@@ -202,7 +228,7 @@ class ExpressRekapTest extends TestCase
 
     public function test_tabel_laporan_csv_dan_pdf_menampilkan_gabungan(): void
     {
-        $report = $this->makeReport($this->express);
+        $report = $this->makeReport($this->expressSharingProfit);
 
         $transaction = $this->makeTransaction($report, [
             'account_id' => $this->expressAccount->id,

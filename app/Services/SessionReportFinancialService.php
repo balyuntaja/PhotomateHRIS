@@ -96,7 +96,7 @@ class SessionReportFinancialService
 
     /**
      * Rekap dengan pencatatan gabungan: Newspaper Janus selalu Grand Total,
-     * Photomate Express digabung jika memiliki lebih dari satu metode (QRIS + tunai).
+     * Express Sharing Profit digabung jika memiliki lebih dari satu metode (QRIS + tunai).
      */
     private function usesConsolidatedAmount(SessionReport $report): bool
     {
@@ -146,7 +146,7 @@ class SessionReportFinancialService
     }
 
     /**
-     * Express memakai penjumlahan QRIS + Tunai; Janus memakai Grand Total.
+     * Express Sharing Profit memakai penjumlahan QRIS + Tunai; Janus memakai Grand Total.
      */
     private function consolidatedAmount(SessionReport $report): int
     {
@@ -431,7 +431,7 @@ class SessionReportFinancialService
 
         $normalizedBranch = $this->normalize($branchName);
 
-        return FinancialAccount::query()
+        $accountId = FinancialAccount::query()
             ->active()
             ->orderBy('sort_order')
             ->get()
@@ -441,6 +441,21 @@ class SessionReportFinancialService
                 return $normalizedAccount !== '' && str_contains($normalizedBranch, $normalizedAccount);
             })
             ?->id;
+
+        if ($accountId !== null) {
+            return $accountId;
+        }
+
+        // Cabang "Express Sharing Profit" memakai akun Photomate Express bila
+        // tidak ada akun yang namanya cocok langsung dengan nama cabang.
+        if (app(ExpressRekapService::class)->isExpressBranch($report)) {
+            return FinancialAccount::query()
+                ->active()
+                ->where('name', ExpressRekapService::ACCOUNT_NAME)
+                ->value('id');
+        }
+
+        return null;
     }
 
     private function paymentMethodId(string $method): ?int

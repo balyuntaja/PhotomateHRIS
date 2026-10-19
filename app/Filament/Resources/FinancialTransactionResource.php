@@ -60,7 +60,7 @@ class FinancialTransactionResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['category', 'account', 'party', 'paymentMethod', 'creator', 'submitter']);
+        return parent::getEloquentQuery()->with(['category', 'account', 'party', 'paymentMethod', 'creator', 'submitter', 'cabang']);
     }
 
     public static function sourceLabel(?string $state): string

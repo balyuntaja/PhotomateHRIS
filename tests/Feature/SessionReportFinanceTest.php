@@ -30,9 +30,9 @@ class SessionReportFinanceTest extends TestCase
 
     protected Karyawan $crew;
 
-    protected Cabang $express;
-
     protected Cabang $regular;
+
+    protected Cabang $expressSharingProfit;
 
     protected Cabang $janus;
 
@@ -51,18 +51,18 @@ class SessionReportFinanceTest extends TestCase
             'jam_pulang' => '17:00',
         ]);
 
-        $this->express = Cabang::create([
-            'cabang_id' => 'C0005',
-            'perusahaan_id' => 'P0001',
-            'nama_cabang' => 'Photomate Express',
-            'alamat' => 'Photomate Express Outlet',
-        ]);
-
         $this->regular = Cabang::create([
             'cabang_id' => 'C0007',
             'perusahaan_id' => 'P0001',
             'nama_cabang' => 'Ekspansi',
             'alamat' => 'Ekspansi Outlet',
+        ]);
+
+        $this->expressSharingProfit = Cabang::create([
+            'cabang_id' => 'C0008',
+            'perusahaan_id' => 'P0001',
+            'nama_cabang' => 'Express Sharing Profit',
+            'alamat' => 'Express Sharing Profit Outlet',
         ]);
 
         $this->janus = Cabang::create([
@@ -137,11 +137,11 @@ class SessionReportFinanceTest extends TestCase
             ->assertCanSeeTableRecords([$cash, $qris]);
     }
 
-    public function test_rekap_photomate_express_cash_dan_qris_digabung_menjadi_satu_transaksi(): void
+    public function test_rekap_express_sharing_profit_cash_dan_qris_digabung_menjadi_satu_transaksi(): void
     {
         $this->actingAs($this->supervisor);
 
-        $report = $this->makeReport($this->express, [
+        $report = $this->makeReport($this->expressSharingProfit, [
             ['payment_method' => 'CASH', 'amount' => 30000],
             ['payment_method' => 'QRIS', 'amount' => 45000],
         ]);
@@ -158,13 +158,13 @@ class SessionReportFinanceTest extends TestCase
         $this->assertNull($transaction->payment_method_id);
         $this->assertSame('Gabungan', $transaction->payment_method_label);
         $this->assertSame('Photomate Express', $transaction->account?->name);
-        $this->assertSame('Photomate Express', $transaction->cabang?->nama_cabang);
+        $this->assertSame('Express Sharing Profit', $transaction->cabang?->nama_cabang);
         $this->assertSame('2026-10-11', $transaction->transaction_date->toDateString());
         $this->assertSame($this->supervisor->karyawan_id, $transaction->created_by);
         $this->assertSame($this->crew->karyawan_id, $transaction->submitted_by);
         $this->assertSame($this->crew->nama_lengkap, $transaction->submitted_by_name);
         $this->assertSame(
-            'Rekap Sesi ' . $report->report_number . ' · Photomate Express · Gabungan',
+            'Rekap Sesi ' . $report->report_number . ' · Express Sharing Profit · Gabungan',
             $transaction->description
         );
         $this->assertSame(0, FinancialTransaction::withTrashed()->whereIn('source_id', [
@@ -175,7 +175,7 @@ class SessionReportFinanceTest extends TestCase
         $summary = app(KeuanganService::class)->summary(
             \Illuminate\Support\Carbon::parse('2026-10-01'),
             \Illuminate\Support\Carbon::parse('2026-10-31'),
-            $this->express->cabang_id,
+            $this->expressSharingProfit->cabang_id,
         );
 
         $this->assertSame(75000, $summary['income']);
@@ -185,16 +185,44 @@ class SessionReportFinanceTest extends TestCase
             ->assertSee('Gabungan');
     }
 
+    public function test_rekap_express_sharing_profit_digabung_dan_memakai_akun_photomate_express(): void
+    {
+        $this->actingAs($this->supervisor);
+
+        $report = $this->makeReport($this->expressSharingProfit, [
+            ['payment_method' => 'CASH', 'amount' => 30000],
+            ['payment_method' => 'QRIS', 'amount' => 45000],
+        ]);
+
+        app(SessionWorkflowService::class)->approve($report, $this->supervisor);
+
+        $this->assertSame(1, FinancialTransaction::count());
+
+        $transaction = FinancialTransaction::firstOrFail();
+
+        $this->assertSame((string) $report->id, $transaction->source_id);
+        $this->assertSame(75000, $transaction->amount);
+        $this->assertSame('Pendapatan Booth', $transaction->category?->name);
+        $this->assertSame('Photomate Express', $transaction->account?->name);
+        $this->assertSame('Express Sharing Profit', $transaction->cabang?->nama_cabang);
+        $this->assertNull($transaction->payment_method_id);
+        $this->assertSame('Gabungan', $transaction->payment_method_label);
+        $this->assertSame(
+            'Rekap Sesi ' . $report->report_number . ' · Express Sharing Profit · Gabungan',
+            $transaction->description
+        );
+    }
+
     public function test_rekap_express_pada_tanggal_berbeda_tetap_terpisah(): void
     {
         $this->actingAs($this->supervisor);
 
-        $reportA = $this->makeReport($this->express, [
+        $reportA = $this->makeReport($this->expressSharingProfit, [
             ['payment_method' => 'CASH', 'amount' => 30000],
             ['payment_method' => 'QRIS', 'amount' => 45000],
         ], '2026-10-11');
 
-        $reportB = $this->makeReport($this->express, [
+        $reportB = $this->makeReport($this->expressSharingProfit, [
             ['payment_method' => 'CASH', 'amount' => 10000],
             ['payment_method' => 'QRIS', 'amount' => 20000],
         ], '2026-10-12');
@@ -219,7 +247,7 @@ class SessionReportFinanceTest extends TestCase
     {
         $this->actingAs($this->supervisor);
 
-        $report = $this->makeReport($this->express, [
+        $report = $this->makeReport($this->expressSharingProfit, [
             ['payment_method' => 'QRIS', 'amount' => 25000],
         ]);
 
@@ -259,7 +287,7 @@ class SessionReportFinanceTest extends TestCase
     {
         $this->actingAs($this->supervisor);
 
-        $report = $this->makeReport($this->express, [
+        $report = $this->makeReport($this->expressSharingProfit, [
             ['payment_method' => 'CASH', 'amount' => 30000],
             ['payment_method' => 'QRIS', 'amount' => 45000],
         ]);
@@ -283,7 +311,7 @@ class SessionReportFinanceTest extends TestCase
     {
         $this->actingAs($this->supervisor);
 
-        $report = $this->makeReport($this->express, [
+        $report = $this->makeReport($this->expressSharingProfit, [
             ['payment_method' => 'CASH', 'amount' => 30000],
             ['payment_method' => 'QRIS', 'amount' => 45000],
         ]);
@@ -319,7 +347,7 @@ class SessionReportFinanceTest extends TestCase
             ->where('name', SessionReportFinancialService::CATEGORY_NAME)
             ->delete();
 
-        $report = $this->makeReport($this->express, [
+        $report = $this->makeReport($this->expressSharingProfit, [
             ['payment_method' => 'QRIS', 'amount' => 25000],
         ]);
 

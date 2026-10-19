@@ -23,6 +23,8 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     protected Cabang $regular;
 
+    protected Cabang $expressSharing;
+
     protected FinancialCategory $oldCategory;
 
     protected function setUp(): void
@@ -50,6 +52,13 @@ class KeuanganBackfillRekapSesiTest extends TestCase
             'perusahaan_id' => 'P0001',
             'nama_cabang' => 'Ekspansi',
             'alamat' => 'Ekspansi Outlet',
+        ]);
+
+        $this->expressSharing = Cabang::create([
+            'cabang_id' => 'C0008',
+            'perusahaan_id' => 'P0001',
+            'nama_cabang' => 'Express Sharing Profit',
+            'alamat' => 'Express Sharing Profit Outlet',
         ]);
 
         $this->oldCategory = FinancialCategory::where('name', 'Pendapatan Lain-lain')
@@ -198,7 +207,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
             'amount' => 30000,
             'category_id' => $this->pendapatanBoothCategory()->id,
             'transaction_date' => '2026-10-11',
-            'description' => 'Rekap Sesi ' . $report->report_number . ' · Photomate Express · Tunai',
+            'description' => 'Rekap Sesi ' . $report->report_number . ' · ' . ($report->cabang?->nama_cabang ?? '-') . ' · Tunai',
             'source_type' => SessionReportFinancialService::SOURCE,
             'source_id' => $report->id . '-GRAND',
         ]);
@@ -285,7 +294,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     public function test_transaksi_lama_express_cash_dan_qris_digabung_menjadi_satu_transaksi(): void
     {
-        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+        $report = $this->makeApprovedReport($this->expressSharing, cash: 60000, qris: 60000);
 
         $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
         $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
@@ -301,7 +310,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
         $this->assertSame((string) $report->id, $merged->source_id);
         $this->assertSame(120000, $merged->amount);
-        $this->assertSame('Rekap Sesi ' . $report->report_number . ' · Photomate Express · Gabungan', $merged->description);
+        $this->assertSame('Rekap Sesi ' . $report->report_number . ' · Express Sharing Profit · Gabungan', $merged->description);
         $this->assertNull($merged->payment_method_id);
         $this->assertSame('Photomate Express', $merged->account?->name);
         $this->assertSame($this->pendapatanBoothCategory()->id, $merged->category_id);
@@ -319,7 +328,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     public function test_transaksi_lama_express_dengan_kategori_berbeda_tidak_digabung(): void
     {
-        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+        $report = $this->makeApprovedReport($this->expressSharing, cash: 60000, qris: 60000);
 
         $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
         $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
@@ -336,7 +345,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     public function test_transaksi_lama_express_dengan_tanggal_berbeda_tidak_digabung(): void
     {
-        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+        $report = $this->makeApprovedReport($this->expressSharing, cash: 60000, qris: 60000);
 
         $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
         $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
@@ -352,7 +361,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     public function test_transaksi_lama_express_dengan_akun_berbeda_tidak_digabung(): void
     {
-        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+        $report = $this->makeApprovedReport($this->expressSharing, cash: 60000, qris: 60000);
 
         $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
         $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
@@ -368,9 +377,30 @@ class KeuanganBackfillRekapSesiTest extends TestCase
         $this->assertSame(2, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
     }
 
+    public function test_backfill_express_sharing_profit_memakai_nama_cabang_langsung(): void
+    {
+        $report = $this->makeApprovedReport($this->expressSharing, cash: 60000, qris: 60000);
+
+        $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
+        $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
+
+        $this->artisan('keuangan:backfill-rekap-sesi', ['--cabang' => 'Express Sharing Profit'])->assertSuccessful();
+
+        $this->assertSame(1, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+
+        $merged = FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->firstOrFail();
+
+        $this->assertSame((string) $report->id, $merged->source_id);
+        $this->assertSame(120000, $merged->amount);
+        $this->assertSame('Express Sharing Profit', $merged->cabang?->nama_cabang);
+        $this->assertSame('Photomate Express', $merged->account?->name);
+        $this->assertNull($merged->payment_method_id);
+        $this->assertStringContainsString('Gabungan', (string) $merged->description);
+    }
+
     public function test_transaksi_lama_express_satu_metode_tidak_digabung(): void
     {
-        $report = $this->makeApprovedReport($this->express, cash: 0, qris: 25000);
+        $report = $this->makeApprovedReport($this->expressSharing, cash: 0, qris: 25000);
 
         $qris = $this->makeLegacyTransaction($report, 'QRIS', 25000);
 
@@ -386,7 +416,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     public function test_dry_run_tidak_menggabungkan_transaksi_lama_express(): void
     {
-        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+        $report = $this->makeApprovedReport($this->expressSharing, cash: 60000, qris: 60000);
 
         $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
         $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);

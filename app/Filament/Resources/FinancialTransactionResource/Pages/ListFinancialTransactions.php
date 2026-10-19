@@ -33,7 +33,7 @@ class ListFinancialTransactions extends ListRecords
                 ->color('success')
                 ->action(function (): StreamedResponse {
                     $records = $this->getFilteredTableQuery()
-                        ->with(['category', 'account', 'paymentMethod', 'submitter', 'creator'])
+                        ->with(['category', 'account', 'paymentMethod', 'submitter', 'creator', 'cabang'])
                         ->get();
 
                     $service = app(KeuanganService::class);

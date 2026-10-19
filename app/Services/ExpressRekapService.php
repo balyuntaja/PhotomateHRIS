@@ -7,23 +7,44 @@ use App\Models\SessionReport;
 use Illuminate\Support\Collection;
 
 /**
- * Identifikasi dan detail rekap Photomate Express yang dicatat sebagai satu
- * transaksi gabungan per rekap (QRIS + Tunai).
+ * Identifikasi dan detail rekap Express Sharing Profit yang dicatat sebagai
+ * satu transaksi gabungan per rekap (QRIS + Tunai).
  *
  * Kategori transaksi tetap Pendapatan Booth; service ini tidak mengubah
  * kategori maupun master data.
  */
 class ExpressRekapService
 {
-    public const BRANCH_KEYWORD = 'photomate express';
+    public const BRANCH_KEYWORDS = [
+        'express sharing profit',
+    ];
 
+    /**
+     * Akun keuangan fallback untuk cabang Express Sharing Profit bila tidak
+     * ada akun yang namanya cocok langsung dengan nama cabang.
+     */
     public const ACCOUNT_NAME = 'Photomate Express';
 
     public function isExpressBranch(SessionReport $report): bool
     {
-        $branchName = $this->normalize($report->cabang?->nama_cabang ?? '');
+        return $this->isExpressBranchName($report->cabang?->nama_cabang);
+    }
 
-        return $branchName !== '' && str_contains($branchName, self::BRANCH_KEYWORD);
+    public function isExpressBranchName(?string $branchName): bool
+    {
+        $normalized = $this->normalize((string) $branchName);
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        foreach (self::BRANCH_KEYWORDS as $keyword) {
+            if (str_contains($normalized, $keyword)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function isConsolidated(FinancialTransaction $transaction): bool
@@ -31,8 +52,8 @@ class ExpressRekapService
         return $transaction->source_type === SessionReportFinancialService::SOURCE
             && $transaction->payment_method_id === null
             && $transaction->category?->name === SessionReportFinancialService::CATEGORY_NAME
-            && $transaction->account?->name === self::ACCOUNT_NAME
-            && $this->isReportSourceId($transaction->source_id);
+            && $this->isReportSourceId($transaction->source_id)
+            && $this->isExpressBranchName($transaction->cabang?->nama_cabang);
     }
 
     public function isRekap(FinancialTransaction $transaction): bool
