@@ -7,6 +7,7 @@ use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
+use App\Services\ExpressRekapService;
 use App\Services\InvoiceFinancialService;
 use App\Services\KeuanganService;
 use App\Services\LuminashImportService;
@@ -229,7 +230,7 @@ class FinancialTransactionResource extends Resource
                     Infolists\Components\TextEntry::make('transaction_date_label')
                         ->label('Tanggal'),
 
-                    Infolists\Components\TextEntry::make('paymentMethod.name')
+                    Infolists\Components\TextEntry::make('payment_method_label')
                         ->label('Metode Pembayaran')
                         ->placeholder('-'),
 
@@ -364,7 +365,7 @@ class FinancialTransactionResource extends Resource
                     ->url(fn (FinancialTransaction $record): ?string => self::invoiceUrl($record))
                     ->openUrlInNewTab(),
 
-                Tables\Columns\TextColumn::make('paymentMethod.name')
+                Tables\Columns\TextColumn::make('payment_method_label')
                     ->label('Metode')
                     ->placeholder('-')
                     ->toggleable(),
@@ -440,16 +441,35 @@ class FinancialTransactionResource extends Resource
                     ->label('Lihat Rincian')
                     ->icon('heroicon-o-list-bullet')
                     ->color('info')
-                    ->visible(fn (FinancialTransaction $record): bool => app(LuminashRekapService::class)->isRekap($record))
-                    ->modalHeading('Rincian Rekap Pendapatan Booth Luminash')
+                    ->visible(fn (FinancialTransaction $record): bool => app(LuminashRekapService::class)->isRekap($record)
+                        || app(ExpressRekapService::class)->isRekap($record))
+                    ->modalHeading(fn (FinancialTransaction $record): string => app(ExpressRekapService::class)->isRekap($record)
+                        ? 'Rincian Rekap Photomate Express'
+                        : 'Rincian Rekap Pendapatan Booth Luminash')
                     ->modalWidth('2xl')
-                    ->modalContent(fn (FinancialTransaction $record) => view(
-                        'filament.resources.financial-transaction-resource.rekap-detail',
-                        [
-                            'rekap' => $record,
-                            'components' => app(LuminashRekapService::class)->constituents($record),
-                        ]
-                    ))
+                    ->modalContent(function (FinancialTransaction $record) {
+                        if (app(ExpressRekapService::class)->isRekap($record)) {
+                            $detail = app(ExpressRekapService::class)->detailRows($record);
+
+                            return view(
+                                'filament.resources.financial-transaction-resource.express-rekap-detail',
+                                [
+                                    'rekap' => $record,
+                                    'report' => $detail['report'],
+                                    'rows' => $detail['rows'],
+                                    'total' => $detail['total'],
+                                ]
+                            );
+                        }
+
+                        return view(
+                            'filament.resources.financial-transaction-resource.rekap-detail',
+                            [
+                                'rekap' => $record,
+                                'components' => app(LuminashRekapService::class)->constituents($record),
+                            ]
+                        );
+                    })
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Tutup'),
 
@@ -468,6 +488,7 @@ class FinancialTransactionResource extends Resource
 
                 Tables\Actions\EditAction::make()
                     ->label('Edit')
+                    ->hidden(fn (FinancialTransaction $record): bool => app(ExpressRekapService::class)->isRekap($record))
                     ->modalHeading('Edit Transaksi')
                     ->modalSubmitActionLabel('Simpan Perubahan')
                     ->successNotificationTitle('Transaksi berhasil diperbarui.'),

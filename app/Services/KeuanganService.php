@@ -346,7 +346,7 @@ class KeuanganService
             $transaction->account?->name ?? 'Tanpa Akun',
             $transaction->category?->name ?? '-',
             $transaction->description ?: '-',
-            $transaction->paymentMethod?->name ?? '-',
+            $transaction->payment_method_label,
             RupiahHelper::format($transaction->amount),
             $transaction->submitted_by_label,
             $transaction->creator?->nama_lengkap ?? '-',

@@ -95,12 +95,17 @@ class SessionReportFinancialService
     }
 
     /**
-     * Rekap sesi Newspaper Janus dicatat sebagai SATU transaksi memakai Grand Total
-     * (gabungan QRIS + tunai); cabang lain tetap dicatat per metode pembayaran.
+     * Rekap dengan pencatatan gabungan: Newspaper Janus selalu Grand Total,
+     * Photomate Express digabung jika memiliki lebih dari satu metode (QRIS + tunai).
      */
     private function usesConsolidatedAmount(SessionReport $report): bool
     {
-        return $report->isNewspaperJanus();
+        if ($report->isNewspaperJanus()) {
+            return true;
+        }
+
+        return app(ExpressRekapService::class)->isExpressBranch($report)
+            && count($this->methodAmounts($report)) > 1;
     }
 
     /**
@@ -126,18 +131,30 @@ class SessionReportFinancialService
             return $plans;
         }
 
-        $grandTotal = (int) $report->grand_total_amount;
+        $amount = $this->consolidatedAmount($report);
 
-        if ($grandTotal <= 0) {
+        if ($amount <= 0) {
             return [];
         }
 
         return [[
             'source_id' => $this->consolidatedSourceIdFor($report),
-            'amount' => $grandTotal,
+            'amount' => $amount,
             'payment_method_id' => null,
             'description' => $this->consolidatedDescription($report),
         ]];
+    }
+
+    /**
+     * Express memakai penjumlahan QRIS + Tunai; Janus memakai Grand Total.
+     */
+    private function consolidatedAmount(SessionReport $report): int
+    {
+        if (app(ExpressRekapService::class)->isExpressBranch($report)) {
+            return (int) $report->total_cash_amount + (int) $report->total_qris_amount;
+        }
+
+        return (int) $report->grand_total_amount;
     }
 
     /**
@@ -186,7 +203,7 @@ class SessionReportFinancialService
             'reason' => null,
             'transactions' => collect(),
             'keep' => null,
-            'amount' => (int) $report->grand_total_amount,
+            'amount' => $this->consolidatedAmount($report),
         ];
 
         if (! $this->usesConsolidatedAmount($report)) {
@@ -320,10 +337,13 @@ class SessionReportFinancialService
      */
     private function consolidationBlocker(SessionReport $report, Collection $legacy): ?string
     {
-        $grandTotal = (int) $report->grand_total_amount;
+        $expectedTotal = $this->consolidatedAmount($report);
+        $expectedLabel = app(ExpressRekapService::class)->isExpressBranch($report)
+            ? 'total QRIS + Tunai'
+            : 'Grand Total';
 
-        if ($grandTotal <= 0) {
-            return 'Grand Total rekap tidak valid (' . $grandTotal . ')';
+        if ($expectedTotal <= 0) {
+            return $expectedLabel . ' rekap tidak valid (' . $expectedTotal . ')';
         }
 
         if ($legacy->contains(fn (FinancialTransaction $row): bool => $row->trashed())) {
@@ -334,17 +354,50 @@ class SessionReportFinancialService
             return 'Ada transaksi lama yang bukan pemasukan';
         }
 
+        $categoryId = $this->pendapatanBoothCategory()->id;
+        $otherCategory = $legacy->first(
+            fn (FinancialTransaction $row): bool => (int) $row->category_id !== $categoryId
+        );
+
+        if ($otherCategory) {
+            return 'Ada transaksi lama dengan kategori berbeda (' . $otherCategory->category_id . ')';
+        }
+
         $otherBranch = $legacy->first(fn (FinancialTransaction $row): bool => $row->cabang_id !== $report->cabang_id);
 
         if ($otherBranch) {
             return 'Transaksi lama terhubung ke cabang berbeda (' . ($otherBranch->cabang_id ?: 'tanpa cabang') . ')';
         }
 
+        $expectedDate = $report->report_date?->toDateString();
+        $otherDate = $legacy->first(
+            fn (FinancialTransaction $row): bool => $row->transaction_date?->toDateString() !== $expectedDate
+        );
+
+        if ($otherDate) {
+            return 'Ada transaksi lama dengan tanggal berbeda (' . ($otherDate->transaction_date?->toDateString() ?? '-') . ')';
+        }
+
+        if ($legacy->contains(
+            fn (FinancialTransaction $row): bool => $row->payment_status !== FinancialTransaction::PAYMENT_STATUS_LUNAS
+        )) {
+            return 'Ada transaksi lama yang tidak berstatus lunas';
+        }
+
+        $accountId = $this->resolveAccountId($report);
+        $otherAccount = $legacy->first(
+            fn (FinancialTransaction $row): bool => filled($row->account_id) && (int) $row->account_id !== (int) $accountId
+        );
+
+        if ($otherAccount) {
+            return 'Ada transaksi lama dengan akun berbeda (#' . $otherAccount->account_id . ')';
+        }
+
         $legacyTotal = (int) $legacy->sum('amount');
 
-        if ($legacyTotal !== $grandTotal) {
+        if ($legacyTotal !== $expectedTotal) {
             return 'Total transaksi lama ' . RupiahHelper::format($legacyTotal)
-                . ' tidak sama dengan Grand Total ' . RupiahHelper::format($grandTotal);
+                . ' tidak sama dengan ' . $expectedLabel . ' ' . RupiahHelper::format($expectedTotal);
         }
 
         return null;
@@ -401,13 +454,22 @@ class SessionReportFinancialService
     {
         $methodLabel = $method === self::METHOD_CASH ? 'Tunai' : 'QRIS';
 
-        return $this->consolidatedDescription($report) . ' · ' . $methodLabel;
+        return $this->baseDescription($report) . ' · ' . $methodLabel;
     }
 
     /**
      * Satu rekap sesi = satu transaksi, sehingga keterangan cukup menyebut nomor rekap dan cabang.
      */
     private function consolidatedDescription(SessionReport $report): string
+    {
+        $description = $this->baseDescription($report);
+
+        return app(ExpressRekapService::class)->isExpressBranch($report)
+            ? $description . ' · Gabungan'
+            : $description;
+    }
+
+    private function baseDescription(SessionReport $report): string
     {
         return 'Rekap Sesi ' . $report->report_number . ' · ' . ($report->cabang?->nama_cabang ?? '-');
     }

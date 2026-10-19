@@ -188,7 +188,7 @@ class KeuanganReport extends Page implements HasForms, HasTable
                     ->url(fn (FinancialTransaction $record): ?string => FinancialTransactionResource::invoiceUrl($record))
                     ->openUrlInNewTab(),
 
-                TextColumn::make('paymentMethod.name')
+                TextColumn::make('payment_method_label')
                     ->label('Metode Pembayaran')
                     ->placeholder('-'),
 

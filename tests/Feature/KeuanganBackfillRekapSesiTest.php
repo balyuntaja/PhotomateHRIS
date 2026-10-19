@@ -21,6 +21,8 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     protected Cabang $express;
 
+    protected Cabang $regular;
+
     protected FinancialCategory $oldCategory;
 
     protected function setUp(): void
@@ -43,6 +45,13 @@ class KeuanganBackfillRekapSesiTest extends TestCase
             'alamat' => 'Photomate Express Outlet',
         ]);
 
+        $this->regular = Cabang::create([
+            'cabang_id' => 'C0007',
+            'perusahaan_id' => 'P0001',
+            'nama_cabang' => 'Ekspansi',
+            'alamat' => 'Ekspansi Outlet',
+        ]);
+
         $this->oldCategory = FinancialCategory::where('name', 'Pendapatan Lain-lain')
             ->where('transaction_type', FinancialCategory::TYPE_INCOME)
             ->firstOrFail();
@@ -52,13 +61,13 @@ class KeuanganBackfillRekapSesiTest extends TestCase
     {
         $booth = $this->pendapatanBoothCategory();
 
-        $report = $this->makeApprovedReport($this->express, cash: 30000, qris: 45000);
+        $report = $this->makeApprovedReport($this->regular, cash: 30000, qris: 45000);
 
         $importTransaction = $this->makeLuminashTransaction('202610010001', 25000);
         $manualTransaction = $this->makeManualTransaction();
         $manualCategoryId = $manualTransaction->category_id;
 
-        $importedReport = $this->makeApprovedReport($this->express, cash: 0, qris: 25000, orderId: '202610020002');
+        $importedReport = $this->makeApprovedReport($this->regular, cash: 0, qris: 25000, orderId: '202610020002');
 
         $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
 
@@ -74,7 +83,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
         $this->assertSame($booth->id, $cash->category_id);
         $this->assertSame(30000, $cash->amount);
-        $this->assertSame('Photomate Express', $cash->account?->name);
+        $this->assertSame('Ekspansi', $cash->account?->name);
         $this->assertSame($booth->id, $qris->category_id);
         $this->assertSame(45000, $qris->amount);
 
@@ -160,7 +169,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     public function test_rekap_tersinkron_sebagian_hanya_melengkapi_referensi_yang_hilang(): void
     {
-        $report = $this->makeApprovedReport($this->express, cash: 30000, qris: 45000);
+        $report = $this->makeApprovedReport($this->regular, cash: 30000, qris: 45000);
 
         FinancialTransaction::create([
             'transaction_type' => FinancialTransaction::TYPE_INCOME,
@@ -182,7 +191,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     public function test_transaksi_duplikat_dengan_referensi_berbeda_dilaporkan_tanpa_dihapus_dan_tanpa_transaksi_baru(): void
     {
-        $report = $this->makeApprovedReport($this->express, cash: 30000, qris: 0);
+        $report = $this->makeApprovedReport($this->regular, cash: 30000, qris: 0);
 
         $suspect = FinancialTransaction::create([
             'transaction_type' => FinancialTransaction::TYPE_INCOME,
@@ -203,7 +212,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     public function test_transaksi_yang_dihapus_tidak_dibuat_ulang_dan_dilaporkan(): void
     {
-        $report = $this->makeApprovedReport($this->express, cash: 30000, qris: 0);
+        $report = $this->makeApprovedReport($this->regular, cash: 30000, qris: 0);
 
         $trashed = FinancialTransaction::create([
             'transaction_type' => FinancialTransaction::TYPE_INCOME,
@@ -274,6 +283,122 @@ class KeuanganBackfillRekapSesiTest extends TestCase
         $this->assertSame(120000, (int) FinancialTransaction::sum('amount'));
     }
 
+    public function test_transaksi_lama_express_cash_dan_qris_digabung_menjadi_satu_transaksi(): void
+    {
+        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+
+        $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
+        $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
+
+        $this->assertSame(120000, (int) FinancialTransaction::sum('amount'));
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $this->assertSame(120000, (int) FinancialTransaction::sum('amount'));
+        $this->assertSame(1, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+
+        $merged = FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->firstOrFail();
+
+        $this->assertSame((string) $report->id, $merged->source_id);
+        $this->assertSame(120000, $merged->amount);
+        $this->assertSame('Rekap Sesi ' . $report->report_number . ' · Photomate Express · Gabungan', $merged->description);
+        $this->assertNull($merged->payment_method_id);
+        $this->assertSame('Photomate Express', $merged->account?->name);
+        $this->assertSame($this->pendapatanBoothCategory()->id, $merged->category_id);
+
+        // Baris pertama dipertahankan dan diubah menjadi consolidated; baris kedua soft delete.
+        $this->assertFalse($cash->fresh()->trashed());
+        $this->assertTrue($qris->fresh()->trashed());
+
+        // Idempoten.
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $this->assertSame(1, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+        $this->assertSame(120000, (int) FinancialTransaction::sum('amount'));
+    }
+
+    public function test_transaksi_lama_express_dengan_kategori_berbeda_tidak_digabung(): void
+    {
+        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+
+        $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
+        $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
+
+        $qris->forceFill(['category_id' => $this->oldCategory->id])->saveQuietly();
+
+        $this->artisan('keuangan:backfill-rekap-sesi', ['--dry-run' => true])->assertSuccessful();
+
+        // Dry-run tidak menormalkan kategori, sehingga penggabungan ditolak.
+        $this->assertSame($report->id . '-CASH', $cash->fresh()->source_id);
+        $this->assertSame($report->id . '-QRIS', $qris->fresh()->source_id);
+        $this->assertSame(2, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+    }
+
+    public function test_transaksi_lama_express_dengan_tanggal_berbeda_tidak_digabung(): void
+    {
+        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+
+        $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
+        $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
+
+        $qris->forceFill(['transaction_date' => '2026-10-12'])->saveQuietly();
+
+        $this->artisan('keuangan:backfill-rekap-sesi', ['--dry-run' => true])->assertSuccessful();
+
+        $this->assertSame($report->id . '-CASH', $cash->fresh()->source_id);
+        $this->assertSame($report->id . '-QRIS', $qris->fresh()->source_id);
+        $this->assertSame(2, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+    }
+
+    public function test_transaksi_lama_express_dengan_akun_berbeda_tidak_digabung(): void
+    {
+        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+
+        $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
+        $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
+
+        $qris->forceFill([
+            'account_id' => \App\Models\FinancialAccount::where('name', 'Janus')->value('id'),
+        ])->saveQuietly();
+
+        $this->artisan('keuangan:backfill-rekap-sesi', ['--dry-run' => true])->assertSuccessful();
+
+        $this->assertSame($report->id . '-CASH', $cash->fresh()->source_id);
+        $this->assertSame($report->id . '-QRIS', $qris->fresh()->source_id);
+        $this->assertSame(2, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+    }
+
+    public function test_transaksi_lama_express_satu_metode_tidak_digabung(): void
+    {
+        $report = $this->makeApprovedReport($this->express, cash: 0, qris: 25000);
+
+        $qris = $this->makeLegacyTransaction($report, 'QRIS', 25000);
+
+        $this->artisan('keuangan:backfill-rekap-sesi')->assertSuccessful();
+
+        $qris->refresh();
+
+        $this->assertSame($report->id . '-QRIS', $qris->source_id);
+        $this->assertSame(25000, $qris->amount);
+        $this->assertSame('QRIS', $qris->paymentMethod?->name);
+        $this->assertSame(1, FinancialTransaction::count());
+    }
+
+    public function test_dry_run_tidak_menggabungkan_transaksi_lama_express(): void
+    {
+        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+
+        $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
+        $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);
+
+        $this->artisan('keuangan:backfill-rekap-sesi', ['--dry-run' => true])->assertSuccessful();
+
+        $this->assertSame($report->id . '-CASH', $cash->fresh()->source_id);
+        $this->assertSame($report->id . '-QRIS', $qris->fresh()->source_id);
+        $this->assertSame(2, FinancialTransaction::where('source_type', SessionReportFinancialService::SOURCE)->count());
+        $this->assertSame(120000, (int) FinancialTransaction::sum('amount'));
+    }
+
     public function test_transaksi_lama_tunggal_yang_sudah_sesuai_grand_total_hanya_dinormalkan(): void
     {
         $janus = $this->makeCabang('C0006', 'Newspaper Janus');
@@ -313,7 +438,7 @@ class KeuanganBackfillRekapSesiTest extends TestCase
 
     public function test_transaksi_lama_cabang_lain_tidak_digabung(): void
     {
-        $report = $this->makeApprovedReport($this->express, cash: 60000, qris: 60000);
+        $report = $this->makeApprovedReport($this->regular, cash: 60000, qris: 60000);
 
         $cash = $this->makeLegacyTransaction($report, 'CASH', 60000);
         $qris = $this->makeLegacyTransaction($report, 'QRIS', 60000);

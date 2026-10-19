@@ -13,6 +13,7 @@ use App\Models\Role;
 use App\Models\SessionReport;
 use App\Models\SessionTransaction;
 use App\Services\KeuanganService;
+use App\Services\PricingService;
 use App\Services\SessionReportFinancialService;
 use App\Services\SessionWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -30,6 +31,8 @@ class SessionReportFinanceTest extends TestCase
     protected Karyawan $crew;
 
     protected Cabang $express;
+
+    protected Cabang $regular;
 
     protected Cabang $janus;
 
@@ -55,6 +58,13 @@ class SessionReportFinanceTest extends TestCase
             'alamat' => 'Photomate Express Outlet',
         ]);
 
+        $this->regular = Cabang::create([
+            'cabang_id' => 'C0007',
+            'perusahaan_id' => 'P0001',
+            'nama_cabang' => 'Ekspansi',
+            'alamat' => 'Ekspansi Outlet',
+        ]);
+
         $this->janus = Cabang::create([
             'cabang_id' => 'C0006',
             'perusahaan_id' => 'P0001',
@@ -76,11 +86,11 @@ class SessionReportFinanceTest extends TestCase
         ]);
     }
 
-    public function test_approval_cabang_selain_newspaper_janus_tetap_mencatat_transaksi_per_metode(): void
+    public function test_approval_cabang_reguler_tetap_mencatat_transaksi_per_metode(): void
     {
         $this->actingAs($this->supervisor);
 
-        $report = $this->makeReport($this->express, [
+        $report = $this->makeReport($this->regular, [
             ['payment_method' => 'CASH', 'amount' => 30000],
             ['payment_method' => 'QRIS', 'amount' => 45000],
         ]);
@@ -95,8 +105,8 @@ class SessionReportFinanceTest extends TestCase
         $cash = FinancialTransaction::where('source_id', $report->id . '-CASH')->firstOrFail();
         $this->assertSame(FinancialTransaction::TYPE_INCOME, $cash->transaction_type);
         $this->assertSame($category->id, $cash->category_id);
-        $this->assertSame('Photomate Express', $cash->account?->name);
-        $this->assertSame('Photomate Express', $cash->cabang?->nama_cabang);
+        $this->assertSame('Ekspansi', $cash->account?->name);
+        $this->assertSame('Ekspansi', $cash->cabang?->nama_cabang);
         $this->assertSame(30000, $cash->amount);
         $this->assertSame('Cash', $cash->paymentMethod?->name);
         $this->assertSame('2026-10-11', $cash->transaction_date->toDateString());
@@ -116,7 +126,7 @@ class SessionReportFinanceTest extends TestCase
         $summary = app(KeuanganService::class)->summary(
             \Illuminate\Support\Carbon::parse('2026-10-01'),
             \Illuminate\Support\Carbon::parse('2026-10-31'),
-            $this->express->cabang_id,
+            $this->regular->cabang_id,
         );
 
         $this->assertSame(75000, $summary['income']);
@@ -125,6 +135,84 @@ class SessionReportFinanceTest extends TestCase
             ->assertCanSeeTableRecords([$cash, $qris])
             ->filterTable('category_id', ['value' => $category->id])
             ->assertCanSeeTableRecords([$cash, $qris]);
+    }
+
+    public function test_rekap_photomate_express_cash_dan_qris_digabung_menjadi_satu_transaksi(): void
+    {
+        $this->actingAs($this->supervisor);
+
+        $report = $this->makeReport($this->express, [
+            ['payment_method' => 'CASH', 'amount' => 30000],
+            ['payment_method' => 'QRIS', 'amount' => 45000],
+        ]);
+
+        app(SessionWorkflowService::class)->approve($report, $this->supervisor);
+
+        $this->assertSame(1, FinancialTransaction::count());
+
+        $transaction = FinancialTransaction::firstOrFail();
+
+        $this->assertSame((string) $report->id, $transaction->source_id);
+        $this->assertSame(75000, $transaction->amount);
+        $this->assertSame('Pendapatan Booth', $transaction->category?->name);
+        $this->assertNull($transaction->payment_method_id);
+        $this->assertSame('Gabungan', $transaction->payment_method_label);
+        $this->assertSame('Photomate Express', $transaction->account?->name);
+        $this->assertSame('Photomate Express', $transaction->cabang?->nama_cabang);
+        $this->assertSame('2026-10-11', $transaction->transaction_date->toDateString());
+        $this->assertSame($this->supervisor->karyawan_id, $transaction->created_by);
+        $this->assertSame($this->crew->karyawan_id, $transaction->submitted_by);
+        $this->assertSame($this->crew->nama_lengkap, $transaction->submitted_by_name);
+        $this->assertSame(
+            'Rekap Sesi ' . $report->report_number . ' · Photomate Express · Gabungan',
+            $transaction->description
+        );
+        $this->assertSame(0, FinancialTransaction::withTrashed()->whereIn('source_id', [
+            $report->id . '-CASH',
+            $report->id . '-QRIS',
+        ])->count());
+
+        $summary = app(KeuanganService::class)->summary(
+            \Illuminate\Support\Carbon::parse('2026-10-01'),
+            \Illuminate\Support\Carbon::parse('2026-10-31'),
+            $this->express->cabang_id,
+        );
+
+        $this->assertSame(75000, $summary['income']);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->assertCanSeeTableRecords([$transaction])
+            ->assertSee('Gabungan');
+    }
+
+    public function test_rekap_express_pada_tanggal_berbeda_tetap_terpisah(): void
+    {
+        $this->actingAs($this->supervisor);
+
+        $reportA = $this->makeReport($this->express, [
+            ['payment_method' => 'CASH', 'amount' => 30000],
+            ['payment_method' => 'QRIS', 'amount' => 45000],
+        ], '2026-10-11');
+
+        $reportB = $this->makeReport($this->express, [
+            ['payment_method' => 'CASH', 'amount' => 10000],
+            ['payment_method' => 'QRIS', 'amount' => 20000],
+        ], '2026-10-12');
+
+        app(SessionWorkflowService::class)->approve($reportA, $this->supervisor);
+        app(SessionWorkflowService::class)->approve($reportB, $this->supervisor);
+
+        $this->assertSame(2, FinancialTransaction::count());
+        $this->assertSame(1, FinancialTransaction::whereDate('transaction_date', '2026-10-11')->count());
+        $this->assertSame(1, FinancialTransaction::whereDate('transaction_date', '2026-10-12')->count());
+
+        $transactionA = FinancialTransaction::where('source_id', (string) $reportA->id)->firstOrFail();
+        $transactionB = FinancialTransaction::where('source_id', (string) $reportB->id)->firstOrFail();
+
+        $this->assertSame(75000, $transactionA->amount);
+        $this->assertSame('2026-10-11', $transactionA->transaction_date->toDateString());
+        $this->assertSame(30000, $transactionB->amount);
+        $this->assertSame('2026-10-12', $transactionB->transaction_date->toDateString());
     }
 
     public function test_approval_satu_metode_menghasilkan_satu_transaksi(): void
@@ -138,11 +226,15 @@ class SessionReportFinanceTest extends TestCase
         app(SessionWorkflowService::class)->approve($report, $this->supervisor);
 
         $this->assertSame(1, FinancialTransaction::count());
-        $this->assertDatabaseHas('financial_transactions', [
-            'source_type' => SessionReportFinancialService::SOURCE,
-            'source_id' => $report->id . '-QRIS',
-            'amount' => 25000,
-        ]);
+
+        $transaction = FinancialTransaction::firstOrFail();
+
+        $this->assertSame($report->id . '-QRIS', $transaction->source_id);
+        $this->assertSame(25000, $transaction->amount);
+        $this->assertSame('Pendapatan Booth', $transaction->category?->name);
+        $this->assertSame('QRIS', $transaction->payment_method_label);
+        $this->assertStringContainsString('QRIS', (string) $transaction->description);
+        $this->assertStringNotContainsString('Gabungan', (string) $transaction->description);
     }
 
     public function test_cabang_tanpa_akun_senama_tetap_dicatat_tanpa_akun(): void
@@ -177,10 +269,46 @@ class SessionReportFinanceTest extends TestCase
         $created = app(SessionReportFinancialService::class)->record($report->fresh(), $this->supervisor);
 
         $this->assertSame(0, $created);
-        $this->assertSame(2, FinancialTransaction::count());
+        $this->assertSame(1, FinancialTransaction::count());
+
+        $transaction = FinancialTransaction::firstOrFail();
+        $this->assertSame((string) $report->id, $transaction->source_id);
+        $this->assertSame(75000, $transaction->amount);
 
         $this->expectException(RuntimeException::class);
         app(SessionWorkflowService::class)->approve($report->fresh(), $this->supervisor);
+    }
+
+    public function test_transaksi_lama_express_per_metode_menghalangi_pencatatan_ulang(): void
+    {
+        $this->actingAs($this->supervisor);
+
+        $report = $this->makeReport($this->express, [
+            ['payment_method' => 'CASH', 'amount' => 30000],
+            ['payment_method' => 'QRIS', 'amount' => 45000],
+        ]);
+
+        app(PricingService::class)->recalculateReport($report);
+        $report->refresh();
+
+        FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'amount' => 30000,
+            'category_id' => $this->pendapatanBoothCategory()->id,
+            'transaction_date' => '2026-10-11',
+            'source_type' => SessionReportFinancialService::SOURCE,
+            'source_id' => $report->id . '-CASH',
+        ]);
+
+        try {
+            app(SessionReportFinancialService::class)->record($report->fresh(), $this->supervisor);
+
+            $this->fail('Pencatatan ulang seharusnya ditolak selama transaksi lama per metode masih aktif.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('keuangan:backfill-rekap-sesi', $exception->getMessage());
+        }
+
+        $this->assertSame(1, FinancialTransaction::count());
     }
 
     public function test_kategori_belum_tersedia_membatalkan_approval_dengan_pesan_jelas(): void
@@ -383,10 +511,10 @@ class SessionReportFinanceTest extends TestCase
         $this->assertSame(1, FinancialTransaction::count());
     }
 
-    protected function makeReport(Cabang $cabang, array $transactions): SessionReport
+    protected function makeReport(Cabang $cabang, array $transactions, string $date = '2026-10-11'): SessionReport
     {
         $report = SessionReport::create([
-            'report_date' => '2026-10-11',
+            'report_date' => $date,
             'cabang_id' => $cabang->cabang_id,
             'status' => SessionReport::STATUS_WAITING_APPROVAL,
             'submitted_by' => $this->crew->karyawan_id,

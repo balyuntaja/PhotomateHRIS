@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\ExpressRekapService;
 use App\Utils\MonthHelper;
 use App\Utils\RupiahHelper;
 use Carbon\CarbonInterface;
@@ -255,6 +256,21 @@ class FinancialTransaction extends Model
     public function getFormattedAmountAttribute(): string
     {
         return RupiahHelper::format($this->amount);
+    }
+
+    /**
+     * Label metode pembayaran. Rekap Express yang digabung tidak memiliki
+     * satu metode pun, sehingga ditampilkan sebagai "Gabungan".
+     */
+    public function getPaymentMethodLabelAttribute(): string
+    {
+        if ($this->paymentMethod) {
+            return $this->paymentMethod->name;
+        }
+
+        return app(ExpressRekapService::class)->isConsolidated($this)
+            ? 'Gabungan'
+            : '-';
     }
 
     /**

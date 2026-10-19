@@ -219,7 +219,7 @@
                             <td>{{ $transaction->account?->name ?? 'Tanpa Akun' }}</td>
                             <td>{{ $transaction->category?->name ?? '-' }}</td>
                             <td>{{ filled($transaction->description) ? \Illuminate\Support\Str::limit($transaction->description, 70) : '-' }}</td>
-                            <td>{{ $transaction->paymentMethod?->name ?? '-' }}</td>
+                            <td>{{ $transaction->payment_method_label }}</td>
                             <td class="text-right {{ $transaction->is_income ? 'text-income' : 'text-expense' }}">
                                 {{ $transaction->signed_formatted_amount }}
                             </td>

@@ -22,7 +22,7 @@ class BackfillRekapSesiKeuangan extends Command
                             {--dry-run : Tampilkan rencana perubahan tanpa menyimpan apa pun}
                             {--actor= : ID karyawan yang dicatat sebagai pembuat transaksi backfill (opsional)}';
 
-    protected $description = 'Rekonsiliasi rekap sesi yang sudah approved ke laporan keuangan: satukan transaksi lama per metode pembayaran menjadi satu transaksi Grand Total, catat rekap yang belum tersinkron tanpa membuat transaksi ganda, dan samakan kategori Pendapatan Booth pada transaksi hasil integrasi yang lama';
+    protected $description = 'Rekonsiliasi rekap sesi yang sudah approved ke laporan keuangan: satukan transaksi lama per metode pembayaran menjadi satu transaksi gabungan per rekap (Newspaper Janus / Photomate Express), catat rekap yang belum tersinkron tanpa membuat transaksi ganda, dan samakan kategori Pendapatan Booth pada transaksi hasil integrasi yang lama';
 
     public function handle(): int
     {
@@ -177,9 +177,10 @@ class BackfillRekapSesiKeuangan extends Command
 
                 $stats['eligible']++;
 
-                // Rekap dengan pencatatan gabungan (Newspaper Janus) hanya boleh menghasilkan
-                // satu transaksi. Transaksi lama yang telanjur terpisah per metode digabungkan
-                // lebih dulu supaya pendapatan tidak terhitung dua kali.
+                // Rekap dengan pencatatan gabungan (Newspaper Janus / Photomate Express)
+                // hanya boleh menghasilkan satu transaksi. Transaksi lama yang telanjur
+                // terpisah per metode digabungkan lebih dulu supaya pendapatan tidak
+                // terhitung dua kali.
                 $consolidation = $service->consolidationPlan($report);
 
                 if ($consolidation['status'] === SessionReportFinancialService::CONSOLIDATION_REVIEW) {
