@@ -177,7 +177,7 @@ class KeuanganServiceTest extends TestCase
             $row[array_search('Akun', $headers, true)]
         );
         $this->assertSame(
-            FinancialTransaction::SUBMITTER_LEGACY_LABEL,
+            '-',
             $row[array_search('Disubmit Oleh', $headers, true)]
         );
     }

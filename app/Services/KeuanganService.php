@@ -326,7 +326,7 @@ class KeuanganService
         ?int $accountId = null
     ): Builder {
         return $this->baseQuery($start, $end, $cabangId, $accountId)
-            ->with(['category', 'account', 'paymentMethod', 'submitter'])
+            ->with(['category', 'account', 'paymentMethod', 'submitter', 'creator'])
             ->orderByDesc('transaction_date')
             ->orderByDesc('created_at')
             ->orderByDesc('id');

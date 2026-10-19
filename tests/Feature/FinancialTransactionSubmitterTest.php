@@ -34,23 +34,52 @@ class FinancialTransactionSubmitterTest extends TestCase
             ->firstOrFail();
     }
 
-    public function test_transaksi_lama_manual_tanpa_submitter_menampilkan_data_lama(): void
+    public function test_transaksi_lama_manual_memakai_nama_pembuat_transaksi(): void
+    {
+        $creator = $this->makeKaryawan('K0001', 'Pembuat Manual');
+
+        $transaction = $this->makeTransaction([
+            'created_by' => $creator->karyawan_id,
+        ]);
+
+        $this->assertNull($transaction->submitted_by);
+        $this->assertSame('Pembuat Manual', $transaction->submitted_by_label);
+    }
+
+    public function test_transaksi_otomatis_lama_memakai_nama_pembuat_transaksi(): void
+    {
+        $creator = $this->makeKaryawan('K0002', 'Pembuat Otomatis');
+
+        $transaction = $this->makeTransaction([
+            'source_type' => 'invoice',
+            'source_id' => '1',
+            'created_by' => $creator->karyawan_id,
+        ]);
+
+        $this->assertNull($transaction->submitted_by);
+        $this->assertSame('Pembuat Otomatis', $transaction->submitted_by_label);
+    }
+
+    public function test_pembuat_transaksi_soft_deleted_tetap_tampil_namanya(): void
+    {
+        $creator = $this->makeKaryawan('K0005', 'Pembuat Terhapus');
+
+        $transaction = $this->makeTransaction([
+            'created_by' => $creator->karyawan_id,
+        ]);
+
+        $creator->delete();
+
+        $this->assertSame('Pembuat Terhapus', $transaction->fresh()->submitted_by_label);
+    }
+
+    public function test_tanpa_user_sama_sekali_menampilkan_strip(): void
     {
         $transaction = $this->makeTransaction();
 
         $this->assertNull($transaction->submitted_by);
-        $this->assertSame(FinancialTransaction::SUBMITTER_LEGACY_LABEL, $transaction->submitted_by_label);
-    }
-
-    public function test_transaksi_otomatis_lama_tanpa_submitter_menampilkan_otomatis(): void
-    {
-        $transaction = $this->makeTransaction([
-            'source_type' => 'invoice',
-            'source_id' => '1',
-        ]);
-
-        $this->assertNull($transaction->submitted_by);
-        $this->assertSame(FinancialTransaction::SUBMITTER_SYSTEM_LABEL, $transaction->submitted_by_label);
+        $this->assertNull($transaction->created_by);
+        $this->assertSame('-', $transaction->submitted_by_label);
     }
 
     public function test_snapshot_nama_dipakai_bila_relasi_submitter_tidak_tersedia(): void
@@ -67,17 +96,7 @@ class FinancialTransactionSubmitterTest extends TestCase
 
     public function test_user_soft_deleted_tetap_tampil_namanya(): void
     {
-        $user = Karyawan::create([
-            'karyawan_id' => 'K0001',
-            'perusahaan_id' => 'P0001',
-            'nik' => '123456789012',
-            'nama_lengkap' => 'User Snapshot',
-            'email' => 'snapshot@photomate.id',
-            'password' => bcrypt('password'),
-            'tanggal_lahir' => '1990-01-01',
-            'jenis_kelamin' => 'Laki-laki',
-            'alamat' => 'Malang',
-        ]);
+        $user = $this->makeKaryawan('K0003', 'User Snapshot', 'snapshot@photomate.id');
 
         $transaction = $this->makeTransaction([
             'source_type' => 'invoice',
@@ -100,12 +119,16 @@ class FinancialTransactionSubmitterTest extends TestCase
         $this->assertContains('Akun', $headers);
         $this->assertContains('Disubmit Oleh', $headers);
 
-        $transaction = $this->makeTransaction();
+        $creator = $this->makeKaryawan('K0004', 'Pembuat Export');
+
+        $transaction = $this->makeTransaction([
+            'created_by' => $creator->karyawan_id,
+        ]);
         $row = app(KeuanganService::class)->exportRow($transaction);
 
         $this->assertSame('Tanpa Akun', $row[array_search('Akun', $headers, true)]);
         $this->assertSame(
-            FinancialTransaction::SUBMITTER_LEGACY_LABEL,
+            'Pembuat Export',
             $row[array_search('Disubmit Oleh', $headers, true)]
         );
     }
@@ -122,5 +145,23 @@ class FinancialTransactionSubmitterTest extends TestCase
             'transaction_date' => '2026-10-01',
             'description' => 'Transaksi uji submitter',
         ], $attributes));
+    }
+
+    protected function makeKaryawan(
+        string $karyawanId,
+        string $namaLengkap,
+        ?string $email = null
+    ): Karyawan {
+        return Karyawan::create([
+            'karyawan_id' => $karyawanId,
+            'perusahaan_id' => 'P0001',
+            'nik' => str_pad((string) crc32($karyawanId), 12, '0', STR_PAD_LEFT),
+            'nama_lengkap' => $namaLengkap,
+            'email' => $email ?? strtolower($karyawanId) . '@photomate.id',
+            'password' => bcrypt('password'),
+            'tanggal_lahir' => '1990-01-01',
+            'jenis_kelamin' => 'Laki-laki',
+            'alamat' => 'Malang',
+        ]);
     }
 }

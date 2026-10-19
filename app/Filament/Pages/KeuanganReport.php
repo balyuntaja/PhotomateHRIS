@@ -215,7 +215,7 @@ class KeuanganReport extends Page implements HasForms, HasTable
 
         return app(KeuanganService::class)
             ->baseQuery($filters['period']['start'], $filters['period']['end'], null, $filters['accountId'])
-            ->with(['category', 'account', 'paymentMethod', 'submitter']);
+            ->with(['category', 'account', 'paymentMethod', 'submitter', 'creator']);
     }
 
     protected function getHeaderActions(): array

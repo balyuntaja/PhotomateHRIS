@@ -81,7 +81,7 @@ class InvoiceFinanceIntegrationTest extends TestCase
             $transaction->description
         );
         $this->assertNull($transaction->submitted_by);
-        $this->assertSame(FinancialTransaction::SUBMITTER_SYSTEM_LABEL, $transaction->submitted_by_label);
+        $this->assertSame('-', $transaction->submitted_by_label);
     }
 
     public function test_invoice_lunas_mencatat_submitter_dan_tidak_menimpanya_saat_disimpan_user_lain(): void

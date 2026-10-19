@@ -44,10 +44,6 @@ class FinancialTransaction extends Model
 
     public const ACTION_RESTORED = 'RESTORED';
 
-    public const SUBMITTER_LEGACY_LABEL = 'Data Lama';
-
-    public const SUBMITTER_SYSTEM_LABEL = 'Otomatis';
-
     protected $table = 'financial_transactions';
 
     protected $fillable = [
@@ -166,7 +162,7 @@ class FinancialTransaction extends Model
 
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(Karyawan::class, 'created_by', 'karyawan_id');
+        return $this->belongsTo(Karyawan::class, 'created_by', 'karyawan_id')->withTrashed();
     }
 
     public function updater(): BelongsTo
@@ -262,8 +258,8 @@ class FinancialTransaction extends Model
     }
 
     /**
-     * Nama pengguna yang menyubmit transaksi. Relasi diutamakan, snapshot
-     * dipakai bila relasi tidak tersedia; transaksi lama memakai penanda sumber.
+     * Nama pengguna yang menyubmit transaksi. Relasi submitter diutamakan,
+     * lalu snapshot, lalu pembuat transaksi (created_by) untuk data lama.
      */
     public function getSubmittedByLabelAttribute(): string
     {
@@ -277,9 +273,9 @@ class FinancialTransaction extends Model
             return $this->submitted_by_name;
         }
 
-        return filled($this->source_type)
-            ? self::SUBMITTER_SYSTEM_LABEL
-            : self::SUBMITTER_LEGACY_LABEL;
+        $creatorName = $this->creator?->nama_lengkap;
+
+        return filled($creatorName) ? $creatorName : '-';
     }
 
     public function getSignedFormattedAmountAttribute(): string
