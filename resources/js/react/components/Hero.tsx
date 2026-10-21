@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import heroCollage from "../assets/img/hero_hd.png";
+import heroCollage from "../assets/img/hero_hd.webp";
 import OptimizedImage from "./OptimizedImage";
 
 const DURATION_MS = 1800;
