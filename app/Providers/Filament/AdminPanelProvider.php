@@ -4,22 +4,15 @@ namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login as CustomLogin;
 use App\Filament\Pages\KeuanganInputTransaksi;
-use App\Filament\Resources\RoleResource;
-use App\Filament\Widgets\ActivityOverview;
-use App\Filament\Widgets\CutiTodayOverview;
-use App\Filament\Widgets\IzinTodayOverview;
-use App\Filament\Widgets\SessionOverviewWidget;
-use App\Filament\Widgets\StatsOverview;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages;
+use Filament\Navigation\NavigationGroup;
 use Filament\Panel;
 use Filament\PanelProvider;
-use Filament\Support\Colors\Color;
-use Filament\Widgets;
+use Filament\Support\Enums\MaxWidth;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -42,21 +35,17 @@ class AdminPanelProvider extends PanelProvider
             ->authGuard('web')
             ->databaseNotifications(true, false)
             ->colors([
-                'primary' => Color::hex('#364e71'),
+                'primary' => self::primaryPalette(),
             ])
+            ->theme(asset('css/filament/admin/theme.css'))
+            ->maxContentWidth(MaxWidth::ScreenTwoExtraLarge)
+            ->sidebarCollapsibleOnDesktop()
+            ->sidebarWidth('17rem')
+            ->collapsedSidebarWidth('4.75rem')
+            ->collapsibleNavigationGroups()
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
-            ->pages([
-                Pages\Dashboard::class,
-            ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
-            ->widgets([
-                SessionOverviewWidget::class,
-                StatsOverview::class,
-                // ActivityOverview::class,
-                CutiTodayOverview::class,
-                IzinTodayOverview::class,
-            ])
             ->favicon(asset('favicon.ico'))
             ->globalSearch(false)
             ->middleware([
@@ -77,14 +66,17 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
             ->navigationGroups([
-                'Session Management',
-                'Sistem Antrean',
-                'Manajemen Absensi',
-                'Manajemen Penggajian',
-                'Keuangan',
-                'Laporan',
-                'Data Master',
-                'Keamanan',
+                NavigationGroup::make('Session Management')->icon('heroicon-o-camera'),
+                NavigationGroup::make('Sistem Antrean')->icon('heroicon-o-ticket'),
+                NavigationGroup::make('Operasional')->icon('heroicon-o-briefcase'),
+                NavigationGroup::make('Manajemen Absensi')->icon('heroicon-o-clipboard-document-check'),
+                NavigationGroup::make('Manajemen Penggajian')->icon('heroicon-o-banknotes'),
+                NavigationGroup::make('Keuangan')->icon('heroicon-o-wallet'),
+                NavigationGroup::make('Laporan')->icon('heroicon-o-chart-bar'),
+                NavigationGroup::make('Data Master')->icon('heroicon-o-circle-stack'),
+                NavigationGroup::make('CMS')->icon('heroicon-o-globe-alt'),
+                NavigationGroup::make('Invoice')->icon('heroicon-o-document-text'),
+                NavigationGroup::make('Keamanan')->icon('heroicon-o-shield-check'),
             ])
             ->authenticatedRoutes(function (Panel $panel): void {
                 // Alamat lama Input Transaksi V2 diarahkan ke halaman Input Transaksi utama.
@@ -101,5 +93,27 @@ class AdminPanelProvider extends PanelProvider
                 )
             )
         ;
+    }
+
+    /**
+     * Palette primary Photomate. Shade 600 adalah navy resmi #354B6D.
+     *
+     * @return array<int, string>
+     */
+    private static function primaryPalette(): array
+    {
+        return [
+            50 => '244, 246, 249',
+            100 => '232, 237, 243',
+            200 => '207, 217, 229',
+            300 => '170, 186, 207',
+            400 => '119, 144, 174',
+            500 => '64, 87, 124',
+            600 => '53, 75, 109',
+            700 => '43, 61, 89',
+            800 => '35, 49, 72',
+            900 => '27, 38, 55',
+            950 => '15, 22, 33',
+        ];
     }
 }

@@ -61,24 +61,24 @@ class PerformanceTrendChart extends ChartWidget
                 [
                     'label' => 'Lembur (orang)',
                     'data' => $performance['lembur'],
-                    'borderColor' => 'rgba(139,69,19,1)', // #8b4513 brown
-                    'backgroundColor' => 'rgba(139,69,19,0.15)', // transparan
+                    'borderColor' => 'rgba(53,75,109,1)', // navy Photomate
+                    'backgroundColor' => 'rgba(53,75,109,0.15)', // transparan
                     'fill' => true,
                     'tension' => 0.1,
                 ],
                 [
                     'label' => 'Cuti (orang)',
                     'data' => $performance['cuti'],
-                    'borderColor' => 'rgba(59,130,246,1)', // #3b82f6 blue
-                    'backgroundColor' => 'rgba(59,130,246,0.15)', // transparan
+                    'borderColor' => 'rgba(201,168,106,1)', // cream Photomate
+                    'backgroundColor' => 'rgba(201,168,106,0.18)', // transparan
                     'fill' => true,
                     'tension' => 0.1,
                 ],
                 [
                     'label' => 'Izin (orang)',
                     'data' => $performance['izin'],
-                    'borderColor' => 'rgba(168,85,247,1)', // #a855f7 purple
-                    'backgroundColor' => 'rgba(168,85,247,0.15)', // transparan
+                    'borderColor' => 'rgba(100,116,139,1)', // slate netral
+                    'backgroundColor' => 'rgba(100,116,139,0.15)', // transparan
                     'fill' => true,
                     'tension' => 0.1,
                 ],

@@ -79,11 +79,11 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="text-sm text-gray-500 dark:text-gray-400">Pengajuan Izin</div>
-                            <div class="mt-2 text-2xl font-semibold text-indigo-600 dark:text-indigo-400">
+                            <div class="mt-2 text-2xl font-semibold text-primary-600 dark:text-primary-400">
                                 {{ $summary['izin']['requests'] }} Pengajuan
                             </div>
                         </div>
-                        <x-heroicon-o-clipboard-document-check class="h-10 w-10 text-indigo-500 dark:text-indigo-300" />
+                        <x-heroicon-o-clipboard-document-check class="h-10 w-10 text-primary-500 dark:text-primary-300" />
                     </div>
                 </x-filament::card>
             </div>

@@ -63,7 +63,7 @@
                                     <span class="badge badge-blue">
                                         {{ $karyawan['jabatan'] }}
                                     </span>
-                                    <span class="badge badge-purple">
+                                    <span class="badge badge-navy">
                                         {{ $karyawan['departemen'] }}
                                     </span>
                                 </div>

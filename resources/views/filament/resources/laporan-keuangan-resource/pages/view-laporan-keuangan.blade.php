@@ -79,11 +79,11 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <div class="text-sm text-gray-500 dark:text-gray-400">Total Lembur</div>
-                            <div class="mt-2 text-2xl font-semibold text-indigo-600 dark:text-indigo-400">
+                            <div class="mt-2 text-2xl font-semibold text-primary-600 dark:text-primary-400">
                                 {{ \App\Utils\RupiahHelper::format($summary['totals']['total_overtime']) }}
                             </div>
                         </div>
-                        <x-heroicon-o-clock class="h-10 w-10 text-indigo-500 dark:text-indigo-300" />
+                        <x-heroicon-o-clock class="h-10 w-10 text-primary-500 dark:text-primary-300" />
                     </div>
                 </x-filament::card>
             </div>

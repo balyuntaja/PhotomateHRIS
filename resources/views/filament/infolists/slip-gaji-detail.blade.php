@@ -31,7 +31,7 @@
             <span class="badge-compact badge-blue-compact">
               {{ $karyawan['jabatan'] }}
             </span>
-            <span class="badge-compact badge-purple-compact">
+            <span class="badge-compact badge-navy-compact">
               {{ $karyawan['departemen'] }}
             </span>
           </div>

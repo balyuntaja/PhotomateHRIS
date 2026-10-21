@@ -195,7 +195,7 @@
                                     <td class="px-4 py-3 text-center text-sm text-sky-600 dark:text-sky-400">
                                         {{ $record['cuti_disetujui'] }}
                                     </td>
-                                    <td class="px-4 py-3 text-center text-sm text-indigo-600 dark:text-indigo-400">
+                                    <td class="px-4 py-3 text-center text-sm text-primary-600 dark:text-primary-400">
                                         {{ $record['izin_disetujui'] }}
                                     </td>
                                 </tr>

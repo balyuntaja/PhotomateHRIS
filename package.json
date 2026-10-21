@@ -2,10 +2,14 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "vite build",
-        "dev": "vite"
+        "build": "npm run build:filament && vite build",
+        "build:filament": "npx --yes tailwindcss@3.4.17 -i ./resources/css/filament/admin/theme.css -o ./public/css/filament/admin/theme.css --config ./resources/css/filament/admin/tailwind.config.js --minify",
+        "dev": "concurrently -k \"vite\" \"npm:dev:filament\"",
+        "dev:filament": "npx --yes tailwindcss@3.4.17 -i ./resources/css/filament/admin/theme.css -o ./public/css/filament/admin/theme.css --config ./resources/css/filament/admin/tailwind.config.js --watch"
     },
     "devDependencies": {
+        "@tailwindcss/forms": "^0.5.11",
+        "@tailwindcss/typography": "^0.5.20",
         "@tailwindcss/vite": "^4.0.0",
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",

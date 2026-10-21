@@ -16,12 +16,12 @@
 
 /* Waiting / Daftar Tunggu (Soft Indigo/Blue) */
 .card-waiting {
-    background-color: rgba(54, 78, 113, 0.06) !important;
-    border-color: rgba(54, 78, 113, 0.12) !important;
+    background-color: rgba(53, 75, 109, 0.06) !important;
+    border-color: rgba(53, 75, 109, 0.12) !important;
 }
 .dark .card-waiting {
-    background-color: rgba(54, 78, 113, 0.15) !important;
-    border-color: rgba(54, 78, 113, 0.25) !important;
+    background-color: rgba(53, 75, 109, 0.15) !important;
+    border-color: rgba(53, 75, 109, 0.25) !important;
 }
 
 /* Called / Dipanggil (Soft Amber/Orange) */

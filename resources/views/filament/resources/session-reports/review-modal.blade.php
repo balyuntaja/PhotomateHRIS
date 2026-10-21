@@ -120,7 +120,7 @@
             </div>
             <div class="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-700">
                 <span class="text-xs text-gray-500 block">QRIS</span>
-                <div class="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400 font-mono">{{ \App\Utils\RupiahHelper::format($report->total_qris_amount) }}</div>
+                <div class="text-base sm:text-lg font-bold text-primary-600 dark:text-primary-400 font-mono">{{ \App\Utils\RupiahHelper::format($report->total_qris_amount) }}</div>
                 <span class="text-[11px] text-gray-400">{{ $report->total_qris_sessions }} Lembar QRIS · {{ $report->total_qris_transactions }} Sesi</span>
             </div>
             <div class="p-3 bg-primary-50 dark:bg-primary-950/40 rounded-xl border border-primary-200 dark:border-primary-800/60">
@@ -265,7 +265,7 @@
                         <td class="px-3 py-2 text-center text-gray-500">{{ $index + 1 }}</td>
                         <td class="px-3 py-2 font-medium">
                             @if($trx->payment_method === 'QRIS')
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-300">QRIS</span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-primary-100 text-primary-800 dark:bg-primary-900/60 dark:text-primary-300">QRIS</span>
                             @else
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300">Tunai</span>
                             @endif
@@ -402,7 +402,7 @@
                             'SUBMITTED', 'RESUBMITTED' => 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
                             'REVISION_REQUESTED', 'REJECTED' => 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300',
                             'DRAFT_UPDATED' => 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
-                            'DRAFT_CREATED' => 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300',
+                            'DRAFT_CREATED' => 'bg-primary-100 text-primary-800 dark:bg-primary-950 dark:text-primary-300',
                             default => 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
                         };
 
