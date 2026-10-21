@@ -12,8 +12,9 @@
                 <p>
                     Satu rekap sesi dibuat untuk setiap tanggal di CSV dan langsung berstatus final (tanpa approval Supervisor),
                     sekaligus tercatat sebagai transaksi keuangan dengan kategori <strong>Pendapatan Booth</strong>. Hanya transaksi
-                    <strong>Complete</strong> dan <strong>tanpa voucher</strong> yang diproses; transaksi Incomplete, memakai voucher,
-                    duplikat, dan data tidak valid otomatis dikecualikan. Crew rekap mengikuti pilihan "Crew yang Bertugas" pada form di atas.
+                    <strong>Complete</strong> yang diproses; transaksi Incomplete, <strong>Payment Method Voucher</strong>, duplikat, dan
+                    data tidak valid otomatis dikecualikan. Transaksi <strong>QRIS tetap dihitung</strong> meskipun memiliki Voucher Code.
+                    Crew rekap mengikuti pilihan "Crew yang Bertugas" pada form di atas.
                 </p>
             </div>
         </div>

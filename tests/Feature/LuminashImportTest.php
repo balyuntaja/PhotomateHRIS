@@ -284,6 +284,94 @@ class LuminashImportTest extends TestCase
         $this->assertSame(LuminashImportRow::RESULT_EXCLUDED_VOUCHER, LuminashImportRow::firstOrFail()->result);
     }
 
+    public function test_transaksi_qris_dengan_voucher_code_tetap_diimpor(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $path = $this->storeCsv('qris-voucher.csv', [
+            $this->csvRow('20261011213012034', '11 Oct 2026 21:30', 'Complete', 'QRIS', '25000.0'),
+            $this->csvRow('20261011192203192', '11 Oct 2026 19:22', 'Complete', 'QRIS', '20000.0', 'D6C58D'),
+            $this->csvRow('20261011150003199', '11 Oct 2026 15:00', 'Complete', 'QRIS', '25000.0', 'B7HXEP'),
+        ]);
+
+        $batch = app(LuminashImportService::class)->import($path, 'local', $this->managerFinance);
+
+        $this->assertSame(3, $batch->imported_count);
+        $this->assertSame(0, $batch->excluded_voucher_count);
+        $this->assertSame(70000, $batch->total_imported_amount);
+
+        $report = SessionReport::firstOrFail();
+
+        $this->assertSame(3, $report->total_transactions);
+        $this->assertSame(70000, $report->total_qris_amount);
+        $this->assertSame(70000, $report->grand_total_amount);
+        $this->assertSame(3, SessionTransaction::count());
+        $this->assertSame(3, LuminashImportRow::where('result', LuminashImportRow::RESULT_IMPORTED)->count());
+        $this->assertSame('D6C58D', LuminashImportRow::where('order_id', '20261011192203192')->value('voucher_code'));
+        $this->assertSame('B7HXEP', LuminashImportRow::where('order_id', '20261011150003199')->value('voucher_code'));
+    }
+
+    public function test_voucher_tanpa_pendapatan_tidak_menambah_total_rekap(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $path = $this->storeCsv('campuran-voucher.csv', [
+            $this->csvRow('20261011213012034', '11 Oct 2026 21:30', 'Complete', 'QRIS', '25000.0'),
+            $this->csvRow('20261011192203192', '11 Oct 2026 19:22', 'Complete', 'QRIS', '20000.0', 'D6C58D'),
+            $this->csvRow('20261011192203193', '11 Oct 2026 19:23', 'Complete', ' VOUCHER ', '0.0', 'B7HXEP', 'voucher'),
+        ]);
+
+        $analysis = app(LuminashImportService::class)->analyzeFile($path, 'local');
+
+        $this->assertSame(2, $analysis['summary']['imported']);
+        $this->assertSame(1, $analysis['summary']['excluded_voucher']);
+        $this->assertSame(45000, $analysis['summary']['total_amount']);
+        $this->assertSame(2, $analysis['summary']['by_payment_method']['QRIS']['count']);
+        $this->assertSame(45000, $analysis['summary']['by_payment_method']['QRIS']['amount']);
+
+        $batch = app(LuminashImportService::class)->import($path, 'local', $this->managerFinance);
+
+        $this->assertSame(2, $batch->imported_count);
+        $this->assertSame(1, $batch->excluded_voucher_count);
+        $this->assertSame(45000, $batch->total_imported_amount);
+
+        $report = SessionReport::firstOrFail();
+
+        $this->assertSame(2, $report->total_transactions);
+        $this->assertSame(2, $report->transactions()->count());
+        $this->assertSame(45000, $report->total_qris_amount);
+        $this->assertSame(45000, $report->grand_total_amount);
+        $this->assertDatabaseMissing('financial_transactions', [
+            'source_id' => '20261011192203193',
+        ]);
+    }
+
+    public function test_upload_ulang_qris_dengan_voucher_tidak_membuat_transaksi_ganda(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $path = $this->storeCsv('ulang-qris-voucher.csv', [
+            $this->csvRow('20261011213012034', '11 Oct 2026 21:30', 'Complete', 'QRIS', '25000.0'),
+            $this->csvRow('20261011192203192', '11 Oct 2026 19:22', 'Complete', 'QRIS', '20000.0', 'D6C58D'),
+        ]);
+
+        $service = app(LuminashImportService::class);
+
+        $first = $service->import($path, 'local', $this->managerFinance);
+        $second = $service->import($path, 'local', $this->managerFinance);
+
+        $this->assertSame(2, $first->imported_count);
+        $this->assertSame(0, $second->imported_count);
+        $this->assertSame(2, $second->duplicate_count);
+        $this->assertSame(0, $second->total_imported_amount);
+        $this->assertSame(45000, (int) FinancialTransaction::where('source_type', LuminashImportService::SOURCE)
+            ->where('source_id', 'like', 'REKAP-%')
+            ->sum('amount'));
+        // 2 komponen per-order (soft delete) + 1 baris rekap.
+        $this->assertDatabaseCount('financial_transactions', 3);
+        $this->assertDatabaseCount('session_reports', 1);
+    }
+
     public function test_transaksi_incomplete_tanpa_voucher_dikecualikan(): void
     {
         $this->actingAs($this->managerFinance);
@@ -919,14 +1007,14 @@ class LuminashImportTest extends TestCase
 
         while (($data = fgetcsv($handle)) !== false) {
             $status = trim((string) ($data[$keys['Status']] ?? ''));
-            $voucher = trim((string) ($data[$keys['Voucher Code']] ?? ''));
+            $method = strtolower(trim((string) ($data[$keys['Payment Method']] ?? '')));
             $amount = (float) ($data[$keys['Amount']] ?? 0);
 
             if (strtolower($status) !== 'complete') {
                 continue;
             }
 
-            if ($voucher !== '' && $voucher !== '-') {
+            if ($method === 'voucher') {
                 continue;
             }
 

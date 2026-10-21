@@ -208,11 +208,11 @@ class LuminashImportService
                 continue;
             }
 
-            if ($this->hasVoucher($row)) {
+            if ($this->isVoucherPayment($row)) {
                 $code = $this->normalizeVoucherCode($row['voucher_code'] ?? null);
 
                 $entry['result'] = LuminashImportRow::RESULT_EXCLUDED_VOUCHER;
-                $entry['reason'] = 'Transaksi menggunakan voucher' . ($code ? ' (' . $code . ')' : '') . '.';
+                $entry['reason'] = 'Metode pembayaran Voucher' . ($code ? ' (' . $code . ')' : '') . ' tidak menambah pendapatan.';
 
                 $summary['excluded_voucher']++;
                 $analyzed[] = $entry;
@@ -695,19 +695,13 @@ class LuminashImportService
         ]);
     }
 
-    private function hasVoucher(array $row): bool
+    /**
+     * Transaksi hanya dikecualikan bila Payment Method-nya Voucher.
+     * Keberadaan Voucher Code pada transaksi QRIS tidak membuat transaksi ikut dikecualikan.
+     */
+    private function isVoucherPayment(array $row): bool
     {
-        if ($this->normalizeVoucherCode($row['voucher_code'] ?? null) !== null) {
-            return true;
-        }
-
-        foreach ([$row['payment_method'] ?? null, $row['payment_type'] ?? null] as $value) {
-            if (filled($value) && $this->normalizeKey($value) === 'voucher') {
-                return true;
-            }
-        }
-
-        return false;
+        return $this->normalizeMethodKey((string) ($row['payment_method'] ?? '')) === 'voucher';
     }
 
     private function normalizeVoucherCode(?string $raw): ?string

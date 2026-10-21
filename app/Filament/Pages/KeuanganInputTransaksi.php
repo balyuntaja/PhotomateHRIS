@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Forms\Components\EvidenceUpload;
 use App\Filament\Resources\FinancialTransactionResource;
 use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
@@ -233,15 +234,10 @@ class KeuanganInputTransaksi extends Page implements HasForms
                             ->helperText('Opsional.')
                             ->columnSpanFull(),
 
-                        Forms\Components\FileUpload::make('evidence_path')
-                            ->label('Bukti Transaksi')
-                            ->disk('public')
-                            ->directory('keuangan/evidence')
-                            ->visibility('public')
-                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
-                            ->maxSize(5120)
-                            ->helperText('Opsional. Format JPG, PNG, WEBP, atau PDF (maksimal 5MB).')
-                            ->columnSpanFull(),
+                        Forms\Components\Hidden::make('evidence_path'),
+
+                        EvidenceUpload::make('evidence_upload')
+                            ->storedPath(fn (Get $get): ?string => $get('evidence_path')),
                     ])
                     ->columns([
                         'default' => 1,
@@ -259,6 +255,13 @@ class KeuanganInputTransaksi extends Page implements HasForms
 
         $period = $data['period'] ?? now()->format('Y-m');
         unset($data['period']);
+
+        $upload = $data['evidence_upload'] ?? null;
+        unset($data['evidence_upload']);
+
+        if (filled($upload)) {
+            $data['evidence_path'] = is_array($upload) ? reset($upload) : $upload;
+        }
 
         [$year, $month] = array_pad(explode('-', (string) $period), 2, null);
 
@@ -293,6 +296,8 @@ class KeuanganInputTransaksi extends Page implements HasForms
             'period' => $period,
             'transaction_type' => $transaction->transaction_type,
         ]));
+
+        $this->dispatch('evidence-upload-reset');
     }
 
     /**
@@ -327,6 +332,7 @@ class KeuanganInputTransaksi extends Page implements HasForms
             'counterparty' => null,
             'description' => null,
             'evidence_path' => null,
+            'evidence_upload' => null,
             ...$keep,
         ];
     }

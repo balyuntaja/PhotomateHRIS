@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Forms\Components\EvidenceUpload;
 use App\Filament\Pages\KeuanganInputTransaksi;
 use App\Filament\Pages\KeuanganReport;
 use App\Filament\Resources\FinancialTransactionResource\Pages\ListFinancialTransactions;
@@ -16,6 +17,8 @@ use App\Models\Permission;
 use App\Models\Role;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -169,6 +172,108 @@ class KeuanganInputTransaksiTest extends TestCase
         $this->assertSame($this->managerFinance->karyawan_id, $transaction->submitted_by);
         $this->assertSame($this->managerFinance->nama_lengkap, $transaction->submitted_by_name);
         $this->assertSame($this->managerFinance->nama_lengkap, $transaction->submitted_by_label);
+    }
+
+    public function test_preview_bukti_transaksi_memakai_url_relatif_same_origin(): void
+    {
+        $this->assertSame('/storage', config('filesystems.disks.public.url'));
+
+        $path = 'keuangan/evidence/bukti-transaksi.png';
+
+        Storage::fake('public', ['url' => 'https://domain-lain.example/storage']);
+        Storage::disk('public')->put($path, 'bukti');
+
+        $this->assertSame(
+            '/storage/'.$path,
+            EvidenceUpload::relativeUrl(Storage::disk('public'), $path),
+        );
+    }
+
+    public function test_modal_edit_transaksi_merender_preview_bukti_tersimpan(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->managerFinance);
+
+        $path = 'keuangan/evidence/bukti-transaksi.png';
+        Storage::disk('public')->put($path, 'bukti');
+
+        $transaction = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'amount' => 150000,
+            'category_id' => $this->incomeCategory->id,
+            'account_id' => $this->express->id,
+            'payment_method_id' => $this->cash->id,
+            'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
+            'transaction_date' => '2026-10-21',
+            'evidence_path' => $path,
+        ]);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountTableAction('edit', $transaction)
+            ->assertSeeHtml('evidencePreview')
+            ->assertSee('bukti-transaksi.png');
+    }
+
+    public function test_input_transaksi_menyimpan_bukti_transaksi_yang_diunggah(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->managerFinance);
+
+        Livewire::test(KeuanganInputTransaksi::class)
+            ->fillForm([
+                'account_id' => $this->express->id,
+                'period' => '2026-10',
+                'transaction_date' => '2026-10-07',
+                'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'category_id' => $this->expenseCategory->id,
+                'amount' => '500.000',
+                'party_id' => $this->pihak->id,
+                'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
+                'evidence_upload' => UploadedFile::fake()->image('bukti-transaksi.png'),
+            ])
+            ->call('simpan')
+            ->assertHasNoFormErrors();
+
+        $transaction = FinancialTransaction::firstOrFail();
+
+        $this->assertNotNull($transaction->evidence_path);
+        $this->assertStringStartsWith('keuangan/evidence/', $transaction->evidence_path);
+        Storage::disk('public')->assertExists($transaction->evidence_path);
+    }
+
+    public function test_edit_transaksi_mengganti_bukti_tersimpan(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->managerFinance);
+
+        $oldPath = 'keuangan/evidence/bukti-lama.png';
+        Storage::disk('public')->put($oldPath, 'bukti lama');
+
+        $transaction = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'amount' => 150000,
+            'category_id' => $this->incomeCategory->id,
+            'account_id' => $this->express->id,
+            'payment_method_id' => $this->cash->id,
+            'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
+            'transaction_date' => '2026-10-21',
+            'evidence_path' => $oldPath,
+        ]);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->callTableAction('edit', $transaction, [
+                'evidence_upload' => UploadedFile::fake()->image('bukti-baru.png'),
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $transaction->refresh();
+
+        $this->assertNotSame($oldPath, $transaction->evidence_path);
+        $this->assertStringStartsWith('keuangan/evidence/', $transaction->evidence_path);
+        Storage::disk('public')->assertExists($transaction->evidence_path);
     }
 
     public function test_input_transaksi_menyimpan_transaksi_utang_beserta_jatuh_tempo_dan_pihak_kepada(): void
@@ -361,7 +466,8 @@ class KeuanganInputTransaksiTest extends TestCase
             ->assertSet('data.due_date', null)
             ->assertSet('data.counterparty', null)
             ->assertSet('data.description', null)
-            ->assertSet('data.evidence_path', []);
+            ->assertSet('data.evidence_path', null)
+            ->assertSet('data.evidence_upload', []);
     }
 
     public function test_transaksi_muncul_di_halaman_transaksi_dan_laporan(): void

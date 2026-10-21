@@ -41,7 +41,10 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => env('APP_URL').'/storage',
+            // Relative URL keeps previews on the same origin as the panel, so
+            // FilePond's fetch() is not blocked when APP_URL differs from the
+            // host used in the browser (proxies, tunnels, http/https changes).
+            'url' => '/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,

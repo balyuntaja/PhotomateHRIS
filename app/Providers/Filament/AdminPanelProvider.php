@@ -96,7 +96,8 @@ class AdminPanelProvider extends PanelProvider
                 \Filament\View\PanelsRenderHook::BODY_END,
                 fn (): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString(
                     '<script src="' . asset('js/queue-poster.js') . '"></script>' .
-                    '<script src="' . asset('js/rupiah.js') . '"></script>'
+                    '<script src="' . asset('js/rupiah.js') . '"></script>' .
+                    '<script src="' . asset('js/evidence-upload.js') . '?v=' . filemtime(public_path('js/evidence-upload.js')) . '"></script>'
                 )
             )
         ;

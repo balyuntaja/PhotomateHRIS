@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Forms\Components\EvidenceUpload;
 use App\Filament\Resources\FinancialTransactionResource\Pages;
 use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
@@ -175,15 +176,10 @@ class FinancialTransactionResource extends Resource
                         ->placeholder('Opsional, contoh: Pembelian tinta printer Janus')
                         ->columnSpanFull(),
 
-                    Forms\Components\FileUpload::make('evidence_path')
-                        ->label('Bukti Transaksi')
-                        ->disk('public')
-                        ->directory('keuangan/evidence')
-                        ->visibility('public')
-                        ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
-                        ->maxSize(5120)
-                        ->helperText('Opsional. Format JPG, PNG, WEBP, atau PDF (maksimal 5MB).')
-                        ->columnSpanFull(),
+                    Forms\Components\Hidden::make('evidence_path'),
+
+                    EvidenceUpload::make('evidence_upload')
+                        ->storedPath(fn (Get $get): ?string => $get('evidence_path')),
                 ])
                 ->columns(2),
         ]);
@@ -491,6 +487,17 @@ class FinancialTransactionResource extends Resource
                     ->hidden(fn (FinancialTransaction $record): bool => app(ExpressRekapService::class)->isRekap($record))
                     ->modalHeading('Edit Transaksi')
                     ->modalSubmitActionLabel('Simpan Perubahan')
+                    ->mutateFormDataUsing(function (array $data): array {
+                        $upload = $data['evidence_upload'] ?? null;
+
+                        unset($data['evidence_upload']);
+
+                        if (filled($upload)) {
+                            $data['evidence_path'] = is_array($upload) ? reset($upload) : $upload;
+                        }
+
+                        return $data;
+                    })
                     ->successNotificationTitle('Transaksi berhasil diperbarui.'),
 
                 Tables\Actions\DeleteAction::make()
