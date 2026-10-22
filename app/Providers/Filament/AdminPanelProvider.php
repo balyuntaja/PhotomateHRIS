@@ -72,6 +72,7 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Manajemen Absensi')->icon('heroicon-o-clipboard-document-check'),
                 NavigationGroup::make('Manajemen Penggajian')->icon('heroicon-o-banknotes'),
                 NavigationGroup::make('Keuangan')->icon('heroicon-o-wallet'),
+                NavigationGroup::make('Inventory')->icon('heroicon-o-cube'),
                 NavigationGroup::make('Laporan')->icon('heroicon-o-chart-bar'),
                 NavigationGroup::make('Data Master')->icon('heroicon-o-circle-stack'),
                 NavigationGroup::make('CMS')->icon('heroicon-o-globe-alt'),
