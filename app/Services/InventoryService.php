@@ -264,13 +264,22 @@ class InventoryService
 
         $memberIds = array_values(array_unique($memberIds));
 
-        $subQuery = DB::table('inventory_stocks')
+        // Kunci kelompok dihitung di derived table agar GROUP BY memakai
+        // kolom biasa. MySQL dengan ONLY_FULL_GROUP_BY tidak mengenali
+        // ekspresi CASE yang sama di SELECT dan GROUP BY.
+        $sourceQuery = DB::table('inventory_stocks')
             ->selectRaw(
-                "min(id) as id, inventory_item_id, ({$caseSql}) as cabang_id, sum(jumlah) as jumlah, {$minimumSql} as min_stok, max(last_transaction_at) as last_transaction_at, min(created_at) as created_at, max(updated_at) as updated_at",
-                array_merge($caseBindings, $minimumBindings),
+                "id, inventory_item_id, ({$caseSql}) as cabang_id, jumlah, min_stok, last_transaction_at, created_at, updated_at",
+                $caseBindings,
             )
-            ->whereIn('cabang_id', $memberIds)
-            ->groupByRaw("inventory_item_id, ({$caseSql})", $caseBindings);
+            ->whereIn('cabang_id', $memberIds);
+
+        $subQuery = DB::table($sourceQuery, 'inventory_stock_source')
+            ->selectRaw(
+                "min(id) as id, inventory_item_id, cabang_id, sum(jumlah) as jumlah, {$minimumSql} as min_stok, max(last_transaction_at) as last_transaction_at, min(created_at) as created_at, max(updated_at) as updated_at",
+                $minimumBindings,
+            )
+            ->groupBy('inventory_item_id', 'cabang_id');
 
         $query = InventoryStock::query()
             ->fromSub($subQuery, 'inventory_stocks')
