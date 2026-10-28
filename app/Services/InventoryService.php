@@ -2,14 +2,15 @@
 
 namespace App\Services;
 
-use App\Models\Cabang;
 use App\Models\InventoryItem;
 use App\Models\InventoryStock;
 use App\Models\InventoryTransaction;
 use App\Utils\InventoryAccess;
+use App\Utils\InventoryBranches;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -33,7 +34,7 @@ class InventoryService
             return $this->ensureStocksForItem($item);
         }
 
-        $branchIds = Cabang::query()->orderBy('cabang_id')->pluck('cabang_id');
+        $branchIds = array_values(InventoryBranches::canonicalIds());
         $created = 0;
 
         InventoryItem::query()
@@ -64,14 +65,41 @@ class InventoryService
             ['min_stok.min' => 'Batas minimum stok tidak boleh negatif.'],
         )->validate();
 
-        $stock->update(['min_stok' => $validated['min_stok']]);
+        $cabangId = InventoryBranches::normalizeCabangIdForWrite($stock->cabang_id)
+            ?? (string) $stock->cabang_id;
 
-        return $stock->refresh();
+        $this->insertStockIfMissing(
+            (int) $stock->inventory_item_id,
+            $cabangId,
+            (int) $stock->min_stok,
+        );
+
+        $target = InventoryStock::query()
+            ->where('inventory_item_id', $stock->inventory_item_id)
+            ->where('cabang_id', $cabangId)
+            ->firstOrFail();
+
+        $target->update(['min_stok' => $validated['min_stok']]);
+
+        return $target->refresh();
+    }
+
+    /**
+     * Query stok Inventory yang sudah digabungkan per cabang utama.
+     * Satu baris per barang per cabang (Express/Golio/Newspaper Janus).
+     */
+    public function stockQuery(?string $cabangId = null): Builder
+    {
+        InventoryAccess::authorize();
+
+        return $this->buildStockQuery($cabangId);
     }
 
     public function record(array $data): InventoryTransaction
     {
         InventoryAccess::authorize();
+
+        $data['cabang_id'] = InventoryBranches::normalizeCabangIdForWrite($data['cabang_id'] ?? null);
 
         $validated = $this->validateTransaction($data);
         $idempotencyKey = filled($validated['idempotency_key'] ?? null)
@@ -109,24 +137,21 @@ class InventoryService
     {
         InventoryAccess::authorize();
 
-        $branchId = filled($cabangId) ? (string) $cabangId : null;
+        $branchId = InventoryBranches::filterCanonicalId($cabangId);
 
-        $stockQuery = InventoryStock::query()->whereHas('item', fn (Builder $query): Builder => $query->active());
-
-        if ($branchId !== null) {
-            $stockQuery->where('cabang_id', $branchId);
-        }
+        $stockQuery = $this->buildStockQuery($branchId)
+            ->whereHas('item', fn (Builder $query): Builder => $query->active());
 
         $totalStock = (int) (clone $stockQuery)->sum('jumlah');
+
+        $lowStockQuery = fn (): Builder => (clone $stockQuery)
+            ->where('jumlah', '>', 0)
+            ->whereColumn('jumlah', '<=', 'min_stok');
 
         if ($branchId !== null) {
             $totalItems = (clone $stockQuery)->distinct()->count('inventory_item_id');
 
-            $lowStock = (clone $stockQuery)
-                ->where('jumlah', '>', 0)
-                ->whereColumn('jumlah', '<=', 'min_stok')
-                ->distinct()
-                ->count('inventory_item_id');
+            $lowStock = $lowStockQuery()->distinct()->count('inventory_item_id');
 
             $outOfStock = (clone $stockQuery)
                 ->where('jumlah', 0)
@@ -135,16 +160,14 @@ class InventoryService
         } else {
             $totalItems = InventoryItem::query()->active()->count();
 
-            $lowStock = InventoryItem::query()
-                ->active()
-                ->whereHas('stocks', fn (Builder $query): Builder => $query
-                    ->where('jumlah', '>', 0)
-                    ->whereColumn('jumlah', '<=', 'min_stok'))
-                ->count();
+            $lowStock = $lowStockQuery()->distinct()->count('inventory_item_id');
 
             $outOfStock = InventoryItem::query()
                 ->active()
-                ->whereDoesntHave('stocks', fn (Builder $query): Builder => $query->where('jumlah', '>', 0))
+                ->whereNotIn(
+                    'id',
+                    (clone $stockQuery)->select('inventory_item_id')->where('jumlah', '>', 0),
+                )
                 ->count();
         }
 
@@ -161,12 +184,9 @@ class InventoryService
     {
         InventoryAccess::authorize();
 
-        $branchId = filled($cabangId) ? (string) $cabangId : null;
-
-        return InventoryStock::query()
+        return $this->buildStockQuery($cabangId)
             ->with(['item', 'cabang'])
             ->whereHas('item', fn (Builder $query): Builder => $query->active())
-            ->when($branchId !== null, fn (Builder $query): Builder => $query->where('cabang_id', $branchId))
             ->where(function (Builder $query): void {
                 $query->where('jumlah', 0)
                     ->orWhere(function (Builder $query): void {
@@ -187,10 +207,9 @@ class InventoryService
             return null;
         }
 
-        $stock = InventoryStock::query()
+        $stock = $this->buildStockQuery($cabangId)
             ->with('item')
             ->where('inventory_item_id', $itemId)
-            ->where('cabang_id', $cabangId)
             ->first();
 
         if (! $stock) {
@@ -206,13 +225,69 @@ class InventoryService
         ];
     }
 
+    private function buildStockQuery(?string $cabangId = null): Builder
+    {
+        $groups = InventoryBranches::readGroups();
+
+        if ($groups === []) {
+            return InventoryStock::query()->whereRaw('1 = 0');
+        }
+
+        $caseParts = [];
+        $caseBindings = [];
+        $minimumParts = [];
+        $minimumBindings = [];
+        $memberIds = [];
+
+        foreach ($groups as $group) {
+            $members = $group['members'];
+            $canonicalId = $group['cabang_id'];
+
+            $memberIds = array_merge($memberIds, $members);
+
+            $placeholders = implode(', ', array_fill(0, count($members), '?'));
+
+            $caseParts[] = "when cabang_id in ({$placeholders}) then ?";
+
+            foreach ($members as $memberId) {
+                $caseBindings[] = $memberId;
+            }
+
+            $caseBindings[] = $canonicalId;
+
+            $minimumParts[] = 'when cabang_id = ? then min_stok';
+            $minimumBindings[] = $canonicalId;
+        }
+
+        $caseSql = 'case '.implode(' ', $caseParts).' else cabang_id end';
+        $minimumSql = 'coalesce(max(case '.implode(' ', $minimumParts).' end), max(min_stok), 0)';
+
+        $memberIds = array_values(array_unique($memberIds));
+
+        $subQuery = DB::table('inventory_stocks')
+            ->selectRaw(
+                "min(id) as id, inventory_item_id, ({$caseSql}) as cabang_id, sum(jumlah) as jumlah, {$minimumSql} as min_stok, max(last_transaction_at) as last_transaction_at, min(created_at) as created_at, max(updated_at) as updated_at",
+                array_merge($caseBindings, $minimumBindings),
+            )
+            ->whereIn('cabang_id', $memberIds)
+            ->groupByRaw("inventory_item_id, ({$caseSql})", $caseBindings);
+
+        $query = InventoryStock::query()
+            ->fromSub($subQuery, 'inventory_stocks')
+            ->with(['item', 'cabang']);
+
+        if (filled($cabangId)) {
+            $query->where('cabang_id', InventoryBranches::filterCanonicalId($cabangId));
+        }
+
+        return $query;
+    }
+
     private function ensureStocksForItem(InventoryItem $item): int
     {
         $created = 0;
 
-        $branchIds = Cabang::query()->orderBy('cabang_id')->pluck('cabang_id');
-
-        foreach ($branchIds as $branchId) {
+        foreach (array_values(InventoryBranches::canonicalIds()) as $branchId) {
             $created += $this->insertStockIfMissing(
                 (int) $item->id,
                 (string) $branchId,
@@ -252,6 +327,7 @@ class InventoryService
                     'string',
                     'max:5',
                     Rule::exists('cabang', 'cabang_id')->whereNull('deleted_at'),
+                    Rule::in(array_values(InventoryBranches::canonicalIds())),
                 ],
                 'jumlah' => ['nullable', 'integer', 'min:1', 'required_if:jenis_transaksi,masuk,keluar'],
                 'stok_aktual' => ['nullable', 'integer', 'min:0', 'required_if:jenis_transaksi,penyesuaian'],
@@ -267,6 +343,7 @@ class InventoryService
                 'inventory_item_id.exists' => 'Barang tidak ditemukan.',
                 'cabang_id.required' => 'Cabang wajib dipilih.',
                 'cabang_id.exists' => 'Cabang tidak ditemukan.',
+                'cabang_id.in' => 'Cabang bukan bagian dari Inventory (Express, Golio, Newspaper Janus).',
                 'jumlah.required_if' => 'Jumlah transaksi wajib diisi.',
                 'jumlah.integer' => 'Jumlah transaksi harus berupa bilangan bulat.',
                 'jumlah.min' => 'Jumlah transaksi harus lebih dari nol.',
@@ -298,19 +375,19 @@ class InventoryService
             ]);
         }
 
+        $cabangId = (string) $data['cabang_id'];
+
         $this->insertStockIfMissing(
             (int) $item->id,
-            (string) $data['cabang_id'],
+            $cabangId,
             (int) $item->min_stok_default,
         );
 
-        $stock = InventoryStock::query()
-            ->where('inventory_item_id', $item->id)
-            ->where('cabang_id', $data['cabang_id'])
-            ->lockForUpdate()
-            ->firstOrFail();
+        $stocks = $this->lockBranchStocks((int) $item->id, $cabangId);
 
-        $before = (int) $stock->jumlah;
+        $canonicalStock = $stocks->get($cabangId);
+
+        $before = (int) $stocks->sum(fn (InventoryStock $stock): int => (int) $stock->jumlah);
         $type = $data['jenis_transaksi'];
 
         $after = match ($type) {
@@ -337,10 +414,7 @@ class InventoryService
             ]);
         }
 
-        $stock->update([
-            'jumlah' => $after,
-            'last_transaction_at' => now(),
-        ]);
+        $this->applyAggregateStockChange($stocks, $canonicalStock, $after - $before);
 
         return InventoryTransaction::create([
             'nomor_transaksi' => $this->generateTransactionNumber(),
@@ -348,7 +422,7 @@ class InventoryService
             'tanggal_transaksi' => $data['tanggal_transaksi'],
             'jenis_transaksi' => $type,
             'inventory_item_id' => $item->id,
-            'cabang_id' => $data['cabang_id'],
+            'cabang_id' => $cabangId,
             'jumlah' => abs($after - $before),
             'stok_sebelum' => $before,
             'stok_sesudah' => $after,
@@ -358,10 +432,78 @@ class InventoryService
         ]);
     }
 
+    /**
+     * Kunci seluruh baris stok anggota kelompok cabang (mis. semua cabang
+     * Express) agar perubahan stok agregat tetap konsisten.
+     *
+     * @return Collection<string, InventoryStock>
+     */
+    private function lockBranchStocks(int $itemId, string $cabangId): Collection
+    {
+        $memberIds = InventoryBranches::expandCabangIds($cabangId) ?? [$cabangId];
+
+        return InventoryStock::query()
+            ->where('inventory_item_id', $itemId)
+            ->whereIn('cabang_id', $memberIds)
+            ->orderBy('cabang_id')
+            ->lockForUpdate()
+            ->get()
+            ->keyBy('cabang_id');
+    }
+
+    /**
+     * Terapkan selisih stok agregat ke baris-baris anggota. Penambahan
+     * masuk ke baris kanonis; pengurangan diambil dari baris kanonis lalu
+     * baris anggota lain. Tidak ada baris yang dihapus.
+     *
+     * @param  Collection<string, InventoryStock>  $stocks
+     */
+    private function applyAggregateStockChange(Collection $stocks, ?InventoryStock $canonicalStock, int $delta): void
+    {
+        if ($delta === 0 || ! $canonicalStock) {
+            return;
+        }
+
+        $now = now();
+
+        if ($delta > 0) {
+            $canonicalStock->update([
+                'jumlah' => (int) $canonicalStock->jumlah + $delta,
+                'last_transaction_at' => $now,
+            ]);
+
+            return;
+        }
+
+        $remaining = -$delta;
+
+        $ordered = collect([$canonicalStock])
+            ->merge($stocks->except($canonicalStock->cabang_id)->sortKeys());
+
+        foreach ($ordered as $stock) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $deduct = min((int) $stock->jumlah, $remaining);
+
+            if ($deduct <= 0) {
+                continue;
+            }
+
+            $stock->update([
+                'jumlah' => (int) $stock->jumlah - $deduct,
+                'last_transaction_at' => $now,
+            ]);
+
+            $remaining -= $deduct;
+        }
+    }
+
     private function resolveIdempotentRetry(InventoryTransaction $existing, array $data): InventoryTransaction
     {
         $sameRequest = (int) $existing->inventory_item_id === (int) $data['inventory_item_id']
-            && (string) $existing->cabang_id === (string) $data['cabang_id']
+            && InventoryBranches::normalizeCabangIdForWrite((string) $existing->cabang_id) === (string) $data['cabang_id']
             && $existing->jenis_transaksi === $data['jenis_transaksi']
             && $existing->tanggal_transaksi?->toDateString() === Carbon::parse($data['tanggal_transaksi'])->toDateString();
 

@@ -4,10 +4,10 @@ namespace App\Filament\Resources\InventoryTransactionResource\Pages;
 
 use App\Filament\Resources\InventoryTransactionResource;
 use App\Filament\Resources\Pages\CreateRecord;
-use App\Models\Cabang;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Services\InventoryService;
+use App\Utils\InventoryBranches;
 use Filament\Actions\Action;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -26,6 +26,8 @@ class CreateInventoryTransaction extends CreateRecord
         $itemId = request()->integer('item');
         $cabangId = request()->query('cabang');
         $cabangId = is_string($cabangId) ? $cabangId : '';
+        $cabangId = (string) (InventoryBranches::normalizeCabangIdForWrite($cabangId) ?? '');
+        $branchOptions = InventoryBranches::options();
 
         $this->form->fill([
             'jenis_transaksi' => InventoryTransaction::TYPE_IN,
@@ -33,7 +35,7 @@ class CreateInventoryTransaction extends CreateRecord
             'inventory_item_id' => $itemId > 0 && InventoryItem::query()->active()->whereKey($itemId)->exists()
                 ? $itemId
                 : null,
-            'cabang_id' => $cabangId !== '' && Cabang::query()->whereKey($cabangId)->exists()
+            'cabang_id' => $cabangId !== '' && array_key_exists($cabangId, $branchOptions)
                 ? $cabangId
                 : null,
             'idempotency_key' => Str::uuid()->toString(),

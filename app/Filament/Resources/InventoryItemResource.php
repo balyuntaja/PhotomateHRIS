@@ -4,10 +4,11 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\InventoryItemResource\Pages;
 use App\Filament\Resources\InventoryItemResource\RelationManagers;
-use App\Models\Cabang;
 use App\Models\InventoryItem;
 use App\Models\InventoryStock;
+use App\Services\InventoryService;
 use App\Utils\InventoryAccess;
+use App\Utils\InventoryBranches;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Infolists;
@@ -50,14 +51,33 @@ class InventoryItemResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->withSum('stocks as total_stock_sum', 'jumlah')
-            ->withCount([
-                'stocks as branch_stock_count' => fn (Builder $query): Builder => $query->where('jumlah', '>', 0),
-                'stocks as low_stock_branch_count' => fn (Builder $query): Builder => $query
-                    ->where('jumlah', '>', 0)
-                    ->whereColumn('jumlah', '<=', 'min_stok'),
-            ]);
+        $query = parent::getEloquentQuery();
+
+        foreach (InventoryBranches::readGroups() as $key => $group) {
+            $query->withSum(
+                ['stocks as stock_sum_'.$key => fn (Builder $stockQuery): Builder => $stockQuery
+                    ->whereIn('cabang_id', $group['members'])],
+                'jumlah',
+            );
+
+            $query->withSum(
+                ['stocks as stock_min_'.$key => fn (Builder $stockQuery): Builder => $stockQuery
+                    ->where('cabang_id', $group['cabang_id'])],
+                'min_stok',
+            );
+        }
+
+        $memberIds = InventoryBranches::allMemberCabangIds(true);
+
+        if ($memberIds !== []) {
+            $query->withSum(
+                ['stocks as total_stock_sum' => fn (Builder $stockQuery): Builder => $stockQuery
+                    ->whereIn('cabang_id', $memberIds)],
+                'jumlah',
+            );
+        }
+
+        return $query;
     }
 
     public static function form(Form $form): Form
@@ -175,7 +195,7 @@ class InventoryItemResource extends Resource
                     ->formatStateUsing(fn (int $state): string => number_format($state, 0, ',', '.'))
                     ->alignCenter()
                     ->weight('semibold')
-                    ->tooltip('Total stok seluruh cabang'),
+                    ->tooltip('Total stok cabang Inventory (Express, Golio, Newspaper Janus)'),
 
                 Tables\Columns\TextColumn::make('branch_stock_count')
                     ->label('Cabang')
@@ -183,14 +203,14 @@ class InventoryItemResource extends Resource
                     ->alignCenter()
                     ->badge()
                     ->color('primary')
-                    ->tooltip('Jumlah cabang yang memiliki stok tersedia'),
+                    ->tooltip('Jumlah cabang Inventory yang memiliki stok tersedia'),
 
                 Tables\Columns\TextColumn::make('stock_status')
                     ->label('Status Stok')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => InventoryStock::STATUS_LABELS[$state] ?? (string) $state)
                     ->color(fn (?string $state): string => InventoryStock::STATUS_COLORS[$state] ?? 'gray')
-                    ->tooltip('Status agregat berdasarkan stok seluruh cabang'),
+                    ->tooltip('Status agregat berdasarkan stok cabang Inventory'),
 
                 Tables\Columns\TextColumn::make('is_active')
                     ->label('Status Barang')
@@ -220,42 +240,43 @@ class InventoryItemResource extends Resource
 
                 Tables\Filters\SelectFilter::make('cabang_id')
                     ->label('Cabang')
-                    ->options(fn (): array => Cabang::query()
-                        ->orderBy('nama_cabang')
-                        ->pluck('nama_cabang', 'cabang_id')
-                        ->all())
-                    ->searchable()
+                    ->options(fn (): array => InventoryBranches::options())
+                    ->placeholder('Semua Cabang')
                     ->query(function (Builder $query, array $data): Builder {
-                        $branchId = $data['value'] ?? null;
+                        $branchIds = InventoryBranches::expandCabangIds($data['value'] ?? null);
 
-                        return filled($branchId)
-                            ? $query->whereHas('stocks', fn (Builder $stockQuery): Builder => $stockQuery->where('cabang_id', $branchId))
-                            : $query;
+                        return $branchIds === null
+                            ? $query
+                            : $query->whereHas(
+                                'stocks',
+                                fn (Builder $stockQuery): Builder => $stockQuery->whereIn('cabang_id', $branchIds),
+                            );
                     }),
 
                 Tables\Filters\SelectFilter::make('status_stok')
                     ->label('Status Stok')
                     ->options(InventoryStock::STATUS_LABELS)
                     ->query(function (Builder $query, array $data): Builder {
-                        return match ($data['value'] ?? null) {
-                            InventoryStock::STATUS_HABIS => $query->whereDoesntHave(
-                                'stocks',
-                                fn (Builder $stockQuery): Builder => $stockQuery->where('jumlah', '>', 0),
+                        $status = $data['value'] ?? null;
+                        $stockQuery = app(InventoryService::class)->stockQuery();
+
+                        $lowStockItems = fn (): Builder => (clone $stockQuery)
+                            ->select('inventory_item_id')
+                            ->where('jumlah', '>', 0)
+                            ->whereColumn('jumlah', '<=', 'min_stok');
+
+                        return match ($status) {
+                            InventoryStock::STATUS_HABIS => $query->whereNotIn(
+                                'id',
+                                (clone $stockQuery)->select('inventory_item_id')->where('jumlah', '>', 0),
                             ),
-                            InventoryStock::STATUS_MENIPIS => $query->whereHas(
-                                'stocks',
-                                fn (Builder $stockQuery): Builder => $stockQuery
-                                    ->where('jumlah', '>', 0)
-                                    ->whereColumn('jumlah', '<=', 'min_stok'),
-                            ),
+                            InventoryStock::STATUS_MENIPIS => $query->whereIn('id', $lowStockItems()),
                             InventoryStock::STATUS_AMAN => $query
-                                ->whereHas('stocks', fn (Builder $stockQuery): Builder => $stockQuery->where('jumlah', '>', 0))
-                                ->whereDoesntHave(
-                                    'stocks',
-                                    fn (Builder $stockQuery): Builder => $stockQuery
-                                        ->where('jumlah', '>', 0)
-                                        ->whereColumn('jumlah', '<=', 'min_stok'),
-                                ),
+                                ->whereIn(
+                                    'id',
+                                    (clone $stockQuery)->select('inventory_item_id')->where('jumlah', '>', 0),
+                                )
+                                ->whereNotIn('id', $lowStockItems()),
                             default => $query,
                         };
                     }),
@@ -409,7 +430,7 @@ class InventoryItemResource extends Resource
             Infolists\Components\Section::make('Ringkasan Stok')
                 ->schema([
                     Infolists\Components\TextEntry::make('total_stock')
-                        ->label('Total Stok Seluruh Cabang')
+                        ->label('Total Stok Cabang Inventory')
                         ->badge()
                         ->color('primary')
                         ->formatStateUsing(fn (int $state): string => number_format($state, 0, ',', '.')),

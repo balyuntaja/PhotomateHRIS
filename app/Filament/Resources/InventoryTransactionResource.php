@@ -3,12 +3,12 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\InventoryTransactionResource\Pages;
-use App\Models\Cabang;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Models\Karyawan;
 use App\Services\InventoryService;
 use App\Utils\InventoryAccess;
+use App\Utils\InventoryBranches;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -115,10 +115,7 @@ class InventoryTransactionResource extends Resource
 
                     Forms\Components\Select::make('cabang_id')
                         ->label('Cabang')
-                        ->options(fn (): array => Cabang::query()
-                            ->orderBy('nama_cabang')
-                            ->pluck('nama_cabang', 'cabang_id')
-                            ->all())
+                        ->options(fn (): array => InventoryBranches::options())
                         ->searchable()
                         ->required()
                         ->live()
@@ -214,10 +211,17 @@ class InventoryTransactionResource extends Resource
                     ->weight('semibold')
                     ->description(fn (InventoryTransaction $record): string => $record->item?->kode_barang ?? '-'),
 
-                Tables\Columns\TextColumn::make('cabang.nama_cabang')
+                Tables\Columns\TextColumn::make('inventory_branch_label')
                     ->label('Cabang')
-                    ->searchable()
                     ->placeholder('-'),
+
+                Tables\Columns\TextColumn::make('source_branch_label')
+                    ->label('Cabang Sumber')
+                    ->state(fn (InventoryTransaction $record): ?string => $record->source_branch_label !== $record->inventory_branch_label
+                        ? $record->source_branch_label
+                        : null)
+                    ->placeholder('-')
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('jenis_transaksi')
                     ->label('Jenis')
@@ -305,11 +309,15 @@ class InventoryTransactionResource extends Resource
 
                 Tables\Filters\SelectFilter::make('cabang_id')
                     ->label('Cabang')
-                    ->options(fn (): array => Cabang::query()
-                        ->orderBy('nama_cabang')
-                        ->pluck('nama_cabang', 'cabang_id')
-                        ->all())
-                    ->searchable(),
+                    ->options(fn (): array => InventoryBranches::options())
+                    ->placeholder('Semua Cabang')
+                    ->query(function (Builder $query, array $data): Builder {
+                        $branchIds = InventoryBranches::expandCabangIds($data['value'] ?? null);
+
+                        return $branchIds === null
+                            ? $query
+                            : $query->whereIn('cabang_id', $branchIds);
+                    }),
 
                 Tables\Filters\SelectFilter::make('jenis_transaksi')
                     ->label('Jenis Transaksi')
@@ -362,8 +370,13 @@ class InventoryTransactionResource extends Resource
                         ->label('Kode / SKU')
                         ->placeholder('-'),
 
-                    Infolists\Components\TextEntry::make('cabang.nama_cabang')
+                    Infolists\Components\TextEntry::make('inventory_branch_label')
                         ->label('Cabang')
+                        ->placeholder('-'),
+
+                    Infolists\Components\TextEntry::make('source_branch_label')
+                        ->label('Cabang Sumber Transaksi')
+                        ->visible(fn (InventoryTransaction $record): bool => $record->source_branch_label !== $record->inventory_branch_label)
                         ->placeholder('-'),
 
                     Infolists\Components\TextEntry::make('jumlah')

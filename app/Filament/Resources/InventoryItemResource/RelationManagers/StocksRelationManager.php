@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\InventoryItemResource\RelationManagers;
 
+use App\Filament\Concerns\GroupedStockRecordResolver;
 use App\Models\InventoryStock;
 use App\Services\InventoryService;
 use App\Utils\InventoryAccess;
@@ -10,6 +11,8 @@ use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 class StocksRelationManager extends RelationManager
@@ -18,11 +21,18 @@ class StocksRelationManager extends RelationManager
 
     protected static ?string $title = 'Stok per Cabang';
 
+    protected function resolveTableRecord(?string $key): ?Model
+    {
+        return GroupedStockRecordResolver::resolve($this, $key);
+    }
+
     public function table(Table $table): Table
     {
         return $table
+            ->query(fn (): Builder => app(InventoryService::class)->stockQuery()
+                ->where('inventory_item_id', $this->getOwnerRecord()->getKey()))
             ->columns([
-                Tables\Columns\TextColumn::make('cabang.nama_cabang')
+                Tables\Columns\TextColumn::make('inventory_branch_label')
                     ->label('Cabang')
                     ->placeholder('-'),
 

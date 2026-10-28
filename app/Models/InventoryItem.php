@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Utils\InventoryBranches;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -41,6 +42,8 @@ class InventoryItem extends Model
         'min_stok_default' => 'integer',
         'is_active' => 'boolean',
     ];
+
+    protected ?array $inventoryBranchSummaryCache = null;
 
     protected static function booted(): void
     {
@@ -84,28 +87,91 @@ class InventoryItem extends Model
             return (int) $this->attributes['total_stock_sum'];
         }
 
-        return (int) $this->stocks()->sum('jumlah');
+        return (int) collect($this->inventoryBranchStockSummaries())->sum('stock');
     }
 
     public function getBranchStockCountAttribute(): int
     {
-        if (array_key_exists('branch_stock_count', $this->attributes)) {
-            return (int) $this->attributes['branch_stock_count'];
-        }
-
-        return $this->stocks()->where('jumlah', '>', 0)->count();
+        return collect($this->inventoryBranchStockSummaries())
+            ->filter(fn (array $summary): bool => $summary['stock'] > 0)
+            ->count();
     }
 
     public function getLowStockBranchCountAttribute(): int
     {
-        if (array_key_exists('low_stock_branch_count', $this->attributes)) {
-            return (int) $this->attributes['low_stock_branch_count'];
+        return collect($this->inventoryBranchStockSummaries())
+            ->filter(fn (array $summary): bool => $summary['stock'] > 0 && $summary['stock'] <= $summary['min'])
+            ->count();
+    }
+
+    /**
+     * Ringkasan stok per cabang Inventory utama (Express, Golio,
+     * Newspaper Janus). Stok anggota Express dijumlahkan menjadi satu.
+     *
+     * @return array<string, array{stock: int, min: int}>
+     */
+    public function inventoryBranchStockSummaries(): array
+    {
+        if ($this->inventoryBranchSummaryCache !== null) {
+            return $this->inventoryBranchSummaryCache;
         }
 
-        return $this->stocks()
-            ->where('jumlah', '>', 0)
-            ->whereColumn('jumlah', '<=', 'min_stok')
-            ->count();
+        $keys = InventoryBranches::ORDER;
+        $aggregatesLoaded = true;
+
+        foreach ($keys as $key) {
+            if (! array_key_exists('stock_sum_'.$key, $this->attributes)) {
+                $aggregatesLoaded = false;
+                break;
+            }
+        }
+
+        if ($aggregatesLoaded) {
+            $summaries = [];
+
+            foreach ($keys as $key) {
+                $summaries[$key] = [
+                    'stock' => (int) ($this->attributes['stock_sum_'.$key] ?? 0),
+                    'min' => (int) ($this->attributes['stock_min_'.$key] ?? 0),
+                ];
+            }
+
+            return $this->inventoryBranchSummaryCache = $summaries;
+        }
+
+        $groups = InventoryBranches::readGroups();
+        $summaries = [];
+        $memberMap = [];
+
+        foreach ($groups as $key => $group) {
+            $summaries[$key] = ['stock' => 0, 'min' => 0];
+
+            foreach ($group['members'] as $memberId) {
+                $memberMap[$memberId] = $key;
+            }
+        }
+
+        $canonicalFound = [];
+
+        foreach ($this->stocks()->get(['cabang_id', 'jumlah', 'min_stok']) as $stock) {
+            $cabangId = (string) $stock->cabang_id;
+            $key = $memberMap[$cabangId] ?? null;
+
+            if ($key === null) {
+                continue;
+            }
+
+            $summaries[$key]['stock'] += (int) $stock->jumlah;
+
+            if ($cabangId === $groups[$key]['cabang_id']) {
+                $summaries[$key]['min'] = (int) $stock->min_stok;
+                $canonicalFound[$key] = true;
+            } elseif (! ($canonicalFound[$key] ?? false)) {
+                $summaries[$key]['min'] = max($summaries[$key]['min'], (int) $stock->min_stok);
+            }
+        }
+
+        return $this->inventoryBranchSummaryCache = $summaries;
     }
 
     public function getStockStatusAttribute(): string

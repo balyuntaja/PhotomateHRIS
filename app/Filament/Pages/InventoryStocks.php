@@ -2,12 +2,13 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Concerns\GroupedStockRecordResolver;
 use App\Filament\Resources\InventoryTransactionResource;
-use App\Models\Cabang;
 use App\Models\InventoryItem;
 use App\Models\InventoryStock;
 use App\Services\InventoryService;
 use App\Utils\InventoryAccess;
+use App\Utils\InventoryBranches;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -17,6 +18,7 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 class InventoryStocks extends Page implements HasTable
@@ -47,14 +49,16 @@ class InventoryStocks extends Page implements HasTable
         return static::canAccess();
     }
 
+    protected function resolveTableRecord(?string $key): ?Model
+    {
+        return GroupedStockRecordResolver::resolve($this, $key);
+    }
+
     public function table(Table $table): Table
     {
         return $table
-            ->query(
-                InventoryStock::query()
-                    ->with(['item', 'cabang'])
-                    ->whereHas('item', fn (Builder $query): Builder => $query->active()),
-            )
+            ->query(fn (): Builder => app(InventoryService::class)->stockQuery()
+                ->whereHas('item', fn (Builder $query): Builder => $query->active()))
             ->columns([
                 Tables\Columns\TextColumn::make('item.nama_barang')
                     ->label('Barang')
@@ -62,7 +66,7 @@ class InventoryStocks extends Page implements HasTable
                     ->weight('semibold')
                     ->description(fn (InventoryStock $record): string => $record->item?->kode_barang ?? '-'),
 
-                Tables\Columns\TextColumn::make('cabang.nama_cabang')
+                Tables\Columns\TextColumn::make('inventory_branch_label')
                     ->label('Cabang')
                     ->placeholder('-'),
 
@@ -108,11 +112,15 @@ class InventoryStocks extends Page implements HasTable
 
                 Tables\Filters\SelectFilter::make('cabang_id')
                     ->label('Cabang')
-                    ->options(fn (): array => Cabang::query()
-                        ->orderBy('nama_cabang')
-                        ->pluck('nama_cabang', 'cabang_id')
-                        ->all())
-                    ->searchable(),
+                    ->options(fn (): array => InventoryBranches::options())
+                    ->placeholder('Semua Cabang')
+                    ->query(function (Builder $query, array $data): Builder {
+                        $branchId = InventoryBranches::filterCanonicalId($data['value'] ?? null);
+
+                        return $branchId === null
+                            ? $query
+                            : $query->where('cabang_id', $branchId);
+                    }),
 
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Status Stok')

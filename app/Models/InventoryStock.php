@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Utils\InventoryBranches;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -75,5 +76,10 @@ class InventoryStock extends Model
     public function getStatusColorAttribute(): string
     {
         return self::STATUS_COLORS[$this->status] ?? 'gray';
+    }
+
+    public function getInventoryBranchLabelAttribute(): string
+    {
+        return InventoryBranches::labelForCabangId($this->cabang_id, $this->cabang?->nama_cabang);
     }
 }

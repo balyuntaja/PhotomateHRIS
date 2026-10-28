@@ -29,7 +29,7 @@ class TransactionsRelationManager extends RelationManager
                     ->date('d M Y')
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('cabang.nama_cabang')
+                Tables\Columns\TextColumn::make('inventory_branch_label')
                     ->label('Cabang')
                     ->placeholder('-'),
 

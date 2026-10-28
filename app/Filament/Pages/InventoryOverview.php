@@ -2,12 +2,13 @@
 
 namespace App\Filament\Pages;
 
+use App\Filament\Concerns\GroupedStockRecordResolver;
 use App\Filament\Resources\InventoryItemResource;
 use App\Filament\Resources\InventoryTransactionResource;
-use App\Models\Cabang;
 use App\Models\InventoryStock;
 use App\Services\InventoryService;
 use App\Utils\InventoryAccess;
+use App\Utils\InventoryBranches;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Forms\Contracts\HasForms;
@@ -18,6 +19,7 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 class InventoryOverview extends Page implements HasForms, HasTable
@@ -63,10 +65,7 @@ class InventoryOverview extends Page implements HasForms, HasTable
             ->schema([
                 Forms\Components\Select::make('cabang_id')
                     ->label('Cabang')
-                    ->options(fn (): array => Cabang::query()
-                        ->orderBy('nama_cabang')
-                        ->pluck('nama_cabang', 'cabang_id')
-                        ->all())
+                    ->options(fn (): array => InventoryBranches::options())
                     ->placeholder('Semua Cabang')
                     ->live(),
             ])
@@ -77,6 +76,11 @@ class InventoryOverview extends Page implements HasForms, HasTable
     public function updatedData(): void
     {
         $this->resetPage();
+    }
+
+    protected function resolveTableRecord(?string $key): ?Model
+    {
+        return GroupedStockRecordResolver::resolve($this, $key);
     }
 
     public function getSummaryData(): array
@@ -94,7 +98,7 @@ class InventoryOverview extends Page implements HasForms, HasTable
                     ->weight('semibold')
                     ->description(fn (InventoryStock $record): string => $record->item?->kode_barang ?? '-'),
 
-                Tables\Columns\TextColumn::make('cabang.nama_cabang')
+                Tables\Columns\TextColumn::make('inventory_branch_label')
                     ->label('Cabang')
                     ->placeholder('-'),
 

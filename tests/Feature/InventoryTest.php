@@ -22,6 +22,7 @@ use App\Models\Perusahaan;
 use App\Models\Role;
 use App\Services\InventoryService;
 use App\Utils\InventoryAccess;
+use App\Utils\InventoryBranches;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
@@ -43,6 +44,12 @@ class InventoryTest extends TestCase
     protected Cabang $branchA;
 
     protected Cabang $branchB;
+
+    protected Cabang $expressBranch;
+
+    protected Cabang $expressSewa;
+
+    protected Cabang $expressSelfRun;
 
     protected InventoryService $service;
 
@@ -71,7 +78,10 @@ class InventoryTest extends TestCase
         $this->supervisor = $this->makeUser('SPV01', 'Supervisor Inventory', 'R08', 'spv.inventory@photomate.id', '9000000000000003', 'Supervisor');
 
         $this->branchA = $this->makeBranch('C0001', 'Golio');
-        $this->branchB = $this->makeBranch('C0002', 'Wedding Photomate');
+        $this->branchB = $this->makeBranch('C0002', 'Newspaper Janus');
+        $this->expressBranch = $this->makeBranch('C0003', 'Photomate Express');
+        $this->expressSewa = $this->makeBranch('C0004', 'Express Sewa');
+        $this->expressSelfRun = $this->makeBranch('C0005', 'Express Self Run');
 
         $this->service = app(InventoryService::class);
         $this->actingAs($this->admin);
@@ -93,7 +103,7 @@ class InventoryTest extends TestCase
 
         $item = InventoryItem::query()->where('kode_barang', 'KRT-4R')->firstOrFail();
 
-        $this->assertSame(2, $item->stocks()->count());
+        $this->assertSame(3, $item->stocks()->count());
         $this->assertSame(0, (int) $item->stocks()->sum('jumlah'));
         $this->assertSame(8, (int) $item->stocks()->value('min_stok'));
         $this->assertSame('habis', $item->stock_status);
@@ -322,7 +332,178 @@ class InventoryTest extends TestCase
         $this->assertSame(1, $branchA['out_of_stock']);
 
         $this->assertSame(2, $this->service->attentionQuery($this->branchA->cabang_id)->count());
-        $this->assertSame(5, $this->service->attentionQuery()->count());
+        $this->assertSame(8, $this->service->attentionQuery()->count());
+    }
+
+    public function test_inventory_branch_options_only_show_three_main_branches(): void
+    {
+        $this->assertSame(
+            [
+                $this->expressBranch->cabang_id => 'Express',
+                $this->branchA->cabang_id => 'Golio',
+                $this->branchB->cabang_id => 'Newspaper Janus',
+            ],
+            InventoryBranches::options(),
+        );
+    }
+
+    public function test_express_variant_stocks_are_aggregated_into_one_branch_without_duplication(): void
+    {
+        $item = $this->makeItem();
+
+        $this->record(InventoryTransaction::TYPE_IN, 4, $item, $this->expressBranch);
+        $this->record(InventoryTransaction::TYPE_IN, 7, $item, $this->branchA);
+        $this->record(InventoryTransaction::TYPE_IN, 9, $item, $this->branchB);
+
+        InventoryStock::create([
+            'inventory_item_id' => $item->id,
+            'cabang_id' => $this->expressSewa->cabang_id,
+            'jumlah' => 6,
+            'min_stok' => 5,
+            'last_transaction_at' => now(),
+        ]);
+
+        InventoryStock::create([
+            'inventory_item_id' => $item->id,
+            'cabang_id' => $this->expressSelfRun->cabang_id,
+            'jumlah' => 10,
+            'min_stok' => 5,
+            'last_transaction_at' => now(),
+        ]);
+
+        $expressStock = $this->service->stockQuery($this->expressBranch->cabang_id);
+
+        $this->assertSame(1, (clone $expressStock)->count());
+        $this->assertSame(20, (int) (clone $expressStock)->sum('jumlah'));
+
+        $expressSummary = $this->service->summary($this->expressBranch->cabang_id);
+        $this->assertSame(1, $expressSummary['total_items']);
+        $this->assertSame(20, $expressSummary['total_stock']);
+
+        $golioSummary = $this->service->summary($this->branchA->cabang_id);
+        $this->assertSame(7, $golioSummary['total_stock']);
+
+        $janusSummary = $this->service->summary($this->branchB->cabang_id);
+        $this->assertSame(9, $janusSummary['total_stock']);
+
+        $item->refresh();
+        $this->assertSame(36, $item->total_stock);
+        $this->assertSame(3, $item->branch_stock_count);
+
+        $this->assertSame(
+            36,
+            (int) InventoryStock::query()->where('inventory_item_id', $item->id)->sum('jumlah'),
+        );
+    }
+
+    public function test_express_summary_does_not_count_the_same_item_multiple_times(): void
+    {
+        $item = $this->makeItem();
+
+        $this->record(InventoryTransaction::TYPE_IN, 4, $item, $this->expressBranch);
+
+        foreach ([$this->expressSewa, $this->expressSelfRun] as $branch) {
+            InventoryStock::create([
+                'inventory_item_id' => $item->id,
+                'cabang_id' => $branch->cabang_id,
+                'jumlah' => 4,
+                'min_stok' => 5,
+                'last_transaction_at' => now(),
+            ]);
+        }
+
+        $summary = $this->service->summary($this->expressBranch->cabang_id);
+
+        $this->assertSame(1, $summary['total_items']);
+        $this->assertSame(12, $summary['total_stock']);
+    }
+
+    public function test_new_express_transaction_uses_canonical_express_branch_identity(): void
+    {
+        $item = $this->makeItem();
+
+        $transaction = $this->record(InventoryTransaction::TYPE_IN, 5, $item, $this->expressSewa);
+
+        $this->assertSame($this->expressBranch->cabang_id, $transaction->cabang_id);
+        $this->assertSame('Express', $transaction->inventory_branch_label);
+        $this->assertSame(5, $this->stockOf($item, $this->expressBranch));
+        $this->assertSame(0, $this->stockOf($item, $this->expressSewa));
+    }
+
+    public function test_legacy_express_transactions_remain_traceable_under_express(): void
+    {
+        $item = $this->makeItem();
+
+        $legacy = InventoryTransaction::create([
+            'nomor_transaksi' => 'INV-LEGACY-0001',
+            'tanggal_transaksi' => now()->toDateString(),
+            'jenis_transaksi' => InventoryTransaction::TYPE_IN,
+            'inventory_item_id' => $item->id,
+            'cabang_id' => $this->expressSewa->cabang_id,
+            'jumlah' => 3,
+            'stok_sebelum' => 0,
+            'stok_sesudah' => 3,
+            'alasan' => 'Data historis Express Sewa',
+        ]);
+
+        $this->assertSame('Express', $legacy->inventory_branch_label);
+        $this->assertSame('Express Sewa', $legacy->source_branch_label);
+
+        $this->assertContains(
+            $this->expressSewa->cabang_id,
+            InventoryBranches::expandCabangIds($this->expressBranch->cabang_id),
+        );
+        $this->assertContains(
+            $this->expressSelfRun->cabang_id,
+            InventoryBranches::expandCabangIds($this->expressBranch->cabang_id),
+        );
+
+        Livewire::test(ListInventoryTransactions::class)
+            ->filterTable('cabang_id', $this->expressBranch->cabang_id)
+            ->assertCanSeeTableRecords([$legacy]);
+    }
+
+    public function test_non_inventory_branch_is_rejected_for_stock_transactions(): void
+    {
+        $item = $this->makeItem();
+        $wedding = $this->makeBranch('C0006', 'Wedding Photomate');
+
+        try {
+            $this->record(InventoryTransaction::TYPE_IN, 1, $item, $wedding);
+            $this->fail('Cabang non-Inventory seharusnya ditolak.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('cabang_id', $exception->errors());
+        }
+    }
+
+    public function test_inventory_pages_do_not_expose_legacy_express_branch_labels(): void
+    {
+        $this->makeItem();
+
+        $this->get('/admin/inventory')
+            ->assertOk()
+            ->assertDontSee('Express Sewa')
+            ->assertDontSee('Express Self Run');
+
+        $this->get('/admin/inventory-stok')
+            ->assertOk()
+            ->assertSee('Express')
+            ->assertDontSee('Express Sewa')
+            ->assertDontSee('Express Self Run');
+
+        $this->get('/admin/inventory-barang')
+            ->assertOk()
+            ->assertSee('Express')
+            ->assertDontSee('Express Sewa')
+            ->assertDontSee('Express Self Run');
+
+        $this->get('/admin/inventory-riwayat')
+            ->assertOk()
+            ->assertDontSee('Express Sewa');
+
+        $this->get('/admin/inventory-riwayat/create')
+            ->assertOk()
+            ->assertDontSee('Express Sewa');
     }
 
     public function test_non_admin_roles_are_forbidden_from_pages_and_backend_mutations(): void

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Utils\InventoryBranches;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -104,5 +105,21 @@ class InventoryTransaction extends Model
     public function getJenisColorAttribute(): string
     {
         return self::TYPE_COLORS[$this->jenis_transaksi] ?? 'gray';
+    }
+
+    public function getInventoryBranchLabelAttribute(): string
+    {
+        return InventoryBranches::labelForCabangId($this->cabang_id, $this->cabang?->nama_cabang);
+    }
+
+    /**
+     * Nama cabang asli pada transaksi (untuk menelusuri transaksi lama
+     * Express Sewa / Express Self Run / Express Sharing Profit).
+     */
+    public function getSourceBranchLabelAttribute(): string
+    {
+        return $this->cabang?->nama_cabang
+            ?? Cabang::withTrashed()->whereKey($this->cabang_id)->value('nama_cabang')
+            ?? '-';
     }
 }
