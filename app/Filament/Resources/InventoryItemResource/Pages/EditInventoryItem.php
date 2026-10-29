@@ -5,7 +5,6 @@ namespace App\Filament\Resources\InventoryItemResource\Pages;
 use App\Filament\Resources\InventoryItemResource;
 use App\Filament\Resources\InventoryTransactionResource;
 use App\Filament\Resources\Pages\EditRecord;
-use App\Services\InventoryService;
 use Filament\Actions;
 
 class EditInventoryItem extends EditRecord
@@ -13,11 +12,6 @@ class EditInventoryItem extends EditRecord
     protected static string $resource = InventoryItemResource::class;
 
     protected static ?string $title = 'Ubah Barang';
-
-    protected function afterSave(): void
-    {
-        app(InventoryService::class)->ensureStocks($this->getRecord());
-    }
 
     protected function getHeaderActions(): array
     {

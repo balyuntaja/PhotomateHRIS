@@ -117,7 +117,12 @@ class InventoryOverview extends Page implements HasForms, HasTable
                     ->label('Status')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => InventoryStock::STATUS_LABELS[$state] ?? (string) $state)
-                    ->color(fn (?string $state): string => InventoryStock::STATUS_COLORS[$state] ?? 'gray'),
+                    ->color(fn (?string $state): string => InventoryStock::STATUS_COLORS[$state] ?? 'gray')
+                    ->tooltip(fn (InventoryStock $record): ?string => match ($record->status) {
+                        InventoryStock::STATUS_HABIS => 'Barang terdaftar pada cabang ini dengan stok 0. Barang yang belum terdaftar tidak termasuk.',
+                        InventoryStock::STATUS_MENIPIS => 'Stok masih di atas 0 tetapi sudah mencapai atau melewati batas minimum cabang.',
+                        default => null,
+                    }),
 
                 Tables\Columns\TextColumn::make('last_transaction_at')
                     ->label('Terakhir Transaksi')

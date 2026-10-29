@@ -5,7 +5,8 @@
             <p class="text-sm text-gray-500 dark:text-gray-400">
                 Jumlah stok hanya dapat berubah melalui transaksi barang masuk, barang keluar, atau penyesuaian.
                 Gunakan aksi <span class="font-medium text-gray-700 dark:text-gray-200">Atur Batas Minimum</span>
-                untuk menyesuaikan ambang peringatan tiap cabang.
+                untuk menyesuaikan ambang peringatan tiap cabang. Barang yang belum didaftarkan pada suatu cabang
+                tidak ditampilkan sebagai stok 0 maupun stok habis.
             </p>
         </div>
     </x-filament::section>

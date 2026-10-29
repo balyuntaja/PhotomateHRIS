@@ -87,26 +87,40 @@ class InventoryTest extends TestCase
         $this->actingAs($this->admin);
     }
 
-    public function test_admin_can_create_item_and_stock_rows_are_initialized_per_branch(): void
+    public function test_item_creation_registers_only_the_selected_branch(): void
     {
         Livewire::test(CreateInventoryItem::class)
             ->fillForm([
                 'kode_barang' => 'KRT-4R',
                 'nama_barang' => 'Kertas Foto 4R',
                 'kategori' => 'Kertas Foto',
-                'satuan' => 'rim',
-                'min_stok_default' => 8,
+                'satuan' => 'pcs',
+                'min_stok_default' => 10,
                 'is_active' => true,
+                'cabang_id' => $this->branchA->cabang_id,
+                'stok_awal' => 184,
             ])
             ->call('create')
             ->assertHasNoFormErrors();
 
         $item = InventoryItem::query()->where('kode_barang', 'KRT-4R')->firstOrFail();
 
-        $this->assertSame(3, $item->stocks()->count());
-        $this->assertSame(0, (int) $item->stocks()->sum('jumlah'));
-        $this->assertSame(8, (int) $item->stocks()->value('min_stok'));
-        $this->assertSame('habis', $item->stock_status);
+        $this->assertSame(1, $item->stocks()->count());
+
+        $stock = $item->stocks()->firstOrFail();
+        $this->assertSame($this->branchA->cabang_id, $stock->cabang_id);
+        $this->assertSame(184, (int) $stock->jumlah);
+        $this->assertSame(10, (int) $stock->min_stok);
+
+        $this->assertFalse($item->stocks()->where('cabang_id', $this->branchB->cabang_id)->exists());
+        $this->assertFalse($item->stocks()->where('cabang_id', $this->expressBranch->cabang_id)->exists());
+
+        $this->assertSame(184, $item->fresh()->total_stock);
+        $this->assertSame(1, InventoryTransaction::query()->where('inventory_item_id', $item->id)->count());
+        $this->assertSame(
+            InventoryTransaction::TYPE_IN,
+            InventoryTransaction::query()->where('inventory_item_id', $item->id)->value('jenis_transaksi'),
+        );
     }
 
     public function test_admin_can_edit_item_and_deactivate_it(): void
@@ -127,6 +141,8 @@ class InventoryTest extends TestCase
 
         $this->assertSame('Kertas Foto 2R Premium', $item->fresh()->nama_barang);
         $this->assertSame(7, (int) $item->fresh()->min_stok_default);
+        $this->assertSame(1, $item->fresh()->stocks()->count());
+        $this->assertFalse($item->fresh()->stocks()->where('cabang_id', $this->branchB->cabang_id)->exists());
 
         Livewire::test(ListInventoryItems::class)
             ->callTableAction('nonaktifkan', $item->fresh())
@@ -332,7 +348,150 @@ class InventoryTest extends TestCase
         $this->assertSame(1, $branchA['out_of_stock']);
 
         $this->assertSame(2, $this->service->attentionQuery($this->branchA->cabang_id)->count());
-        $this->assertSame(8, $this->service->attentionQuery()->count());
+        $this->assertSame(2, $this->service->attentionQuery()->count());
+    }
+
+    public function test_registering_item_to_another_branch_is_independent(): void
+    {
+        $item = $this->makeItem('KRT-2R', 'Kertas Foto 2R', 5, 'pcs', $this->branchA, 184);
+
+        Livewire::test(ListInventoryItems::class)
+            ->callTableAction('daftarkan_cabang', $item, [
+                'cabang_id' => $this->expressBranch->cabang_id,
+                'stok_awal' => 12,
+                'min_stok' => 3,
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame(184, $this->stockOf($item, $this->branchA));
+        $this->assertSame(12, $this->stockOf($item, $this->expressBranch));
+        $this->assertSame(
+            3,
+            (int) $item->stocks()->where('cabang_id', $this->expressBranch->cabang_id)->value('min_stok'),
+        );
+        $this->assertFalse($item->stocks()->where('cabang_id', $this->branchB->cabang_id)->exists());
+        $this->assertSame(2, $item->stocks()->count());
+
+        $this->assertArrayNotHasKey($this->branchA->cabang_id, $this->service->availableBranchOptions($item));
+        $this->assertArrayNotHasKey($this->expressBranch->cabang_id, $this->service->availableBranchOptions($item));
+        $this->assertArrayHasKey($this->branchB->cabang_id, $this->service->availableBranchOptions($item));
+    }
+
+    public function test_express_transaction_does_not_change_other_branch_stocks(): void
+    {
+        $item = $this->makeItem('KRT-2R', 'Kertas Foto 2R', 5, 'pcs', $this->branchA, 184);
+
+        $this->service->registerBranchStock($item, $this->expressBranch->cabang_id, 12, 3);
+
+        $this->record(InventoryTransaction::TYPE_OUT, 2, $item, $this->expressBranch, null, 'Pemakaian Express');
+
+        $this->assertSame(184, $this->stockOf($item, $this->branchA));
+        $this->assertSame(10, $this->stockOf($item, $this->expressBranch));
+        $this->assertFalse($item->stocks()->where('cabang_id', $this->branchB->cabang_id)->exists());
+    }
+
+    public function test_duplicate_branch_registration_is_rejected(): void
+    {
+        $item = $this->makeItem('KRT-2R', 'Kertas Foto 2R', 5, 'pcs', $this->branchA, 10);
+
+        try {
+            $this->service->registerBranchStock($item, $this->branchA->cabang_id, 5, 1);
+            $this->fail('Pendaftaran ganda pada cabang yang sama seharusnya ditolak.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('cabang_id', $exception->errors());
+        }
+
+        $this->assertSame(1, $item->stocks()->count());
+        $this->assertSame(10, $this->stockOf($item, $this->branchA));
+
+        $expressItem = $this->makeItem('KRT-3R', 'Kertas Foto 3R', 5, 'pcs', $this->expressBranch, 2);
+
+        try {
+            $this->service->registerBranchStock($expressItem, $this->expressSewa->cabang_id, 5, 1);
+            $this->fail('Pendaftaran ganda pada anggota kelompok Express seharusnya ditolak.');
+        } catch (ValidationException $exception) {
+            $this->assertArrayHasKey('cabang_id', $exception->errors());
+        }
+
+        $this->assertSame(1, $expressItem->stocks()->count());
+        $this->assertSame(2, $this->stockOf($expressItem, $this->expressBranch));
+    }
+
+    public function test_summary_counts_stock_locations_and_excludes_unregistered_items(): void
+    {
+        $this->makeItem('KRT-2R', 'Kertas Foto 2R', 5, 'pcs', $this->branchA, 5);
+        $this->makeItem('TINTA-01', 'Tinta Printer', 2, 'botol', $this->branchA, 0);
+        $this->makeItem('PAPER-FRAME', 'Paper Frame', 3, 'pcs', $this->expressBranch, 0);
+
+        InventoryItem::create([
+            'kode_barang' => 'UNREG-01',
+            'nama_barang' => 'Barang Belum Terdaftar',
+            'kategori' => 'Lainnya',
+            'satuan' => 'unit',
+            'min_stok_default' => 2,
+            'is_active' => true,
+        ]);
+
+        $all = $this->service->summary();
+
+        $this->assertSame(4, $all['total_items']);
+        $this->assertSame(5, $all['total_stock']);
+        $this->assertSame(1, $all['low_stock']);
+        $this->assertSame(2, $all['out_of_stock']);
+        $this->assertSame(3, $this->service->attentionQuery()->count());
+
+        $golio = $this->service->summary($this->branchA->cabang_id);
+
+        $this->assertSame(2, $golio['total_items']);
+        $this->assertSame(5, $golio['total_stock']);
+        $this->assertSame(1, $golio['low_stock']);
+        $this->assertSame(1, $golio['out_of_stock']);
+        $this->assertSame(2, $this->service->attentionQuery($this->branchA->cabang_id)->count());
+
+        $express = $this->service->summary($this->expressBranch->cabang_id);
+
+        $this->assertSame(1, $express['total_items']);
+        $this->assertSame(0, $express['total_stock']);
+        $this->assertSame(0, $express['low_stock']);
+        $this->assertSame(1, $express['out_of_stock']);
+        $this->assertSame(1, $this->service->attentionQuery($this->expressBranch->cabang_id)->count());
+
+        $janus = $this->service->summary($this->branchB->cabang_id);
+
+        $this->assertSame(0, $janus['total_items']);
+        $this->assertSame(0, $janus['total_stock']);
+        $this->assertSame(0, $janus['low_stock']);
+        $this->assertSame(0, $janus['out_of_stock']);
+        $this->assertSame(0, $this->service->attentionQuery($this->branchB->cabang_id)->count());
+    }
+
+    public function test_summary_breaks_down_total_stock_by_unit(): void
+    {
+        $this->makeItem('PCS-01', 'Kertas Foto', 1, 'pcs', $this->branchA, 10);
+        $this->makeItem('RIM-01', 'Kertas Gulung', 1, 'rim', $this->branchA, 3);
+
+        $summary = $this->service->summary($this->branchA->cabang_id);
+
+        $this->assertSame(['pcs' => 10, 'rim' => 3], $summary['stock_by_unit']);
+        $this->assertSame(13, $summary['total_stock']);
+
+        $this->get('/admin/inventory')
+            ->assertOk()
+            ->assertSee('dipecah per satuan')
+            ->assertSee('pcs')
+            ->assertSee('rim');
+    }
+
+    public function test_overview_branch_filter_is_applied_to_summary_and_attention_table(): void
+    {
+        $item = $this->makeItem('KRT-2R', 'Kertas Foto 2R', 5, 'pcs', $this->branchA, 5);
+
+        Livewire::test(InventoryOverview::class)
+            ->fillForm(['cabang_id' => $this->branchB->cabang_id])
+            ->assertSee('Belum ada barang pada cabang ini')
+            ->fillForm(['cabang_id' => $this->branchA->cabang_id])
+            ->assertDontSee('Belum ada barang pada cabang ini')
+            ->assertSee($item->nama_barang);
     }
 
     public function test_inventory_branch_options_only_show_three_main_branches(): void
@@ -641,6 +800,8 @@ class InventoryTest extends TestCase
         string $name = 'Kertas Foto 2R',
         int $minStock = 5,
         string $unit = 'rim',
+        ?Cabang $branch = null,
+        int $initialStock = 0,
     ): InventoryItem {
         $item = InventoryItem::create([
             'kode_barang' => $sku,
@@ -651,7 +812,12 @@ class InventoryTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->service->ensureStocks($item);
+        $this->service->registerBranchStock(
+            $item,
+            ($branch ?? $this->branchA)->cabang_id,
+            $initialStock,
+            $minStock,
+        );
 
         return $item;
     }

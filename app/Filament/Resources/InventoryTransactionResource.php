@@ -422,10 +422,14 @@ class InventoryTransactionResource extends Resource
         $itemId = filled($get('inventory_item_id')) ? (int) $get('inventory_item_id') : null;
         $cabangId = filled($get('cabang_id')) ? (string) $get('cabang_id') : null;
 
+        if ($itemId === null || $cabangId === null) {
+            return 'Pilih barang dan cabang untuk melihat stok sistem saat ini.';
+        }
+
         $snapshot = app(InventoryService::class)->stockSnapshot($itemId, $cabangId);
 
         if (! $snapshot) {
-            return 'Pilih barang dan cabang untuk melihat stok sistem saat ini.';
+            return 'Barang belum terdaftar pada cabang ini. Menyimpan transaksi hanya akan membuat data stok untuk cabang tersebut.';
         }
 
         $label = 'Stok sistem: '.number_format($snapshot['jumlah'], 0, ',', '.')

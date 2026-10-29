@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\InventoryItemResource\RelationManagers;
 
 use App\Filament\Concerns\GroupedStockRecordResolver;
+use App\Filament\Resources\InventoryItemResource;
 use App\Models\InventoryStock;
 use App\Services\InventoryService;
 use App\Utils\InventoryAccess;
@@ -66,20 +67,23 @@ class StocksRelationManager extends RelationManager
             ->defaultSort('cabang_id')
             ->paginated(false)
             ->headerActions([
-                Tables\Actions\Action::make('sinkronkan')
-                    ->label('Sinkronkan Stok Cabang')
-                    ->icon('heroicon-o-arrow-path')
-                    ->requiresConfirmation()
-                    ->modalHeading('Sinkronkan Stok Cabang')
-                    ->modalDescription('Menambahkan baris stok yang belum ada untuk seluruh cabang aktif. Jumlah stok yang sudah tercatat tidak diubah.')
-                    ->modalSubmitActionLabel('Ya, sinkronkan')
-                    ->visible(fn (): bool => InventoryAccess::allowed(Auth::user()))
-                    ->action(function (): void {
-                        $created = app(InventoryService::class)->syncStocks($this->getOwnerRecord());
+                Tables\Actions\Action::make('daftarkan_cabang')
+                    ->label('Daftarkan ke Cabang')
+                    ->icon('heroicon-o-plus-circle')
+                    ->color('gray')
+                    ->form(fn (): array => InventoryItemResource::registerBranchForm($this->getOwnerRecord()))
+                    ->visible(fn (): bool => InventoryAccess::allowed(Auth::user())
+                        && app(InventoryService::class)->availableBranchOptions($this->getOwnerRecord()) !== [])
+                    ->action(function (array $data): void {
+                        app(InventoryService::class)->registerBranchStock(
+                            $this->getOwnerRecord(),
+                            (string) $data['cabang_id'],
+                            (int) $data['stok_awal'],
+                            (int) $data['min_stok'],
+                        );
 
                         Notification::make()
-                            ->title('Sinkronisasi selesai')
-                            ->body($created.' baris stok baru ditambahkan.')
+                            ->title('Barang didaftarkan ke cabang')
                             ->success()
                             ->send();
                     }),

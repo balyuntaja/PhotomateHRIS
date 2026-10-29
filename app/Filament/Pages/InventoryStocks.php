@@ -85,7 +85,12 @@ class InventoryStocks extends Page implements HasTable
                     ->label('Status Stok')
                     ->badge()
                     ->formatStateUsing(fn (?string $state): string => InventoryStock::STATUS_LABELS[$state] ?? (string) $state)
-                    ->color(fn (?string $state): string => InventoryStock::STATUS_COLORS[$state] ?? 'gray'),
+                    ->color(fn (?string $state): string => InventoryStock::STATUS_COLORS[$state] ?? 'gray')
+                    ->tooltip(fn (InventoryStock $record): ?string => match ($record->status) {
+                        InventoryStock::STATUS_HABIS => 'Barang terdaftar pada cabang ini dengan stok 0. Barang yang belum terdaftar tidak termasuk.',
+                        InventoryStock::STATUS_MENIPIS => 'Stok masih di atas 0 tetapi sudah mencapai atau melewati batas minimum cabang.',
+                        default => null,
+                    }),
 
                 Tables\Columns\TextColumn::make('last_transaction_at')
                     ->label('Terakhir Transaksi')
@@ -176,7 +181,7 @@ class InventoryStocks extends Page implements HasTable
             ->defaultSort('cabang_id')
             ->defaultPaginationPageOption(25)
             ->emptyStateHeading('Belum ada data stok per cabang')
-            ->emptyStateDescription('Tambahkan barang terlebih dahulu, lalu sinkronkan stok cabang untuk membuat baris stok awal.')
+            ->emptyStateDescription('Tambahkan barang dan pilih cabang tujuan, atau daftarkan barang yang sudah ada ke cabang lain untuk membuat baris stok.')
             ->emptyStateIcon('heroicon-o-building-storefront');
     }
 
@@ -187,24 +192,6 @@ class InventoryStocks extends Page implements HasTable
                 ->label('Catat Transaksi')
                 ->icon('heroicon-o-plus')
                 ->url(fn (): string => InventoryTransactionResource::getUrl('create')),
-
-            Actions\Action::make('sinkronkan')
-                ->label('Sinkronkan Stok Cabang')
-                ->icon('heroicon-o-arrow-path')
-                ->color('gray')
-                ->requiresConfirmation()
-                ->modalHeading('Sinkronkan Stok Cabang')
-                ->modalDescription('Menambahkan baris stok yang belum ada untuk seluruh barang aktif dan cabang aktif. Jumlah stok yang sudah tercatat tidak diubah.')
-                ->modalSubmitActionLabel('Ya, sinkronkan')
-                ->action(function (): void {
-                    $created = app(InventoryService::class)->syncStocks();
-
-                    Notification::make()
-                        ->title('Sinkronisasi selesai')
-                        ->body($created.' baris stok baru ditambahkan.')
-                        ->success()
-                        ->send();
-                }),
         ];
     }
 }

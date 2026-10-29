@@ -94,7 +94,7 @@ class InventoryItemResource extends Resource
                         ->placeholder('Contoh: KRT-2R')
                         ->validationMessages([
                             'required' => 'Kode barang wajib diisi.',
-                            'unique' => 'Kode barang sudah digunakan.',
+                            'unique' => 'Kode barang sudah terdaftar. Buka barang tersebut lalu gunakan aksi Daftarkan ke Cabang untuk menambah stok di cabang lain.',
                             'max' => 'Kode barang maksimal 50 karakter.',
                         ]),
 
@@ -131,13 +131,13 @@ class InventoryItemResource extends Resource
                         ->validationMessages(['required' => 'Satuan wajib dipilih.']),
 
                     Forms\Components\TextInput::make('min_stok_default')
-                        ->label('Batas Minimum Stok (default per cabang)')
+                        ->label('Batas Minimum Stok')
                         ->numeric()
                         ->integer()
                         ->minValue(0)
                         ->default(0)
                         ->required()
-                        ->helperText('Nilai awal untuk setiap cabang. Batas minimum dapat diatur berbeda per cabang di halaman Stok per Cabang.')
+                        ->helperText('Diterapkan pada cabang tujuan saat barang ditambahkan, dan menjadi nilai default saat barang didaftarkan ke cabang lain.')
                         ->validationMessages([
                             'required' => 'Batas minimum stok wajib diisi.',
                             'min' => 'Batas minimum stok tidak boleh negatif.',
@@ -150,11 +150,42 @@ class InventoryItemResource extends Resource
                 ])
                 ->columns(2),
 
+            Forms\Components\Section::make('Stok Cabang Tujuan')
+                ->description('Barang baru hanya didaftarkan ke cabang yang dipilih. Cabang lain tidak otomatis memperoleh data stok untuk barang ini.')
+                ->schema([
+                    Forms\Components\Select::make('cabang_id')
+                        ->label('Cabang Tujuan')
+                        ->options(fn (): array => InventoryBranches::options())
+                        ->required()
+                        ->selectablePlaceholder(false)
+                        ->helperText('Pilih satu cabang Inventory tempat stok awal dicatat.')
+                        ->validationMessages([
+                            'required' => 'Cabang tujuan wajib dipilih.',
+                        ]),
+
+                    Forms\Components\TextInput::make('stok_awal')
+                        ->label('Stok Awal')
+                        ->numeric()
+                        ->integer()
+                        ->minValue(0)
+                        ->default(0)
+                        ->required()
+                        ->helperText('Hanya diterapkan pada cabang yang dipilih. Stok awal dicatat sebagai transaksi barang masuk.')
+                        ->validationMessages([
+                            'required' => 'Stok awal wajib diisi.',
+                            'integer' => 'Stok awal harus berupa bilangan bulat.',
+                            'min' => 'Stok awal tidak boleh negatif.',
+                        ]),
+                ])
+                ->columns(2)
+                ->columnSpanFull()
+                ->visibleOn('create'),
+
             Forms\Components\Section::make('Pengelolaan Stok')
                 ->schema([
                     Forms\Components\Placeholder::make('stock_notice')
                         ->hiddenLabel()
-                        ->content('Jumlah stok tidak diubah dari form ini. Gunakan menu Transaksi Stok agar setiap perubahan tercatat pada riwayat.'),
+                        ->content('Stok awal hanya diterapkan pada cabang tujuan saat menambah barang. Perubahan stok berikutnya hanya melalui menu Transaksi Stok agar tercatat pada riwayat.'),
                 ])
                 ->columnSpanFull(),
         ]);
@@ -334,6 +365,27 @@ class InventoryItemResource extends Resource
                             ->success()
                             ->send();
                     }),
+
+                Tables\Actions\Action::make('daftarkan_cabang')
+                    ->label('Daftarkan ke Cabang')
+                    ->icon('heroicon-m-plus-circle')
+                    ->color('gray')
+                    ->form(fn (InventoryItem $record): array => static::registerBranchForm($record))
+                    ->visible(fn (InventoryItem $record): bool => InventoryAccess::allowed(Auth::user())
+                        && app(InventoryService::class)->availableBranchOptions($record) !== [])
+                    ->action(function (InventoryItem $record, array $data): void {
+                        app(InventoryService::class)->registerBranchStock(
+                            $record,
+                            (string) $data['cabang_id'],
+                            (int) $data['stok_awal'],
+                            (int) $data['min_stok'],
+                        );
+
+                        Notification::make()
+                            ->title('Barang didaftarkan ke cabang')
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -449,6 +501,52 @@ class InventoryItemResource extends Resource
                 ])
                 ->columns(3),
         ]);
+    }
+
+    /**
+     * Form untuk mendaftarkan master barang yang sudah ada ke cabang lain.
+     *
+     * @return array<int, Forms\Components\Component>
+     */
+    public static function registerBranchForm(InventoryItem $item): array
+    {
+        return [
+            Forms\Components\Select::make('cabang_id')
+                ->label('Cabang Tujuan')
+                ->options(fn (): array => app(InventoryService::class)->availableBranchOptions($item))
+                ->required()
+                ->selectablePlaceholder(false)
+                ->validationMessages([
+                    'required' => 'Cabang tujuan wajib dipilih.',
+                ]),
+
+            Forms\Components\TextInput::make('stok_awal')
+                ->label('Stok Awal')
+                ->numeric()
+                ->integer()
+                ->minValue(0)
+                ->default(0)
+                ->required()
+                ->helperText('Hanya diterapkan pada cabang yang dipilih. Stok awal dicatat sebagai barang masuk.')
+                ->validationMessages([
+                    'required' => 'Stok awal wajib diisi.',
+                    'integer' => 'Stok awal harus berupa bilangan bulat.',
+                    'min' => 'Stok awal tidak boleh negatif.',
+                ]),
+
+            Forms\Components\TextInput::make('min_stok')
+                ->label('Batas Minimum Stok')
+                ->numeric()
+                ->integer()
+                ->minValue(0)
+                ->default($item->min_stok_default)
+                ->required()
+                ->helperText('Batas minimum khusus untuk cabang yang dipilih.')
+                ->validationMessages([
+                    'required' => 'Batas minimum stok wajib diisi.',
+                    'min' => 'Batas minimum stok tidak boleh negatif.',
+                ]),
+        ];
     }
 
     public static function getRelations(): array

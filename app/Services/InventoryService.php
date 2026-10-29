@@ -19,40 +19,133 @@ use Illuminate\Validation\ValidationException;
 
 class InventoryService
 {
-    public function ensureStocks(InventoryItem $item): int
-    {
+    /**
+     * Daftarkan satu master barang ke satu cabang Inventory saja.
+     * Baris stok cabang lain tidak dibuat.
+     */
+    public function registerBranchStock(
+        InventoryItem $item,
+        ?string $cabangId,
+        int $initialStock = 0,
+        ?int $minStock = null,
+    ): InventoryStock {
         InventoryAccess::authorize();
 
-        return $this->ensureStocksForItem($item);
+        $cabangId = InventoryBranches::normalizeCabangIdForWrite($cabangId);
+
+        $validated = Validator::make(
+            [
+                'cabang_id' => $cabangId,
+                'stok_awal' => $initialStock,
+                'min_stok' => $minStock ?? (int) $item->min_stok_default,
+            ],
+            [
+                'cabang_id' => [
+                    'required',
+                    'string',
+                    'max:5',
+                    Rule::exists('cabang', 'cabang_id')->whereNull('deleted_at'),
+                    Rule::in(array_values(InventoryBranches::canonicalIds())),
+                ],
+                'stok_awal' => ['required', 'integer', 'min:0'],
+                'min_stok' => ['required', 'integer', 'min:0'],
+            ],
+            [
+                'cabang_id.required' => 'Cabang tujuan wajib dipilih.',
+                'cabang_id.exists' => 'Cabang tidak ditemukan.',
+                'cabang_id.in' => 'Cabang bukan bagian dari Inventory (Express, Golio, Newspaper Janus).',
+                'stok_awal.required' => 'Stok awal wajib diisi.',
+                'stok_awal.integer' => 'Stok awal harus berupa bilangan bulat.',
+                'stok_awal.min' => 'Stok awal tidak boleh negatif.',
+                'min_stok.required' => 'Batas minimum stok wajib diisi.',
+                'min_stok.integer' => 'Batas minimum stok harus berupa bilangan bulat.',
+                'min_stok.min' => 'Batas minimum stok tidak boleh negatif.',
+            ],
+        )->validate();
+
+        $branchId = (string) $validated['cabang_id'];
+        $group = InventoryBranches::readGroups()[InventoryBranches::canonicalKeyForCabangId($branchId)] ?? null;
+        $memberIds = $group['members'] ?? [$branchId];
+
+        try {
+            return DB::transaction(function () use ($item, $branchId, $validated, $memberIds): InventoryStock {
+                InventoryItem::query()
+                    ->whereKey($item->getKey())
+                    ->lockForUpdate()
+                    ->first();
+
+                if (InventoryStock::query()
+                    ->where('inventory_item_id', $item->id)
+                    ->whereIn('cabang_id', $memberIds)
+                    ->exists()) {
+                    throw ValidationException::withMessages([
+                        'cabang_id' => 'Barang ini sudah terdaftar pada cabang '
+                            .InventoryBranches::labelForCabangId($branchId)
+                            .'. Setiap barang hanya boleh memiliki satu data stok per cabang.',
+                    ]);
+                }
+
+                $stock = InventoryStock::create([
+                    'inventory_item_id' => $item->id,
+                    'cabang_id' => $branchId,
+                    'jumlah' => (int) $validated['stok_awal'],
+                    'min_stok' => (int) $validated['min_stok'],
+                    'last_transaction_at' => (int) $validated['stok_awal'] > 0 ? now() : null,
+                ]);
+
+                if ((int) $validated['stok_awal'] > 0) {
+                    InventoryTransaction::create([
+                        'nomor_transaksi' => $this->generateTransactionNumber(),
+                        'tanggal_transaksi' => now()->toDateString(),
+                        'jenis_transaksi' => InventoryTransaction::TYPE_IN,
+                        'inventory_item_id' => $item->id,
+                        'cabang_id' => $branchId,
+                        'jumlah' => (int) $validated['stok_awal'],
+                        'stok_sebelum' => 0,
+                        'stok_sesudah' => (int) $validated['stok_awal'],
+                        'alasan' => 'Stok awal pendaftaran cabang',
+                        'user_id' => auth()->id(),
+                        'user_name' => auth()->user()?->nama_lengkap,
+                    ]);
+                }
+
+                return $stock;
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            throw ValidationException::withMessages([
+                'cabang_id' => 'Barang ini sudah terdaftar pada cabang yang dipilih.',
+            ]);
+        }
     }
 
-    public function syncStocks(?InventoryItem $item = null): int
+    /**
+     * Opsi cabang yang belum memiliki data stok untuk barang ini.
+     *
+     * @return array<string, string>
+     */
+    public function availableBranchOptions(InventoryItem $item): array
     {
         InventoryAccess::authorize();
 
-        if ($item !== null) {
-            return $this->ensureStocksForItem($item);
+        $registered = InventoryStock::query()
+            ->where('inventory_item_id', $item->id)
+            ->pluck('cabang_id')
+            ->map(fn ($cabangId): string => (string) $cabangId)
+            ->flip();
+
+        $options = [];
+
+        foreach (InventoryBranches::readGroups() as $group) {
+            foreach ($group['members'] as $memberId) {
+                if ($registered->has($memberId)) {
+                    continue 2;
+                }
+            }
+
+            $options[$group['cabang_id']] = InventoryBranches::labelForCabangId($group['cabang_id']);
         }
 
-        $branchIds = array_values(InventoryBranches::canonicalIds());
-        $created = 0;
-
-        InventoryItem::query()
-            ->active()
-            ->select(['id', 'min_stok_default'])
-            ->chunkById(100, function ($items) use ($branchIds, &$created): void {
-                foreach ($items as $item) {
-                    foreach ($branchIds as $branchId) {
-                        $created += $this->insertStockIfMissing(
-                            (int) $item->id,
-                            (string) $branchId,
-                            (int) $item->min_stok_default,
-                        );
-                    }
-                }
-            });
-
-        return $created;
+        return $options;
     }
 
     public function updateMinStock(InventoryStock $stock, int $minStock): InventoryStock
@@ -142,38 +235,43 @@ class InventoryService
         $stockQuery = $this->buildStockQuery($branchId)
             ->whereHas('item', fn (Builder $query): Builder => $query->active());
 
-        $totalStock = (int) (clone $stockQuery)->sum('jumlah');
+        $stockByUnit = (clone $stockQuery)
+            ->join('inventory_items', 'inventory_items.id', '=', 'inventory_stocks.inventory_item_id')
+            ->where('inventory_items.is_active', true)
+            ->selectRaw('inventory_items.satuan as satuan, sum(inventory_stocks.jumlah) as total')
+            ->groupBy('inventory_items.satuan')
+            ->orderBy('inventory_items.satuan')
+            ->get()
+            ->mapWithKeys(fn (InventoryStock $row): array => [
+                (string) $row->satuan => (int) $row->total,
+            ])
+            ->filter(fn (int $total): bool => $total > 0)
+            ->all();
 
-        $lowStockQuery = fn (): Builder => (clone $stockQuery)
+        $totalStock = (int) array_sum($stockByUnit);
+
+        // Stok menipis dihitung dari lokasi stok barang-cabang, bukan dari
+        // jumlah master barang. Baris dengan stok 0 tidak termasuk menipis.
+        $lowStock = (clone $stockQuery)
             ->where('jumlah', '>', 0)
-            ->whereColumn('jumlah', '<=', 'min_stok');
+            ->whereColumn('jumlah', '<=', 'min_stok')
+            ->count();
 
-        if ($branchId !== null) {
-            $totalItems = (clone $stockQuery)->distinct()->count('inventory_item_id');
+        // Stok habis hanya menghitung baris stok yang benar-benar terdaftar.
+        // Barang yang belum didaftarkan pada cabang tidak dihitung.
+        $outOfStock = (clone $stockQuery)
+            ->where('jumlah', 0)
+            ->count();
 
-            $lowStock = $lowStockQuery()->distinct()->count('inventory_item_id');
-
-            $outOfStock = (clone $stockQuery)
-                ->where('jumlah', 0)
-                ->distinct()
-                ->count('inventory_item_id');
-        } else {
-            $totalItems = InventoryItem::query()->active()->count();
-
-            $lowStock = $lowStockQuery()->distinct()->count('inventory_item_id');
-
-            $outOfStock = InventoryItem::query()
-                ->active()
-                ->whereNotIn(
-                    'id',
-                    (clone $stockQuery)->select('inventory_item_id')->where('jumlah', '>', 0),
-                )
-                ->count();
-        }
+        $totalItems = $branchId !== null
+            ? (clone $stockQuery)->distinct()->count('inventory_item_id')
+            : InventoryItem::query()->active()->count();
 
         return [
             'total_items' => $totalItems,
+            'active_master_items' => InventoryItem::query()->active()->count(),
             'total_stock' => $totalStock,
+            'stock_by_unit' => $stockByUnit,
             'low_stock' => $lowStock,
             'out_of_stock' => $outOfStock,
             'cabang_id' => $branchId,
@@ -290,21 +388,6 @@ class InventoryService
         }
 
         return $query;
-    }
-
-    private function ensureStocksForItem(InventoryItem $item): int
-    {
-        $created = 0;
-
-        foreach (array_values(InventoryBranches::canonicalIds()) as $branchId) {
-            $created += $this->insertStockIfMissing(
-                (int) $item->id,
-                (string) $branchId,
-                (int) $item->min_stok_default,
-            );
-        }
-
-        return $created;
     }
 
     private function insertStockIfMissing(int $itemId, string $branchId, int $defaultMinStock): int
