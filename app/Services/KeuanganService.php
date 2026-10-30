@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Cabang;
 use App\Models\FinancialTransaction;
 use App\Utils\MonthHelper;
 use App\Utils\RupiahHelper;
@@ -23,6 +24,17 @@ class KeuanganService
     public const PRESET_CUSTOM = 'custom';
 
     public const DEFAULT_PRESET = self::PRESET_THIS_MONTH;
+
+    public const CABANG_FILTER_EXPRESS = 'express';
+
+    /**
+     * Cabang yang digabung menjadi satu pilihan "Express" pada Dashboard Keuangan.
+     */
+    public const EXPRESS_BRANCH_NAMES = [
+        'Express Self Run',
+        'Express Sewa',
+        'Express Sharing Profit',
+    ];
 
     public const EXPORT_HEADERS = [
         'ID',
@@ -53,6 +65,49 @@ class KeuanganService
             self::PRESET_LAST_MONTH => 'Bulan Lalu',
             self::PRESET_CUSTOM => 'Rentang Custom',
         ];
+    }
+
+    /**
+     * Opsi filter cabang Dashboard Keuangan: Express digabung menjadi satu.
+     *
+     * @return array<string, string>
+     */
+    public function cabangFilterOptions(): array
+    {
+        $options = [];
+
+        if ($this->expressCabangIds() !== []) {
+            $options[self::CABANG_FILTER_EXPRESS] = 'Express';
+        }
+
+        foreach (['Golio', 'Newspaper Janus'] as $branchName) {
+            $cabangId = Cabang::query()->where('nama_cabang', $branchName)->value('cabang_id');
+
+            if (filled($cabangId)) {
+                $options[(string) $cabangId] = $branchName;
+            }
+        }
+
+        return $options;
+    }
+
+    /**
+     * Terjemahkan nilai filter cabang menjadi daftar cabang_id.
+     * Null berarti tanpa filter (seluruh cabang).
+     *
+     * @return array<int, string>|null
+     */
+    public function resolveCabangFilterIds(?string $cabangFilter): ?array
+    {
+        if (blank($cabangFilter)) {
+            return null;
+        }
+
+        if ($cabangFilter === self::CABANG_FILTER_EXPRESS) {
+            return $this->expressCabangIds();
+        }
+
+        return [(string) $cabangFilter];
     }
 
     /**
@@ -108,10 +163,15 @@ class KeuanganService
         ?string $cabangId = null,
         ?int $accountId = null
     ): Builder {
+        $cabangIds = $this->resolveCabangFilterIds($cabangId);
+
         return FinancialTransaction::query()
             ->periode($start, $end)
-            ->forCabang($cabangId)
-            ->forAccount($accountId);
+            ->forAccount($accountId)
+            ->when(
+                $cabangIds !== null,
+                fn (Builder $query): Builder => $query->whereIn('cabang_id', $cabangIds)
+            );
     }
 
     /**
@@ -353,6 +413,22 @@ class KeuanganService
             $transaction->created_at?->format('Y-m-d H:i:s') ?? '-',
             $transaction->updated_at?->format('Y-m-d H:i:s') ?? '-',
         ];
+    }
+
+    /**
+     * Seluruh cabang Express, termasuk yang sudah soft-deleted agar data historis tetap terhitung.
+     *
+     * @return array<int, string>
+     */
+    protected function expressCabangIds(): array
+    {
+        return Cabang::withTrashed()
+            ->whereIn('nama_cabang', self::EXPRESS_BRANCH_NAMES)
+            ->orderBy('cabang_id')
+            ->pluck('cabang_id')
+            ->map(fn ($cabangId): string => (string) $cabangId)
+            ->values()
+            ->all();
     }
 
     /**

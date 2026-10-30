@@ -5,8 +5,8 @@ import heroCollage from "../assets/img/hero_hd.webp";
 import OptimizedImage from "./OptimizedImage";
 
 const DURATION_MS = 1800;
-const EVENT_TARGET = 70;
-const SESI_TARGET = 2713;
+const EVENT_TARGET = 120;
+const SESI_TARGET = 10108;
 
 function useCountUp(end: number, startOnMount: boolean) {
   const [value, setValue] = useState(0);
@@ -33,7 +33,8 @@ function useCountUp(end: number, startOnMount: boolean) {
 }
 
 function formatSesi(n: number) {
-  return n.toLocaleString("id-ID");
+  if (n < 1000) return String(n);
+  return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
 }
 
 const Hero: React.FC = () => {
@@ -154,13 +155,13 @@ const Hero: React.FC = () => {
               <div className="flex gap-8">
                 <div>
                   <p className="text-2xl font-bold text-primary tabular-nums">
-                    {countEvent}
+                    {countEvent}+
                   </p>
                   <p className="text-xs text-gray-500">Event</p>
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-primary tabular-nums">
-                    {formatSesi(countSesi)}
+                    {formatSesi(countSesi)}+
                   </p>
                   <p className="text-xs text-gray-500">Sesi Foto</p>
                 </div>

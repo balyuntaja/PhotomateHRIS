@@ -5,7 +5,6 @@ namespace App\Filament\Pages;
 use App\Filament\Widgets\Keuangan\IncomeExpenseChart;
 use App\Filament\Widgets\Keuangan\KeuanganStatsOverview;
 use App\Filament\Widgets\Keuangan\LatestTransactionsWidget;
-use App\Models\Cabang;
 use App\Services\KeuanganService;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -84,10 +83,7 @@ class KeuanganDashboard extends BaseDashboard
 
             Forms\Components\Select::make('cabang_id')
                 ->label('Cabang')
-                ->options(fn (): array => Cabang::query()
-                    ->orderBy('nama_cabang')
-                    ->pluck('nama_cabang', 'cabang_id')
-                    ->all())
+                ->options(fn (): array => app(KeuanganService::class)->cabangFilterOptions())
                 ->placeholder('Semua Cabang')
                 ->live(),
         ]);
