@@ -343,8 +343,8 @@ class FinancialTransactionResource extends Resource
                     ->placeholder('Tanpa Akun')
                     ->toggleable(),
 
-                Tables\Columns\TextColumn::make('submitted_by_label')
-                    ->label('Disubmit Oleh')
+                Tables\Columns\TextColumn::make('recording_info_name')
+                    ->label('Dibayarkan / Disubmit Oleh')
                     ->toggleable(),
 
                 Tables\Columns\TextColumn::make('category.name')

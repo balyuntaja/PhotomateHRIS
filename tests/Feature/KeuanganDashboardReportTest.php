@@ -184,7 +184,7 @@ class KeuanganDashboardReportTest extends TestCase
             ->assertFormFieldExists('account_id')
             ->assertFormFieldDoesNotExist('cabang_id')
             ->assertTableColumnExists('account.name')
-            ->assertTableColumnExists('submitted_by_label')
+            ->assertTableColumnExists('recording_info_name')
             ->assertTableColumnDoesNotExist('cabang.nama_cabang');
     }
 

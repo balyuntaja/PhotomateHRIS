@@ -301,7 +301,7 @@ class KeuanganTransactionTest extends TestCase
 
         $component = Livewire::test(ListFinancialTransactions::class)
             ->assertTableColumnExists('account.name')
-            ->assertTableColumnExists('submitted_by_label')
+            ->assertTableColumnExists('recording_info_name')
             ->assertTableColumnDoesNotExist('cabang.nama_cabang')
             ->assertTableFilterExists('account_id')
             ->filterTable('account_id', ['value' => $this->expressAccount->id])
@@ -415,6 +415,33 @@ class KeuanganTransactionTest extends TestCase
         $this->assertSame($this->janusAccount->id, $transaction->account_id);
         $this->assertSame($this->managerFinance->karyawan_id, $transaction->submitted_by);
         $this->assertSame($this->managerFinance->nama_lengkap, $transaction->submitted_by_name);
+    }
+
+    public function test_tabel_transaksi_menampilkan_nama_pembayar_untuk_transaksi_manual(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $party = FinancialParty::create([
+            'name' => 'Aldo',
+            'type' => FinancialParty::TYPE_EMPLOYEE,
+            'is_active' => true,
+        ]);
+
+        $transaction = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+            'amount' => 500000,
+            'category_id' => $this->expenseCategory->id,
+            'account_id' => $this->expressAccount->id,
+            'payment_method_id' => $this->cash->id,
+            'party_id' => $party->id,
+            'transaction_date' => Carbon::today()->toDateString(),
+            'description' => 'Pembelian tinta',
+        ]);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->assertCanSeeTableRecords([$transaction])
+            ->assertSee('Dibayarkan / Disubmit Oleh')
+            ->assertSee('Aldo');
     }
 
     public function test_detail_transaksi_manual_menampilkan_pihak_pembayar(): void

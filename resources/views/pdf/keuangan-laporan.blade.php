@@ -206,7 +206,7 @@
                         <th style="width: 18%;">Deskripsi</th>
                         <th style="width: 10%;">Metode</th>
                         <th class="text-right" style="width: 12%;">Nominal</th>
-                        <th style="width: 15%;">Disubmit Oleh</th>
+                        <th style="width: 15%;">Dibayarkan / Disubmit Oleh</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -223,7 +223,7 @@
                             <td class="text-right {{ $transaction->is_income ? 'text-income' : 'text-expense' }}">
                                 {{ $transaction->signed_formatted_amount }}
                             </td>
-                            <td>{{ $transaction->submitted_by_label }}</td>
+                            <td>{{ $transaction->recording_info_name }}</td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -296,7 +296,7 @@
                     <th style="width: 18%;">Deskripsi</th>
                     <th style="width: 10%;">Metode</th>
                     <th class="text-right" style="width: 12%;">Nominal</th>
-                    <th style="width: 15%;">Disubmit Oleh</th>
+                    <th style="width: 15%;">Dibayarkan / Disubmit Oleh</th>
                 </tr>
             </thead>
             <tbody>

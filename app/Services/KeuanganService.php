@@ -45,7 +45,7 @@ class KeuanganService
         'Deskripsi',
         'Metode Pembayaran',
         'Nominal',
-        'Disubmit Oleh',
+        'Dibayarkan / Disubmit Oleh',
         'Dibuat Oleh',
         'Created At',
         'Updated At',
@@ -370,7 +370,7 @@ class KeuanganService
         ?int $accountId = null
     ): Builder {
         return $this->baseQuery($start, $end, $cabangId, $accountId)
-            ->with(['category', 'account', 'paymentMethod', 'submitter', 'creator', 'cabang'])
+            ->with(['category', 'account', 'party', 'paymentMethod', 'submitter', 'creator', 'cabang'])
             ->orderBy('transaction_date')
             ->orderBy('id');
     }
@@ -386,7 +386,7 @@ class KeuanganService
         ?int $accountId = null
     ): Builder {
         return $this->baseQuery($start, $end, $cabangId, $accountId)
-            ->with(['category', 'account', 'paymentMethod', 'submitter', 'creator', 'cabang'])
+            ->with(['category', 'account', 'party', 'paymentMethod', 'submitter', 'creator', 'cabang'])
             ->orderByDesc('transaction_date')
             ->orderByDesc('created_at')
             ->orderByDesc('id');
@@ -408,7 +408,7 @@ class KeuanganService
             $transaction->description ?: '-',
             $transaction->payment_method_label,
             RupiahHelper::format($transaction->amount),
-            $transaction->submitted_by_label,
+            $transaction->recording_info_name,
             $transaction->creator?->nama_lengkap ?? '-',
             $transaction->created_at?->format('Y-m-d H:i:s') ?? '-',
             $transaction->updated_at?->format('Y-m-d H:i:s') ?? '-',

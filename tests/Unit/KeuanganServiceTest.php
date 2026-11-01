@@ -158,7 +158,7 @@ class KeuanganServiceTest extends TestCase
     {
         $this->assertNotContains('Cabang', KeuanganService::EXPORT_HEADERS);
         $this->assertContains('Akun', KeuanganService::EXPORT_HEADERS);
-        $this->assertContains('Disubmit Oleh', KeuanganService::EXPORT_HEADERS);
+        $this->assertContains('Dibayarkan / Disubmit Oleh', KeuanganService::EXPORT_HEADERS);
 
         $transaction = $this->makeTransaction(
             FinancialTransaction::TYPE_INCOME,
@@ -178,7 +178,7 @@ class KeuanganServiceTest extends TestCase
         );
         $this->assertSame(
             '-',
-            $row[array_search('Disubmit Oleh', $headers, true)]
+            $row[array_search('Dibayarkan / Disubmit Oleh', $headers, true)]
         );
     }
 

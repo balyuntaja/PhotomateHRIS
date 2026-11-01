@@ -200,8 +200,8 @@ class KeuanganReport extends Page implements HasForms, HasTable
                     ->alignEnd()
                     ->sortable(),
 
-                TextColumn::make('submitted_by_label')
-                    ->label('Disubmit Oleh'),
+                TextColumn::make('recording_info_name')
+                    ->label('Dibayarkan / Disubmit Oleh'),
             ])
             ->defaultSort('transaction_date', 'desc')
             ->emptyStateHeading('Belum ada transaksi pada periode ini.')

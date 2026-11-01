@@ -185,25 +185,29 @@ class FinancialTransactionSubmitterTest extends TestCase
         $this->assertSame('Petugas Import', $transaction->recording_info_name);
     }
 
-    public function test_export_memakai_akun_dan_disubmit_oleh_tanpa_cabang(): void
+    public function test_export_memakai_akun_dan_nama_pembayar_tanpa_cabang(): void
     {
         $headers = KeuanganService::EXPORT_HEADERS;
 
         $this->assertNotContains('Cabang', $headers);
         $this->assertContains('Akun', $headers);
-        $this->assertContains('Disubmit Oleh', $headers);
+        $this->assertContains('Dibayarkan / Disubmit Oleh', $headers);
 
-        $creator = $this->makeKaryawan('K0004', 'Pembuat Export');
+        $pembayar = FinancialParty::create([
+            'name' => 'Pembayar Export',
+            'type' => FinancialParty::TYPE_OTHER,
+            'is_active' => true,
+        ]);
 
         $transaction = $this->makeTransaction([
-            'created_by' => $creator->karyawan_id,
+            'party_id' => $pembayar->id,
         ]);
         $row = app(KeuanganService::class)->exportRow($transaction);
 
         $this->assertSame('Tanpa Akun', $row[array_search('Akun', $headers, true)]);
         $this->assertSame(
-            'Pembuat Export',
-            $row[array_search('Disubmit Oleh', $headers, true)]
+            'Pembayar Export',
+            $row[array_search('Dibayarkan / Disubmit Oleh', $headers, true)]
         );
     }
 
