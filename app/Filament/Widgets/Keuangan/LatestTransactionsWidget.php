@@ -9,11 +9,16 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\Concerns\InteractsWithPageFilters;
 use Filament\Widgets\TableWidget;
+use Illuminate\Contracts\Pagination\Paginator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Lang;
 
 class LatestTransactionsWidget extends TableWidget
 {
     use InteractsWithPageFilters;
+
+    public const PER_PAGE = 10;
 
     protected static bool $isDiscovered = false;
 
@@ -22,6 +27,8 @@ class LatestTransactionsWidget extends TableWidget
     protected static ?string $heading = 'Transaksi Terbaru';
 
     protected int|string|array $columnSpan = 'full';
+
+    public ?string $filtersSignature = null;
 
     public function table(Table $table): Table
     {
@@ -33,13 +40,14 @@ class LatestTransactionsWidget extends TableWidget
             $this->filters['sampai'] ?? null,
         );
 
+        $this->useIndonesianPaginationOverview();
+
         return $table
             ->query(
                 $service->baseQuery($period['start'], $period['end'], $this->filters['cabang_id'] ?? null)
                     ->with(['category', 'cabang', 'paymentMethod'])
                     ->orderByDesc('transaction_date')
                     ->orderByDesc('id')
-                    ->limit(8)
             )
             ->columns([
                 Tables\Columns\TextColumn::make('transaction_date')
@@ -73,9 +81,48 @@ class LatestTransactionsWidget extends TableWidget
                     ->url(fn (): string => FinancialTransactionResource::getUrl('index'))
                     ->visible(fn (): bool => Auth::user()?->can('view_any_keuangan_transaction') ?? false),
             ])
-            ->paginated(false)
+            ->paginated([self::PER_PAGE])
+            ->defaultPaginationPageOption(self::PER_PAGE)
             ->emptyStateHeading('Belum ada transaksi')
             ->emptyStateDescription('Mulai catat pemasukan dan pengeluaran Photomate di sini.')
             ->emptyStateIcon('heroicon-o-wallet');
+    }
+
+    public function bootedInteractsWithTable(): void
+    {
+        parent::bootedInteractsWithTable();
+
+        $this->resetPageWhenFiltersChange();
+    }
+
+    protected function paginateTableQuery(Builder $query): Paginator
+    {
+        return $query->paginate(
+            perPage: self::PER_PAGE,
+            pageName: $this->getTablePaginationPageName(),
+        )->onEachSide(0);
+    }
+
+    protected function resetPageWhenFiltersChange(): void
+    {
+        $signature = md5(json_encode([
+            $this->filters['periode'] ?? null,
+            $this->filters['dari'] ?? null,
+            $this->filters['sampai'] ?? null,
+            $this->filters['cabang_id'] ?? null,
+        ]));
+
+        if ($this->filtersSignature !== null && $this->filtersSignature !== $signature) {
+            $this->resetPage();
+        }
+
+        $this->filtersSignature = $signature;
+    }
+
+    protected function useIndonesianPaginationOverview(): void
+    {
+        Lang::addLines([
+            'components/pagination.overview' => '{1} Menampilkan 1 transaksi|[2,*] Menampilkan :first–:last dari :total transaksi',
+        ], app()->getLocale(), 'filament');
     }
 }

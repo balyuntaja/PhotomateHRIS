@@ -112,9 +112,112 @@ class KeuanganDashboardReportTest extends TestCase
             ->assertSee('Rp 481.550')
             ->assertSee('Rp 1.518.450')
             ->assertSee('Transaksi Terbaru')
+            ->assertSee('Menampilkan 1–3 dari 3 transaksi')
             ->assertSee('Pemasukan vs Pengeluaran')
             ->assertSee('Pelunasan Event A')
             ->assertSee('Newspaper Janus');
+    }
+
+    public function test_transaksi_terbaru_dashboard_memakai_pagination_sepuluh_per_halaman(): void
+    {
+        $this->actingAs($this->financeUser);
+
+        $awalBulan = Carbon::today()->startOfMonth();
+
+        $records = collect(range(0, 11))->map(fn (int $index): FinancialTransaction => $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            100000 + $index,
+            $this->incomeCategory->id,
+            null,
+            $awalBulan->copy()->addDays($index)->toDateString(),
+            "Transaksi dashboard {$index}"
+        ));
+
+        $terurutTerbaru = $records->sortByDesc('transaction_date')->values();
+
+        Livewire::test(LatestTransactionsWidget::class)
+            ->assertSee('Menampilkan 1–10 dari 12 transaksi')
+            ->assertCanSeeTableRecords($terurutTerbaru->take(10), inOrder: true)
+            ->assertCanNotSeeTableRecords($terurutTerbaru->slice(10))
+            ->call('gotoPage', 2, 'page')
+            ->assertSee('Menampilkan 11–12 dari 12 transaksi')
+            ->assertCanSeeTableRecords($terurutTerbaru->slice(10))
+            ->assertCanNotSeeTableRecords($terurutTerbaru->take(10));
+    }
+
+    public function test_transaksi_terbaru_dashboard_mengikuti_filter_periode_dan_cabang(): void
+    {
+        $this->actingAs($this->financeUser);
+
+        $bulanLalu = Carbon::today()->subMonthNoOverflow()->startOfMonth();
+
+        $transaksiBulanLalu = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            150000,
+            $this->incomeCategory->id,
+            'C0005',
+            $bulanLalu->toDateString(),
+            'Transaksi bulan lalu'
+        );
+
+        $transaksiJanus = $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            250000,
+            $this->incomeCategory->id,
+            'C0004',
+            Carbon::today()->toDateString(),
+            'Transaksi Janus bulan ini'
+        );
+
+        Livewire::test(LatestTransactionsWidget::class, [
+            'filters' => ['periode' => KeuanganService::PRESET_LAST_MONTH],
+        ])
+            ->assertCanSeeTableRecords([$transaksiBulanLalu])
+            ->assertCanNotSeeTableRecords([$transaksiJanus]);
+
+        Livewire::test(LatestTransactionsWidget::class, [
+            'filters' => [
+                'periode' => KeuanganService::PRESET_THIS_MONTH,
+                'cabang_id' => 'C0004',
+            ],
+        ])
+            ->assertCanSeeTableRecords([$transaksiJanus])
+            ->assertCanNotSeeTableRecords([$transaksiBulanLalu]);
+    }
+
+    public function test_pagination_transaksi_terbaru_kembali_ke_halaman_pertama_saat_filter_berubah(): void
+    {
+        $this->actingAs($this->financeUser);
+
+        $awalBulan = Carbon::today()->startOfMonth();
+
+        $records = collect(range(0, 14))->map(fn (int $index): FinancialTransaction => $this->makeTransaction(
+            FinancialTransaction::TYPE_INCOME,
+            100000 + $index,
+            $this->incomeCategory->id,
+            null,
+            $awalBulan->copy()->addDays($index)->toDateString(),
+            "Transaksi reset filter {$index}"
+        ));
+
+        $terurutTerbaru = $records->sortByDesc('transaction_date')->values();
+
+        $sameSignature = md5(json_encode([KeuanganService::PRESET_THIS_MONTH, null, null, null]));
+
+        Livewire::test(LatestTransactionsWidget::class, [
+            'filters' => ['periode' => KeuanganService::PRESET_THIS_MONTH],
+            'filtersSignature' => $sameSignature,
+            'paginators' => ['page' => 2],
+        ])
+            ->assertCanSeeTableRecords($terurutTerbaru->slice(10));
+
+        Livewire::test(LatestTransactionsWidget::class, [
+            'filters' => ['periode' => KeuanganService::PRESET_THIS_MONTH],
+            'filtersSignature' => md5(json_encode([KeuanganService::PRESET_LAST_MONTH, null, null, null])),
+            'paginators' => ['page' => 2],
+        ])
+            ->assertCanSeeTableRecords($terurutTerbaru->take(10), inOrder: true)
+            ->assertCanNotSeeTableRecords($terurutTerbaru->slice(10));
     }
 
     public function test_dashboard_dan_halaman_laporan_menolak_user_tanpa_permission(): void
