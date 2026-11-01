@@ -274,6 +274,40 @@ class FinancialTransaction extends Model
     }
 
     /**
+     * Transaksi manual adalah transaksi yang tidak berasal dari sumber otomatis.
+     */
+    public function getIsManualAttribute(): bool
+    {
+        return blank($this->source_type);
+    }
+
+    /**
+     * Label informasi pencatatan pada Detail Transaksi: transaksi manual
+     * memakai label pihak pembayar/penerima, transaksi otomatis tetap
+     * memakai label submitter.
+     */
+    public function getRecordingInfoLabelAttribute(): string
+    {
+        return $this->is_manual ? $this->party_label : 'Disubmit Oleh';
+    }
+
+    /**
+     * Nilai informasi pencatatan pada Detail Transaksi: transaksi manual
+     * menampilkan pihak yang dipilih saat input, bukan pengguna yang
+     * mencatat. Transaksi otomatis memakai nama submitter yang sudah ada.
+     */
+    public function getRecordingInfoNameAttribute(): string
+    {
+        if (! $this->is_manual) {
+            return $this->submitted_by_label;
+        }
+
+        $partyName = $this->party?->name;
+
+        return filled($partyName) ? $partyName : '-';
+    }
+
+    /**
      * Nama pengguna yang menyubmit transaksi. Relasi submitter diutamakan,
      * lalu snapshot, lalu pembuat transaksi (created_by) untuk data lama.
      */

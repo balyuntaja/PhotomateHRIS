@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\FinancialCategory;
+use App\Models\FinancialParty;
 use App\Models\FinancialTransaction;
 use App\Models\Karyawan;
 use App\Models\Perusahaan;
@@ -109,6 +110,79 @@ class FinancialTransactionSubmitterTest extends TestCase
         $user->delete();
 
         $this->assertSame('User Snapshot', $transaction->fresh()->submitted_by_label);
+    }
+
+    public function test_transaksi_manual_menampilkan_pihak_pembayar_bukan_pencatat(): void
+    {
+        $pencatat = $this->makeKaryawan('K0006', 'Super Admin');
+        $aldo = FinancialParty::create([
+            'name' => 'Aldo',
+            'type' => FinancialParty::TYPE_EMPLOYEE,
+            'is_active' => true,
+        ]);
+
+        $transaction = $this->makeTransaction([
+            'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+            'party_id' => $aldo->id,
+            'created_by' => $pencatat->karyawan_id,
+            'submitted_by' => $pencatat->karyawan_id,
+            'submitted_by_name' => $pencatat->nama_lengkap,
+        ]);
+
+        $this->assertSame('Dibayarkan Oleh', $transaction->recording_info_label);
+        $this->assertSame('Aldo', $transaction->recording_info_name);
+    }
+
+    public function test_transaksi_manual_pemasukan_menampilkan_pihak_penerima(): void
+    {
+        $penerima = FinancialParty::create([
+            'name' => 'Penerima Uji',
+            'type' => FinancialParty::TYPE_EMPLOYEE,
+            'is_active' => true,
+        ]);
+
+        $transaction = $this->makeTransaction([
+            'party_id' => $penerima->id,
+        ]);
+
+        $this->assertSame('Diterima Oleh', $transaction->recording_info_label);
+        $this->assertSame('Penerima Uji', $transaction->recording_info_name);
+    }
+
+    public function test_transaksi_manual_tanpa_pihak_tidak_memakai_nama_pencatat(): void
+    {
+        $pencatat = $this->makeKaryawan('K0007', 'Super Admin');
+
+        $transaction = $this->makeTransaction([
+            'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+            'created_by' => $pencatat->karyawan_id,
+            'submitted_by' => $pencatat->karyawan_id,
+            'submitted_by_name' => $pencatat->nama_lengkap,
+        ]);
+
+        $this->assertSame('Dibayarkan Oleh', $transaction->recording_info_label);
+        $this->assertSame('-', $transaction->recording_info_name);
+    }
+
+    public function test_transaksi_otomatis_tetap_menampilkan_disubmit_oleh(): void
+    {
+        $importer = $this->makeKaryawan('K0008', 'Petugas Import');
+        $pihak = FinancialParty::create([
+            'name' => 'Pihak Tidak Relevan',
+            'type' => FinancialParty::TYPE_OTHER,
+            'is_active' => true,
+        ]);
+
+        $transaction = $this->makeTransaction([
+            'source_type' => 'luminash_csv',
+            'source_id' => 'ORDER-1',
+            'party_id' => $pihak->id,
+            'submitted_by' => $importer->karyawan_id,
+            'submitted_by_name' => $importer->nama_lengkap,
+        ]);
+
+        $this->assertSame('Disubmit Oleh', $transaction->recording_info_label);
+        $this->assertSame('Petugas Import', $transaction->recording_info_name);
     }
 
     public function test_export_memakai_akun_dan_disubmit_oleh_tanpa_cabang(): void

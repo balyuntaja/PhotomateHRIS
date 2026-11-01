@@ -294,8 +294,8 @@ class FinancialTransactionResource extends Resource
 
             Infolists\Components\Section::make('Informasi Pencatatan')
                 ->schema([
-                    Infolists\Components\TextEntry::make('submitted_by_label')
-                        ->label('Disubmit Oleh'),
+                    Infolists\Components\TextEntry::make('recording_info_name')
+                        ->label(fn (FinancialTransaction $record): string => $record->recording_info_label),
 
                     Infolists\Components\TextEntry::make('creator.nama_lengkap')
                         ->label('Dibuat Oleh')

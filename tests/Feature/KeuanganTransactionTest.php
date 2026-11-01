@@ -317,7 +317,9 @@ class KeuanganTransactionTest extends TestCase
 
         $account = FinancialAccount::where('name', 'Photomate Express')->firstOrFail();
         $party = FinancialParty::where('name', 'Balyun')->firstOrFail();
-        $tanggalTransaksi = Carbon::today()->subDays(1)->toDateString();
+        $tanggalTransaksi = Carbon::today()->day > 1
+            ? Carbon::today()->subDays(1)->toDateString()
+            : Carbon::today()->addDay()->toDateString();
         $periode = Carbon::today()->format('Y-m');
 
         Livewire::test(KeuanganInputTransaksi::class)
@@ -413,6 +415,34 @@ class KeuanganTransactionTest extends TestCase
         $this->assertSame($this->janusAccount->id, $transaction->account_id);
         $this->assertSame($this->managerFinance->karyawan_id, $transaction->submitted_by);
         $this->assertSame($this->managerFinance->nama_lengkap, $transaction->submitted_by_name);
+    }
+
+    public function test_detail_transaksi_manual_menampilkan_pihak_pembayar(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $party = FinancialParty::create([
+            'name' => 'Aldo',
+            'type' => FinancialParty::TYPE_EMPLOYEE,
+            'is_active' => true,
+        ]);
+
+        $transaction = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+            'amount' => 500000,
+            'category_id' => $this->expenseCategory->id,
+            'account_id' => $this->expressAccount->id,
+            'payment_method_id' => $this->cash->id,
+            'party_id' => $party->id,
+            'transaction_date' => Carbon::today()->toDateString(),
+            'description' => 'Pembelian tinta',
+        ]);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountTableAction('view', $transaction)
+            ->assertSee('Informasi Pencatatan')
+            ->assertSee('Dibayarkan Oleh')
+            ->assertSee('Aldo');
     }
 
     protected function makeTransaction(
