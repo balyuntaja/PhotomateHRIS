@@ -9,8 +9,8 @@ use App\Models\FinancialCategory;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
 use App\Models\Karyawan;
-use App\Models\Perusahaan;
 use App\Models\Permission;
+use App\Models\Perusahaan;
 use App\Models\Role;
 use App\Services\KeuanganService;
 use App\Services\LuminashImportService;
@@ -230,7 +230,7 @@ class LuminashRekapTest extends TestCase
                 'payment_method_id' => $this->qris->id,
                 'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
                 'transaction_date' => '2026-10-11',
-                'description' => 'Luminash lama ' . $orderId,
+                'description' => 'Luminash lama '.$orderId,
                 'source_type' => LuminashImportService::SOURCE,
                 'source_id' => $orderId,
             ]);
@@ -275,6 +275,11 @@ class LuminashRekapTest extends TestCase
         $rekap = $this->rekapFor('2026-10-11');
 
         Livewire::test(ListFinancialTransactions::class)
+            ->filterTable('periode', [
+                'preset' => KeuanganService::PRESET_CUSTOM,
+                'dari' => '2026-10-01',
+                'sampai' => '2026-10-31',
+            ])
             ->assertCanSeeTableRecords([$rekap])
             ->assertSee('Rekap Pendapatan Booth Luminash (2 transaksi)');
 
@@ -290,7 +295,7 @@ class LuminashRekapTest extends TestCase
 
     protected function storeCsv(string $name, array $rows): string
     {
-        $path = 'luminash-imports/' . $name;
+        $path = 'luminash-imports/'.$name;
         Storage::disk('local')->put($path, $this->csvContent($rows));
 
         return $path;
@@ -328,7 +333,7 @@ class LuminashRekapTest extends TestCase
         return [
             $orderId, $timestamp, 'BOOTH_1', 'QRIS', 'qris', $amount,
             '1', '0', 'Complete', 'Golio 1', '-', '', 'No',
-            'https://media.luminash.id/session/' . $orderId,
+            'https://media.luminash.id/session/'.$orderId,
         ];
     }
 
@@ -354,7 +359,7 @@ class LuminashRekapTest extends TestCase
             'role_id' => $roleId,
             'perusahaan_id' => 'P0001',
             'nik' => str_pad((string) crc32($karyawanId), 12, '0', STR_PAD_LEFT),
-            'nama_lengkap' => $roleName . ' Uji',
+            'nama_lengkap' => $roleName.' Uji',
             'email' => $email,
             'password' => bcrypt('password'),
             'tanggal_lahir' => '1990-01-01',

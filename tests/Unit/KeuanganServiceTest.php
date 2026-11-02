@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Models\Cabang;
 use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
+use App\Models\FinancialParentCategory;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
 use App\Models\Perusahaan;
@@ -85,22 +86,25 @@ class KeuanganServiceTest extends TestCase
         $this->assertSame(10, FinancialCategory::where('transaction_type', FinancialCategory::TYPE_INCOME)->count());
         $this->assertGreaterThanOrEqual(20, FinancialCategory::where('transaction_type', FinancialCategory::TYPE_EXPENSE)->count());
         $this->assertGreaterThanOrEqual(6, FinancialPaymentMethod::count());
+        $this->assertSame(10, FinancialParentCategory::count());
 
         $this->assertDatabaseHas('financial_categories', [
             'name' => 'Pendapatan Booth',
             'transaction_type' => FinancialCategory::TYPE_INCOME,
+            'parent_category_id' => FinancialParentCategory::where('name', 'Pendapatan Booth')->value('id'),
             'is_active' => true,
         ]);
 
         $this->assertDatabaseHas('financial_categories', [
             'name' => 'Pelunasan Invoice',
             'transaction_type' => FinancialCategory::TYPE_INCOME,
+            'parent_category_id' => FinancialParentCategory::where('name', 'Pendapatan Booth')->value('id'),
             'is_active' => true,
         ]);
 
         $this->assertDatabaseHas('financial_categories', [
             'name' => 'Tinta',
-            'group_name' => 'Operasional',
+            'parent_category_id' => FinancialParentCategory::where('name', 'Persediaan')->value('id'),
             'transaction_type' => FinancialCategory::TYPE_EXPENSE,
             'is_active' => true,
         ]);
@@ -211,7 +215,7 @@ class KeuanganServiceTest extends TestCase
         $this->assertSame(2000000, $series['income'][$todayIndex]);
     }
 
-    public function test_category_breakdown_mengelompokkan_pengeluaran_per_grup(): void
+    public function test_category_breakdown_mengelompokkan_pengeluaran_per_kategori_utama(): void
     {
         $this->seedContohTransaksi();
 
@@ -221,22 +225,25 @@ class KeuanganServiceTest extends TestCase
         $this->assertSame(481550, $breakdown[FinancialTransaction::TYPE_EXPENSE]['total']);
         $this->assertSame(2000000, $breakdown[FinancialTransaction::TYPE_INCOME]['total']);
 
-        // Pemasukan tidak dikelompokkan (group_name null).
-        $incomeGroups = $breakdown[FinancialTransaction::TYPE_INCOME]['groups'];
-        $this->assertCount(1, $incomeGroups);
-        $this->assertNull($incomeGroups[0]['label']);
-        $this->assertSame('Pelunasan', $incomeGroups[0]['items'][0]['name']);
+        $incomeParents = $breakdown[FinancialTransaction::TYPE_INCOME]['parents'];
+        $this->assertCount(1, $incomeParents);
+        $this->assertSame('Pendapatan Booth', $incomeParents[0]['label']);
+        $this->assertSame('Pelunasan', $incomeParents[0]['items'][0]['name']);
+        $this->assertSame(100.0, $incomeParents[0]['percentage']);
 
-        $expenseGroups = $breakdown[FinancialTransaction::TYPE_EXPENSE]['groups'];
-        $this->assertCount(1, $expenseGroups);
-        $this->assertSame('Operasional', $expenseGroups[0]['label']);
-        $this->assertSame(481550, $expenseGroups[0]['total']);
-        $this->assertSame(100.0, $expenseGroups[0]['percentage']);
+        $expenseParents = $breakdown[FinancialTransaction::TYPE_EXPENSE]['parents'];
+        $this->assertCount(2, $expenseParents);
 
-        // Item diurutkan dari nominal terbesar.
-        $this->assertSame('Tinta', $expenseGroups[0]['items'][0]['name']);
-        $this->assertSame(381550, $expenseGroups[0]['items'][0]['total']);
-        $this->assertSame('Bensin', $expenseGroups[0]['items'][1]['name']);
+        // Parent diurutkan dari nominal terbesar.
+        $this->assertSame('Persediaan', $expenseParents[0]['label']);
+        $this->assertSame(381550, $expenseParents[0]['total']);
+        $this->assertSame(79.2, $expenseParents[0]['percentage']);
+        $this->assertSame('Tinta', $expenseParents[0]['items'][0]['name']);
+
+        $this->assertSame('Transportasi', $expenseParents[1]['label']);
+        $this->assertSame(100000, $expenseParents[1]['total']);
+        $this->assertSame(20.8, $expenseParents[1]['percentage']);
+        $this->assertSame('Bensin', $expenseParents[1]['items'][0]['name']);
     }
 
     public function test_branch_breakdown_menghitung_selisih_kas(): void

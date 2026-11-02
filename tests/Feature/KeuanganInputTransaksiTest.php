@@ -8,12 +8,13 @@ use App\Filament\Pages\KeuanganReport;
 use App\Filament\Resources\FinancialTransactionResource\Pages\ListFinancialTransactions;
 use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
+use App\Models\FinancialParentCategory;
 use App\Models\FinancialParty;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
 use App\Models\Karyawan;
-use App\Models\Perusahaan;
 use App\Models\Permission;
+use App\Models\Perusahaan;
 use App\Models\Role;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -32,6 +33,10 @@ class KeuanganInputTransaksiTest extends TestCase
     protected FinancialCategory $incomeCategory;
 
     protected FinancialCategory $expenseCategory;
+
+    protected FinancialParentCategory $incomeParentCategory;
+
+    protected FinancialParentCategory $expenseParentCategory;
 
     protected FinancialPaymentMethod $cash;
 
@@ -65,6 +70,9 @@ class KeuanganInputTransaksiTest extends TestCase
         $this->expenseCategory = FinancialCategory::where('name', 'Tinta')
             ->where('transaction_type', FinancialCategory::TYPE_EXPENSE)
             ->firstOrFail();
+
+        $this->incomeParentCategory = $this->incomeCategory->parentCategory;
+        $this->expenseParentCategory = $this->expenseCategory->parentCategory;
 
         $this->cash = FinancialPaymentMethod::where('name', 'Cash')->firstOrFail();
 
@@ -141,6 +149,7 @@ class KeuanganInputTransaksiTest extends TestCase
                 'period' => '2026-10',
                 'transaction_date' => '2026-10-07',
                 'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $this->expenseParentCategory->id,
                 'category_id' => $this->expenseCategory->id,
                 'amount' => '500.000',
                 'party_id' => $this->pihak->id,
@@ -205,7 +214,7 @@ class KeuanganInputTransaksiTest extends TestCase
             'account_id' => $this->express->id,
             'payment_method_id' => $this->cash->id,
             'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
-            'transaction_date' => '2026-10-21',
+            'transaction_date' => Carbon::today()->toDateString(),
             'evidence_path' => $path,
         ]);
 
@@ -227,6 +236,7 @@ class KeuanganInputTransaksiTest extends TestCase
                 'period' => '2026-10',
                 'transaction_date' => '2026-10-07',
                 'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $this->expenseParentCategory->id,
                 'category_id' => $this->expenseCategory->id,
                 'amount' => '500.000',
                 'party_id' => $this->pihak->id,
@@ -259,7 +269,7 @@ class KeuanganInputTransaksiTest extends TestCase
             'account_id' => $this->express->id,
             'payment_method_id' => $this->cash->id,
             'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
-            'transaction_date' => '2026-10-21',
+            'transaction_date' => Carbon::today()->toDateString(),
             'evidence_path' => $oldPath,
         ]);
 
@@ -286,6 +296,7 @@ class KeuanganInputTransaksiTest extends TestCase
                 'period' => '2026-10',
                 'transaction_date' => '2026-10-07',
                 'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $this->expenseParentCategory->id,
                 'category_id' => $this->expenseCategory->id,
                 'amount' => '500000',
                 'party_id' => $this->pihak->id,
@@ -316,6 +327,7 @@ class KeuanganInputTransaksiTest extends TestCase
             ->call('simpan')
             ->assertHasFormErrors([
                 'account_id' => 'required',
+                'parent_category_id' => 'required',
                 'category_id' => 'required',
                 'party_id' => 'required',
             ]);
@@ -334,6 +346,7 @@ class KeuanganInputTransaksiTest extends TestCase
                     'period' => '2026-10',
                     'transaction_date' => '2026-10-07',
                     'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                    'parent_category_id' => $this->expenseParentCategory->id,
                     'category_id' => $this->expenseCategory->id,
                     'amount' => $nominal,
                     'party_id' => $this->pihak->id,
@@ -356,6 +369,7 @@ class KeuanganInputTransaksiTest extends TestCase
                 'period' => '2026-10',
                 'transaction_date' => '2026-10-07',
                 'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $this->expenseParentCategory->id,
                 'category_id' => $this->expenseCategory->id,
                 'amount' => '100000',
                 'party_id' => $this->pihak->id,
@@ -382,7 +396,66 @@ class KeuanganInputTransaksiTest extends TestCase
                 'period' => '2026-10',
                 'transaction_date' => '2026-10-07',
                 'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $this->incomeParentCategory->id,
                 'category_id' => $this->incomeCategory->id,
+                'amount' => '100000',
+                'party_id' => $this->pihak->id,
+                'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
+            ])
+            ->call('simpan')
+            ->assertHasFormErrors(['category_id']);
+
+        $this->assertDatabaseCount('financial_transactions', 0);
+    }
+
+    public function test_input_transaksi_mereset_kategori_utama_dan_sub_kategori_saat_jenis_transaksi_berubah(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        Livewire::test(KeuanganInputTransaksi::class)
+            ->fillForm([
+                'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $this->expenseParentCategory->id,
+                'category_id' => $this->expenseCategory->id,
+            ])
+            ->set('data.transaction_type', FinancialTransaction::TYPE_INCOME)
+            ->assertSet('data.parent_category_id', null)
+            ->assertSet('data.category_id', null);
+    }
+
+    public function test_input_transaksi_mereset_sub_kategori_saat_kategori_utama_berubah(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $transportasi = FinancialParentCategory::query()->where('name', 'Transportasi')->firstOrFail();
+
+        Livewire::test(KeuanganInputTransaksi::class)
+            ->fillForm([
+                'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $this->expenseParentCategory->id,
+                'category_id' => $this->expenseCategory->id,
+            ])
+            ->set('data.parent_category_id', $transportasi->id)
+            ->assertSet('data.category_id', null);
+    }
+
+    public function test_input_transaksi_menolak_sub_kategori_dari_kategori_utama_lain(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $bensin = FinancialCategory::query()
+            ->where('name', 'Bensin')
+            ->where('transaction_type', FinancialTransaction::TYPE_EXPENSE)
+            ->firstOrFail();
+
+        Livewire::test(KeuanganInputTransaksi::class)
+            ->fillForm([
+                'account_id' => $this->express->id,
+                'period' => '2026-10',
+                'transaction_date' => '2026-10-07',
+                'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $this->expenseParentCategory->id,
+                'category_id' => $bensin->id,
                 'amount' => '100000',
                 'party_id' => $this->pihak->id,
                 'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
@@ -403,6 +476,7 @@ class KeuanganInputTransaksiTest extends TestCase
                 'period' => '2026-10',
                 'transaction_date' => '2026-10-07',
                 'transaction_type' => 'transfer',
+                'parent_category_id' => $this->expenseParentCategory->id,
                 'category_id' => $this->expenseCategory->id,
                 'amount' => '100000',
                 'party_id' => 99999,
@@ -445,6 +519,7 @@ class KeuanganInputTransaksiTest extends TestCase
                 'period' => '2026-10',
                 'transaction_date' => '2026-10-07',
                 'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $this->expenseParentCategory->id,
                 'category_id' => $this->expenseCategory->id,
                 'amount' => '100000',
                 'party_id' => $this->pihak->id,
@@ -460,6 +535,7 @@ class KeuanganInputTransaksiTest extends TestCase
             ->assertSet('data.transaction_type', FinancialTransaction::TYPE_EXPENSE)
             ->assertSet('data.transaction_date', fn ($value): bool => Carbon::parse($value)->isToday())
             ->assertSet('data.amount', null)
+            ->assertSet('data.parent_category_id', null)
             ->assertSet('data.category_id', null)
             ->assertSet('data.party_id', null)
             ->assertSet('data.payment_status', FinancialTransaction::PAYMENT_STATUS_LUNAS)
@@ -480,6 +556,7 @@ class KeuanganInputTransaksiTest extends TestCase
                 'period' => Carbon::today()->format('Y-m'),
                 'transaction_date' => Carbon::today()->toDateString(),
                 'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $this->expenseParentCategory->id,
                 'category_id' => $this->expenseCategory->id,
                 'amount' => '381.550',
                 'party_id' => $this->pihak->id,
@@ -540,7 +617,7 @@ class KeuanganInputTransaksiTest extends TestCase
             'role_id' => $roleId,
             'perusahaan_id' => 'P0001',
             'nik' => str_pad((string) crc32($karyawanId), 12, '0', STR_PAD_LEFT),
-            'nama_lengkap' => $roleName . ' Uji',
+            'nama_lengkap' => $roleName.' Uji',
             'email' => $email,
             'password' => bcrypt('password'),
             'tanggal_lahir' => '1990-01-01',

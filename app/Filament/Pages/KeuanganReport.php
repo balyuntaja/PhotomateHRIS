@@ -177,7 +177,7 @@ class KeuanganReport extends Page implements HasForms, HasTable
                     ->placeholder('Tanpa Akun'),
 
                 TextColumn::make('category.name')
-                    ->label('Kategori')
+                    ->label('Sub Kategori')
                     ->placeholder('-'),
 
                 TextColumn::make('description')
@@ -241,13 +241,13 @@ class KeuanganReport extends Page implements HasForms, HasTable
                         ->get();
 
                     $filename = 'laporan-keuangan-photomate-'
-                        . $report['period']['start']->format('Ymd') . '-'
-                        . $report['period']['end']->format('Ymd') . '.csv';
+                        .$report['period']['start']->format('Ymd').'-'
+                        .$report['period']['end']->format('Ymd').'.csv';
 
                     return response()->streamDownload(function () use ($records, $service): void {
                         $handle = fopen('php://output', 'w');
 
-                        fputs($handle, "\xEF\xBB\xBF");
+                        fwrite($handle, "\xEF\xBB\xBF");
 
                         fputcsv($handle, KeuanganService::EXPORT_HEADERS);
 

@@ -77,7 +77,7 @@ class InvoiceFinanceIntegrationTest extends TestCase
         $this->assertSame(InvoiceFinancialService::SOURCE, $transaction->source_type);
         $this->assertSame((string) $invoice->id, $transaction->source_id);
         $this->assertSame(
-            'Pelunasan Invoice ' . $invoice->invoice_number . ' - Keluarga Uji',
+            'Pelunasan Invoice '.$invoice->invoice_number.' - Keluarga Uji',
             $transaction->description
         );
         $this->assertNull($transaction->submitted_by);
@@ -271,8 +271,13 @@ class InvoiceFinanceIntegrationTest extends TestCase
         $this->actingAs($this->makeSuperAdmin());
 
         Livewire::test(ListFinancialTransactions::class)
+            ->filterTable('periode', [
+                'preset' => KeuanganService::PRESET_CUSTOM,
+                'dari' => '2026-10-01',
+                'sampai' => '2026-10-31',
+            ])
             ->assertCanSeeTableRecords([$this->invoiceTransaction($invoice)])
-            ->assertSee('/admin/invoices/' . $invoice->id . '/edit');
+            ->assertSee('/admin/invoices/'.$invoice->id.'/edit');
     }
 
     public function test_tabel_invoice_diurutkan_dari_invoice_terbaru(): void

@@ -147,14 +147,14 @@ class KeuanganService
     public function periodLabel(CarbonInterface $start, CarbonInterface $end): string
     {
         if ($start->isSameDay($end)) {
-            return $start->day . ' ' . MonthHelper::formatPeriod((int) $start->month, (int) $start->year);
+            return $start->day.' '.MonthHelper::formatPeriod((int) $start->month, (int) $start->year);
         }
 
         if ($start->isSameMonth($end) && $start->isSameYear($end)) {
             return MonthHelper::formatPeriod((int) $start->month, (int) $start->year);
         }
 
-        return $start->format('d/m/Y') . ' - ' . $end->format('d/m/Y');
+        return $start->format('d/m/Y').' - '.$end->format('d/m/Y');
     }
 
     public function baseQuery(
@@ -241,19 +241,20 @@ class KeuanganService
     }
 
     /**
-     * Breakdown per grup lalu per kategori.
+     * Breakdown per kategori utama lalu sub kategori.
      *
-     * @return array<string, array{total: int, groups: array<int, array{label: string|null, total: int, percentage: float, items: array<int, array{name: string, total: int, percentage: float}>}>}>
+     * @return array<string, array{total: int, parents: array<int, array{label: string|null, total: int, percentage: float, items: array<int, array{name: string, total: int, percentage: float}>}>}>
      */
     public function categoryBreakdown(CarbonInterface $start, CarbonInterface $end, ?string $cabangId = null): array
     {
         $rows = $this->baseQuery($start, $end, $cabangId)
             ->join('financial_categories', 'financial_categories.id', '=', 'financial_transactions.category_id')
+            ->leftJoin('financial_parent_categories', 'financial_parent_categories.id', '=', 'financial_categories.parent_category_id')
             ->selectRaw('financial_categories.name as category_name')
-            ->selectRaw('financial_categories.group_name as group_name')
+            ->selectRaw('financial_parent_categories.name as parent_name')
             ->selectRaw('financial_transactions.transaction_type as transaction_type')
             ->selectRaw('SUM(financial_transactions.amount) as total')
-            ->groupBy('financial_categories.name', 'financial_categories.group_name', 'financial_transactions.transaction_type')
+            ->groupBy('financial_categories.name', 'financial_parent_categories.name', 'financial_transactions.transaction_type')
             ->get();
 
         $totals = [
@@ -261,7 +262,7 @@ class KeuanganService
             FinancialTransaction::TYPE_EXPENSE => 0,
         ];
 
-        $groups = [
+        $parents = [
             FinancialTransaction::TYPE_INCOME => [],
             FinancialTransaction::TYPE_EXPENSE => [],
         ];
@@ -274,18 +275,18 @@ class KeuanganService
             $total = (int) $row->total;
             $totals[$type] += $total;
 
-            $groupKey = $row->group_name ?: '__none__';
+            $parentKey = $row->parent_name ?: '__none__';
 
-            if (! isset($groups[$type][$groupKey])) {
-                $groups[$type][$groupKey] = [
-                    'label' => $row->group_name,
+            if (! isset($parents[$type][$parentKey])) {
+                $parents[$type][$parentKey] = [
+                    'label' => $row->parent_name,
                     'total' => 0,
                     'items' => [],
                 ];
             }
 
-            $groups[$type][$groupKey]['total'] += $total;
-            $groups[$type][$groupKey]['items'][] = [
+            $parents[$type][$parentKey]['total'] += $total;
+            $parents[$type][$parentKey]['items'][] = [
                 'name' => $row->category_name,
                 'total' => $total,
             ];
@@ -294,11 +295,11 @@ class KeuanganService
         $result = [];
 
         foreach ($totals as $type => $typeTotal) {
-            $typeGroups = array_values($groups[$type]);
+            $typeParents = array_values($parents[$type]);
 
-            foreach ($typeGroups as $index => $group) {
-                $typeGroups[$index]['percentage'] = $typeTotal > 0 ? round($group['total'] / $typeTotal * 100, 1) : 0.0;
-                $typeGroups[$index]['items'] = collect($group['items'])
+            foreach ($typeParents as $index => $parent) {
+                $typeParents[$index]['percentage'] = $typeTotal > 0 ? round($parent['total'] / $typeTotal * 100, 1) : 0.0;
+                $typeParents[$index]['items'] = collect($parent['items'])
                     ->map(fn (array $item): array => [
                         'name' => $item['name'],
                         'total' => $item['total'],
@@ -311,7 +312,7 @@ class KeuanganService
 
             $result[$type] = [
                 'total' => $typeTotal,
-                'groups' => collect($typeGroups)->sortByDesc('total')->values()->all(),
+                'parents' => collect($typeParents)->sortByDesc('total')->values()->all(),
             ];
         }
 

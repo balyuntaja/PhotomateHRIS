@@ -7,8 +7,8 @@ use App\Models\Cabang;
 use App\Models\FinancialCategory;
 use App\Models\FinancialTransaction;
 use App\Models\Karyawan;
-use App\Models\Perusahaan;
 use App\Models\Permission;
+use App\Models\Perusahaan;
 use App\Models\Role;
 use App\Models\SessionReport;
 use App\Models\SessionTransaction;
@@ -102,7 +102,7 @@ class SessionReportFinanceTest extends TestCase
         $this->assertSame(SessionReport::STATUS_APPROVED, $report->fresh()->status);
         $this->assertSame(2, FinancialTransaction::count());
 
-        $cash = FinancialTransaction::where('source_id', $report->id . '-CASH')->firstOrFail();
+        $cash = FinancialTransaction::where('source_id', $report->id.'-CASH')->firstOrFail();
         $this->assertSame(FinancialTransaction::TYPE_INCOME, $cash->transaction_type);
         $this->assertSame($category->id, $cash->category_id);
         $this->assertSame('Ekspansi', $cash->account?->name);
@@ -118,7 +118,7 @@ class SessionReportFinanceTest extends TestCase
         $this->assertSame($this->crew->nama_lengkap, $cash->submitted_by_label);
         $this->assertStringContainsString($report->report_number, (string) $cash->description);
 
-        $qris = FinancialTransaction::where('source_id', $report->id . '-QRIS')->firstOrFail();
+        $qris = FinancialTransaction::where('source_id', $report->id.'-QRIS')->firstOrFail();
         $this->assertSame(45000, $qris->amount);
         $this->assertSame('QRIS', $qris->paymentMethod?->name);
         $this->assertSame($category->id, $qris->category_id);
@@ -132,6 +132,11 @@ class SessionReportFinanceTest extends TestCase
         $this->assertSame(75000, $summary['income']);
 
         Livewire::test(ListFinancialTransactions::class)
+            ->filterTable('periode', [
+                'preset' => KeuanganService::PRESET_CUSTOM,
+                'dari' => '2026-10-01',
+                'sampai' => '2026-10-31',
+            ])
             ->assertCanSeeTableRecords([$cash, $qris])
             ->filterTable('category_id', ['value' => $category->id])
             ->assertCanSeeTableRecords([$cash, $qris]);
@@ -164,12 +169,12 @@ class SessionReportFinanceTest extends TestCase
         $this->assertSame($this->crew->karyawan_id, $transaction->submitted_by);
         $this->assertSame($this->crew->nama_lengkap, $transaction->submitted_by_name);
         $this->assertSame(
-            'Rekap Sesi ' . $report->report_number . ' · Express Sharing Profit · Gabungan',
+            'Rekap Sesi '.$report->report_number.' · Express Sharing Profit · Gabungan',
             $transaction->description
         );
         $this->assertSame(0, FinancialTransaction::withTrashed()->whereIn('source_id', [
-            $report->id . '-CASH',
-            $report->id . '-QRIS',
+            $report->id.'-CASH',
+            $report->id.'-QRIS',
         ])->count());
 
         $summary = app(KeuanganService::class)->summary(
@@ -181,6 +186,11 @@ class SessionReportFinanceTest extends TestCase
         $this->assertSame(75000, $summary['income']);
 
         Livewire::test(ListFinancialTransactions::class)
+            ->filterTable('periode', [
+                'preset' => KeuanganService::PRESET_CUSTOM,
+                'dari' => '2026-10-01',
+                'sampai' => '2026-10-31',
+            ])
             ->assertCanSeeTableRecords([$transaction])
             ->assertSee('Gabungan');
     }
@@ -208,7 +218,7 @@ class SessionReportFinanceTest extends TestCase
         $this->assertNull($transaction->payment_method_id);
         $this->assertSame('Gabungan', $transaction->payment_method_label);
         $this->assertSame(
-            'Rekap Sesi ' . $report->report_number . ' · Express Sharing Profit · Gabungan',
+            'Rekap Sesi '.$report->report_number.' · Express Sharing Profit · Gabungan',
             $transaction->description
         );
     }
@@ -257,7 +267,7 @@ class SessionReportFinanceTest extends TestCase
 
         $transaction = FinancialTransaction::firstOrFail();
 
-        $this->assertSame($report->id . '-QRIS', $transaction->source_id);
+        $this->assertSame($report->id.'-QRIS', $transaction->source_id);
         $this->assertSame(25000, $transaction->amount);
         $this->assertSame('Pendapatan Booth', $transaction->category?->name);
         $this->assertSame('QRIS', $transaction->payment_method_label);
@@ -325,7 +335,7 @@ class SessionReportFinanceTest extends TestCase
             'category_id' => $this->pendapatanBoothCategory()->id,
             'transaction_date' => '2026-10-11',
             'source_type' => SessionReportFinancialService::SOURCE,
-            'source_id' => $report->id . '-CASH',
+            'source_id' => $report->id.'-CASH',
         ]);
 
         try {
@@ -420,13 +430,13 @@ class SessionReportFinanceTest extends TestCase
         $this->assertNull($transaction->payment_method_id);
         $this->assertSame('2026-10-11', $transaction->transaction_date->toDateString());
         $this->assertSame(FinancialTransaction::PAYMENT_STATUS_LUNAS, $transaction->payment_status);
-        $this->assertSame('Rekap Sesi ' . $report->report_number . ' · Newspaper Janus', $transaction->description);
+        $this->assertSame('Rekap Sesi '.$report->report_number.' · Newspaper Janus', $transaction->description);
         $this->assertSame($this->supervisor->karyawan_id, $transaction->created_by);
         $this->assertSame($this->crew->karyawan_id, $transaction->submitted_by);
         $this->assertSame($this->crew->nama_lengkap, $transaction->submitted_by_name);
 
-        $this->assertDatabaseMissing('financial_transactions', ['source_id' => $report->id . '-CASH']);
-        $this->assertDatabaseMissing('financial_transactions', ['source_id' => $report->id . '-QRIS']);
+        $this->assertDatabaseMissing('financial_transactions', ['source_id' => $report->id.'-CASH']);
+        $this->assertDatabaseMissing('financial_transactions', ['source_id' => $report->id.'-QRIS']);
 
         $summary = app(KeuanganService::class)->summary(
             \Illuminate\Support\Carbon::parse('2026-10-01'),
@@ -437,6 +447,11 @@ class SessionReportFinanceTest extends TestCase
         $this->assertSame(120000, $summary['income']);
 
         Livewire::test(ListFinancialTransactions::class)
+            ->filterTable('periode', [
+                'preset' => KeuanganService::PRESET_CUSTOM,
+                'dari' => '2026-10-01',
+                'sampai' => '2026-10-31',
+            ])
             ->assertCanSeeTableRecords([$transaction])
             ->filterTable('category_id', ['value' => $this->pendapatanBoothCategory()->id])
             ->assertCanSeeTableRecords([$transaction]);
@@ -525,7 +540,7 @@ class SessionReportFinanceTest extends TestCase
             'category_id' => $this->pendapatanBoothCategory()->id,
             'transaction_date' => '2026-10-11',
             'source_type' => SessionReportFinancialService::SOURCE,
-            'source_id' => $report->id . '-CASH',
+            'source_id' => $report->id.'-CASH',
         ]);
 
         try {
@@ -592,7 +607,7 @@ class SessionReportFinanceTest extends TestCase
             'role_id' => $roleId,
             'perusahaan_id' => 'P0001',
             'nik' => str_pad((string) crc32($karyawanId), 12, '0', STR_PAD_LEFT),
-            'nama_lengkap' => $roleName . ' Uji',
+            'nama_lengkap' => $roleName.' Uji',
             'email' => $email,
             'password' => bcrypt('password'),
             'tanggal_lahir' => '1990-01-01',

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\FinancialCategoryResource\Pages;
 
 use App\Filament\Resources\FinancialCategoryResource;
+use App\Filament\Resources\FinancialParentCategoryResource;
 use App\Filament\Resources\Pages\ListRecords;
 use Filament\Actions;
 
@@ -16,12 +17,19 @@ class ListFinancialCategories extends ListRecords
     {
         return [
             Actions\CreateAction::make()
-                ->label('Tambah Kategori')
+                ->label('Tambah Sub Kategori')
                 ->icon('heroicon-o-plus')
-                ->modalHeading('Tambah Kategori')
+                ->modalHeading('Tambah Sub Kategori')
                 ->modalSubmitActionLabel('Simpan')
                 ->createAnother(false)
-                ->successNotificationTitle('Kategori berhasil disimpan.'),
+                ->successNotificationTitle('Sub kategori berhasil disimpan.'),
+
+            Actions\Action::make('kategori_utama')
+                ->label('Kelola Kategori Utama')
+                ->icon('heroicon-o-folder')
+                ->color('gray')
+                ->url(fn (): string => FinancialParentCategoryResource::getUrl())
+                ->authorize(fn (): bool => FinancialParentCategoryResource::canViewAny()),
         ];
     }
 }

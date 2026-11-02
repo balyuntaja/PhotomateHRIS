@@ -6,6 +6,7 @@ use App\Filament\Forms\Components\EvidenceUpload;
 use App\Filament\Resources\FinancialTransactionResource\Pages;
 use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
+use App\Models\FinancialParentCategory;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
 use App\Services\ExpressRekapService;
@@ -14,6 +15,7 @@ use App\Services\KeuanganService;
 use App\Services\LuminashImportService;
 use App\Services\LuminashRekapService;
 use App\Utils\RupiahHelper;
+use Closure;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -61,7 +63,7 @@ class FinancialTransactionResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['category', 'account', 'party', 'paymentMethod', 'creator', 'submitter', 'cabang']);
+        return parent::getEloquentQuery()->with(['category.parentCategory', 'account', 'party', 'paymentMethod', 'creator', 'submitter', 'cabang']);
     }
 
     public static function sourceLabel(?string $state): string
@@ -119,22 +121,17 @@ class FinancialTransactionResource extends Resource
                         ->default(FinancialTransaction::TYPE_INCOME)
                         ->required()
                         ->live()
-                        ->afterStateUpdated(fn (Set $set) => $set('category_id', null))
+                        ->afterStateUpdated(function (Set $set): void {
+                            $set('parent_category_id', null);
+                            $set('category_id', null);
+                        })
                         ->columnSpanFull(),
 
                     self::amountInput(),
 
-                    Forms\Components\Select::make('category_id')
-                        ->label('Kategori')
-                        ->options(fn (Get $get): array => FinancialCategory::query()
-                            ->ofType($get('transaction_type') ?: FinancialTransaction::TYPE_INCOME)
-                            ->active()
-                            ->orderBy('name')
-                            ->pluck('name', 'id')
-                            ->all())
-                        ->searchable()
-                        ->required()
-                        ->validationMessages(['required' => 'Kategori wajib dipilih.']),
+                    self::parentCategoryInput(),
+
+                    self::categoryInput(),
 
                     Forms\Components\DatePicker::make('transaction_date')
                         ->label('Tanggal Transaksi')
@@ -203,6 +200,92 @@ class FinancialTransactionResource extends Resource
             ]);
     }
 
+    public static function parentCategoryInput(): Forms\Components\Select
+    {
+        return Forms\Components\Select::make('parent_category_id')
+            ->label('Kategori Utama')
+            ->options(function (Get $get): array {
+                $type = $get('transaction_type') ?: FinancialTransaction::TYPE_INCOME;
+                $selectedParentId = $get('parent_category_id');
+
+                return FinancialParentCategory::query()
+                    ->where(function (Builder $query) use ($type, $selectedParentId): void {
+                        $query->where(function (Builder $query) use ($type): void {
+                            $query->where('is_active', true)
+                                ->whereHas('subcategories', function (Builder $query) use ($type): void {
+                                    $query->where('transaction_type', $type)
+                                        ->where('is_active', true);
+                                });
+                        });
+
+                        if (filled($selectedParentId)) {
+                            $query->orWhere('id', $selectedParentId);
+                        }
+                    })
+                    ->orderBy('name')
+                    ->pluck('name', 'id')
+                    ->all();
+            })
+            ->searchable()
+            ->required()
+            ->live()
+            ->afterStateUpdated(fn (Set $set) => $set('category_id', null))
+            ->dehydrated(false)
+            ->validationMessages([
+                'required' => 'Kategori utama wajib dipilih.',
+            ]);
+    }
+
+    public static function categoryInput(): Forms\Components\Select
+    {
+        return Forms\Components\Select::make('category_id')
+            ->label('Sub Kategori')
+            ->options(function (Get $get): array {
+                $parentId = $get('parent_category_id');
+                $type = $get('transaction_type') ?: FinancialTransaction::TYPE_INCOME;
+
+                if (blank($parentId)) {
+                    return [];
+                }
+
+                $selectedCategoryId = $get('category_id');
+
+                return FinancialCategory::query()
+                    ->where('parent_category_id', $parentId)
+                    ->ofType($type)
+                    ->where(function (Builder $query) use ($selectedCategoryId): void {
+                        $query->where('is_active', true);
+
+                        if (filled($selectedCategoryId)) {
+                            $query->orWhere('id', $selectedCategoryId);
+                        }
+                    })
+                    ->orderBy('name')
+                    ->pluck('name', 'id')
+                    ->all();
+            })
+            ->searchable()
+            ->required()
+            ->disabled(fn (Get $get): bool => blank($get('parent_category_id')))
+            ->rule(fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                $parentId = $get('parent_category_id');
+                $type = $get('transaction_type') ?: FinancialTransaction::TYPE_INCOME;
+
+                $valid = FinancialCategory::query()
+                    ->whereKey($value)
+                    ->where('parent_category_id', $parentId)
+                    ->ofType($type)
+                    ->exists();
+
+                if (! $valid) {
+                    $fail('Sub kategori tidak sesuai dengan kategori utama dan jenis transaksi.');
+                }
+            })
+            ->validationMessages([
+                'required' => 'Sub kategori wajib dipilih.',
+            ]);
+    }
+
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([
@@ -219,8 +302,12 @@ class FinancialTransactionResource extends Resource
                         ->weight('bold')
                         ->color(fn (FinancialTransaction $record): string => $record->is_income ? 'success' : 'danger'),
 
+                    Infolists\Components\TextEntry::make('category.parentCategory.name')
+                        ->label('Kategori Utama')
+                        ->placeholder('Belum dipetakan'),
+
                     Infolists\Components\TextEntry::make('category.name')
-                        ->label('Kategori')
+                        ->label('Sub Kategori')
                         ->placeholder('-'),
 
                     Infolists\Components\TextEntry::make('transaction_date_label')
@@ -347,8 +434,15 @@ class FinancialTransactionResource extends Resource
                     ->label('Dibayarkan / Disubmit Oleh')
                     ->toggleable(),
 
+                Tables\Columns\TextColumn::make('category.parentCategory.name')
+                    ->label('Kategori Utama')
+                    ->placeholder('Belum dipetakan')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('category.name')
-                    ->label('Kategori')
+                    ->label('Sub Kategori')
                     ->searchable()
                     ->sortable(),
 
@@ -411,8 +505,27 @@ class FinancialTransactionResource extends Resource
                     ->searchable()
                     ->preload(),
 
+                Tables\Filters\SelectFilter::make('parent_category_id')
+                    ->label('Kategori Utama')
+                    ->options(fn (): array => FinancialParentCategory::query()
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->searchable()
+                    ->query(function (Builder $query, array $data): Builder {
+                        $parentId = $data['value'] ?? null;
+
+                        return $query->when(
+                            filled($parentId),
+                            fn (Builder $query): Builder => $query->whereHas(
+                                'category',
+                                fn (Builder $query): Builder => $query->where('parent_category_id', $parentId)
+                            )
+                        );
+                    }),
+
                 Tables\Filters\SelectFilter::make('category_id')
-                    ->label('Kategori')
+                    ->label('Sub Kategori')
                     ->relationship('category', 'name')
                     ->searchable()
                     ->preload(),
@@ -487,6 +600,11 @@ class FinancialTransactionResource extends Resource
                     ->hidden(fn (FinancialTransaction $record): bool => app(ExpressRekapService::class)->isRekap($record))
                     ->modalHeading('Edit Transaksi')
                     ->modalSubmitActionLabel('Simpan Perubahan')
+                    ->mutateRecordDataUsing(function (array $data, FinancialTransaction $record): array {
+                        $data['parent_category_id'] = $record->category?->parent_category_id;
+
+                        return $data;
+                    })
                     ->mutateFormDataUsing(function (array $data): array {
                         $upload = $data['evidence_upload'] ?? null;
 
@@ -565,7 +683,7 @@ class FinancialTransactionResource extends Resource
                     $data['sampai'] ?? null,
                 );
 
-                return ['periode' => 'Periode: ' . $period['label']];
+                return ['periode' => 'Periode: '.$period['label']];
             });
     }
 

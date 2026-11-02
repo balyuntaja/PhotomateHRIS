@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
+use App\Models\FinancialParentCategory;
 use App\Models\FinancialTransaction;
 use App\Models\Invoice;
 use App\Models\Karyawan;
@@ -113,16 +114,27 @@ class InvoiceFinancialService
      */
     private function incomeCategory(): FinancialCategory
     {
-        return FinancialCategory::firstOrCreate(
+        $parent = FinancialParentCategory::firstOrCreate(
+            ['name' => FinancialParentCategory::NAME_INCOME],
+            ['is_active' => true],
+        );
+
+        $category = FinancialCategory::firstOrCreate(
             [
                 'name' => self::CATEGORY_NAME,
                 'transaction_type' => FinancialTransaction::TYPE_INCOME,
             ],
             [
-                'group_name' => null,
+                'parent_category_id' => $parent->id,
                 'is_active' => true,
             ],
         );
+
+        if (blank($category->parent_category_id)) {
+            $category->update(['parent_category_id' => $parent->id]);
+        }
+
+        return $category;
     }
 
     /**
@@ -134,8 +146,8 @@ class InvoiceFinancialService
 
         if (! $account) {
             throw new RuntimeException(
-                'Akun "' . self::ACCOUNT_NAME . '" tidak ditemukan pada master akun keuangan. '
-                . 'Tambahkan akun tersebut terlebih dahulu.'
+                'Akun "'.self::ACCOUNT_NAME.'" tidak ditemukan pada master akun keuangan. '
+                .'Tambahkan akun tersebut terlebih dahulu.'
             );
         }
 
@@ -157,6 +169,6 @@ class InvoiceFinancialService
 
     private function description(Invoice $invoice): string
     {
-        return 'Pelunasan Invoice ' . $invoice->invoice_number . ' - ' . $invoice->client_name;
+        return 'Pelunasan Invoice '.$invoice->invoice_number.' - '.$invoice->client_name;
     }
 }

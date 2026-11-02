@@ -5,11 +5,9 @@ namespace App\Filament\Pages;
 use App\Filament\Forms\Components\EvidenceUpload;
 use App\Filament\Resources\FinancialTransactionResource;
 use App\Models\FinancialAccount;
-use App\Models\FinancialCategory;
 use App\Models\FinancialParty;
 use App\Models\FinancialTransaction;
 use App\Utils\MonthHelper;
-use Closure;
 use Filament\Actions\Action;
 use Filament\Forms;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -26,8 +24,8 @@ use Illuminate\Support\Facades\Gate;
 
 class KeuanganInputTransaksi extends Page implements HasForms
 {
-    use InteractsWithForms;
     use InteractsWithFormActions;
+    use InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-plus-circle';
 
@@ -109,32 +107,6 @@ class KeuanganInputTransaksi extends Page implements HasForms
                             ->required()
                             ->validationMessages(['required' => 'Tanggal transaksi wajib diisi.']),
 
-                        Forms\Components\Select::make('category_id')
-                            ->label('Kategori')
-                            ->options(fn (Get $get): array => FinancialCategory::query()
-                                ->ofType($get('transaction_type') ?: FinancialTransaction::TYPE_INCOME)
-                                ->active()
-                                ->orderBy('name')
-                                ->pluck('name', 'id')
-                                ->all())
-                            ->searchable()
-                            ->required()
-                            ->exists('financial_categories', 'id')
-                            ->rule(fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-                                $valid = FinancialCategory::query()
-                                    ->whereKey($value)
-                                    ->ofType($get('transaction_type') ?: FinancialTransaction::TYPE_INCOME)
-                                    ->exists();
-
-                                if (! $valid) {
-                                    $fail('Kategori tidak sesuai dengan jenis transaksi.');
-                                }
-                            })
-                            ->validationMessages([
-                                'required' => 'Kategori wajib dipilih.',
-                                'exists' => 'Kategori tidak valid.',
-                            ]),
-
                         Forms\Components\ToggleButtons::make('transaction_type')
                             ->label('Jenis Transaksi')
                             ->options(FinancialTransaction::TYPE_LABELS)
@@ -151,8 +123,15 @@ class KeuanganInputTransaksi extends Page implements HasForms
                             ->required()
                             ->in(array_keys(FinancialTransaction::TYPE_LABELS))
                             ->live()
-                            ->afterStateUpdated(fn (Set $set) => $set('category_id', null))
+                            ->afterStateUpdated(function (Set $set): void {
+                                $set('parent_category_id', null);
+                                $set('category_id', null);
+                            })
                             ->validationMessages(['in' => 'Jenis transaksi tidak valid.']),
+
+                        FinancialTransactionResource::parentCategoryInput(),
+
+                        FinancialTransactionResource::categoryInput(),
 
                         FinancialTransactionResource::amountInput(),
 
@@ -286,7 +265,7 @@ class KeuanganInputTransaksi extends Page implements HasForms
 
         Notification::make()
             ->title('Transaksi berhasil disimpan.')
-            ->body($transaction->type_label . ' ' . $transaction->formatted_amount . ' · ' . ($transaction->category?->name ?? '-'))
+            ->body($transaction->type_label.' '.$transaction->formatted_amount.' · '.($transaction->category?->name ?? '-'))
             ->success()
             ->send();
 
@@ -324,6 +303,7 @@ class KeuanganInputTransaksi extends Page implements HasForms
             'period' => now()->format('Y-m'),
             'transaction_date' => now(),
             'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'parent_category_id' => null,
             'category_id' => null,
             'amount' => null,
             'party_id' => null,

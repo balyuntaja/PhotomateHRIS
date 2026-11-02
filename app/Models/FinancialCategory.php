@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FinancialCategory extends Model
@@ -18,8 +19,8 @@ class FinancialCategory extends Model
     protected $table = 'financial_categories';
 
     protected $fillable = [
+        'parent_category_id',
         'name',
-        'group_name',
         'transaction_type',
         'is_active',
     ];
@@ -34,6 +35,11 @@ class FinancialCategory extends Model
             self::TYPE_INCOME => 'Pemasukan',
             self::TYPE_EXPENSE => 'Pengeluaran',
         ];
+    }
+
+    public function parentCategory(): BelongsTo
+    {
+        return $this->belongsTo(FinancialParentCategory::class, 'parent_category_id');
     }
 
     public function transactions(): HasMany

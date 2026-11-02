@@ -34,7 +34,7 @@ class FinancialAuditLog extends Model
     protected const FIELD_LABELS = [
         'transaction_type' => 'Jenis Transaksi',
         'amount' => 'Nominal',
-        'category_id' => 'Kategori',
+        'category_id' => 'Sub Kategori',
         'account_id' => 'Akun',
         'party_id' => 'Dibayarkan / Diterima Oleh',
         'cabang_id' => 'Cabang',
@@ -138,12 +138,12 @@ class FinancialAuditLog extends Model
             return (string) $value;
         }
 
-        return $date->day . ' ' . MonthHelper::formatPeriod((int) $date->month, (int) $date->year);
+        return $date->day.' '.MonthHelper::formatPeriod((int) $date->month, (int) $date->year);
     }
 
     protected function lookup(string $type, mixed $id): string
     {
-        $key = $type . ':' . $id;
+        $key = $type.':'.$id;
 
         if (array_key_exists($key, static::$lookupCache)) {
             return static::$lookupCache[$key];

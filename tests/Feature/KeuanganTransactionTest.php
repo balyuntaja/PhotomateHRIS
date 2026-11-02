@@ -3,18 +3,21 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\KeuanganInputTransaksi;
+use App\Filament\Resources\FinancialCategoryResource\Pages\ListFinancialCategories;
+use App\Filament\Resources\FinancialParentCategoryResource\Pages\ListFinancialParentCategories;
 use App\Filament\Resources\FinancialTransactionResource;
 use App\Filament\Resources\FinancialTransactionResource\Pages\ListFinancialTransactions;
 use App\Models\Cabang;
 use App\Models\FinancialAccount;
 use App\Models\FinancialAuditLog;
 use App\Models\FinancialCategory;
+use App\Models\FinancialParentCategory;
 use App\Models\FinancialParty;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
 use App\Models\Karyawan;
-use App\Models\Perusahaan;
 use App\Models\Permission;
+use App\Models\Perusahaan;
 use App\Models\Role;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -106,6 +109,72 @@ class KeuanganTransactionTest extends TestCase
             ->assertActionHasUrl('tambah_transaksi', KeuanganInputTransaksi::getUrl());
     }
 
+    public function test_halaman_kategori_keuangan_menampilkan_parent_sub_kategori_dan_filter(): void
+    {
+        $admin = $this->makeUser('K0010', 'Admin', 'R01', 'admin.kategori@photomate.id', []);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ListFinancialCategories::class)
+            ->assertSuccessful()
+            ->assertActionVisible('kategori_utama')
+            ->assertTableColumnExists('parentCategory.name')
+            ->assertTableColumnExists('name')
+            ->assertTableFilterExists('parent_category_id')
+            ->assertTableFilterExists('transaction_type')
+            ->searchTable('Tinta')
+            ->assertCanSeeTableRecords([$this->expenseCategory])
+            ->searchTable('Persediaan')
+            ->assertCanSeeTableRecords([$this->expenseCategory]);
+    }
+
+    public function test_halaman_kategori_keuangan_dapat_difilter_berdasarkan_kategori_utama(): void
+    {
+        $admin = $this->makeUser('K0012', 'Admin', 'R01', 'admin.kategori.filter@photomate.id', []);
+
+        $this->actingAs($admin);
+
+        $transportasi = FinancialParentCategory::query()->where('name', 'Transportasi')->firstOrFail();
+        $bensin = FinancialCategory::query()->where('name', 'Bensin')->firstOrFail();
+
+        Livewire::test(ListFinancialCategories::class)
+            ->filterTable('parent_category_id', $transportasi->id)
+            ->assertCanSeeTableRecords([$bensin])
+            ->assertCanNotSeeTableRecords([$this->expenseCategory]);
+    }
+
+    public function test_tabel_transaksi_dapat_difilter_berdasarkan_kategori_utama(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $income = $this->makeTransaction(100000, $this->incomeCategory->id);
+        $expense = $this->makeTransaction(200000, $this->expenseCategory->id);
+        $persediaan = FinancialParentCategory::query()->where('name', 'Persediaan')->firstOrFail();
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->filterTable('parent_category_id', $persediaan->id)
+            ->assertCanSeeTableRecords([$expense])
+            ->assertCanNotSeeTableRecords([$income]);
+    }
+
+    public function test_halaman_kategori_utama_menampilkan_jumlah_sub_kategori_dan_menolak_hapus_parent_terpakai(): void
+    {
+        $admin = $this->makeUser('K0011', 'Admin', 'R01', 'admin.kategori.utama@photomate.id', []);
+
+        $this->actingAs($admin);
+
+        $persediaan = FinancialParentCategory::query()->where('name', 'Persediaan')->firstOrFail();
+
+        Livewire::test(ListFinancialParentCategories::class)
+            ->assertSuccessful()
+            ->assertCanSeeTableRecords([$persediaan])
+            ->assertTableColumnExists('subcategories_count')
+            ->callTableAction('delete', $persediaan)
+            ->assertNotified();
+
+        $this->assertDatabaseHas('financial_parent_categories', ['id' => $persediaan->id]);
+    }
+
     public function test_field_nominal_modal_edit_transaksi_memakai_mask_ribuan_indonesia(): void
     {
         $this->actingAs($this->managerFinance);
@@ -116,6 +185,20 @@ class KeuanganTransactionTest extends TestCase
             ->mountTableAction('edit', $transaction)
             ->assertTableActionDataSet(['amount' => '1.500.000'])
             ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"');
+    }
+
+    public function test_modal_edit_transaksi_mengisi_kategori_utama_dari_sub_kategori_tersimpan(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $transaction = $this->makeTransaction(1500000, $this->expenseCategory->id);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountTableAction('edit', $transaction)
+            ->assertTableActionDataSet([
+                'parent_category_id' => $this->expenseCategory->parent_category_id,
+                'category_id' => $this->expenseCategory->id,
+            ]);
     }
 
     public function test_field_nominal_halaman_input_transaksi_memakai_mask_ribuan_indonesia(): void
@@ -329,6 +412,7 @@ class KeuanganTransactionTest extends TestCase
                 'period' => $periode,
                 'transaction_date' => $tanggalTransaksi,
                 'transaction_type' => FinancialTransaction::TYPE_INCOME,
+                'parent_category_id' => $this->incomeCategory->parent_category_id,
                 'category_id' => $this->incomeCategory->id,
                 'amount' => '2.000.000',
                 'party_id' => $party->id,
@@ -340,6 +424,7 @@ class KeuanganTransactionTest extends TestCase
             ->assertNotified()
             ->assertNoRedirect()
             ->assertSet('data.amount', null)
+            ->assertSet('data.parent_category_id', null)
             ->assertSet('data.category_id', null)
             ->assertSet('data.description', null)
             ->assertSet('data.party_id', null)
@@ -517,7 +602,7 @@ class KeuanganTransactionTest extends TestCase
             'role_id' => $roleId,
             'perusahaan_id' => 'P0001',
             'nik' => str_pad((string) crc32($karyawanId), 12, '0', STR_PAD_LEFT),
-            'nama_lengkap' => $roleName . ' Uji',
+            'nama_lengkap' => $roleName.' Uji',
             'email' => $email,
             'password' => bcrypt('password'),
             'tanggal_lahir' => '1990-01-01',
