@@ -65,7 +65,10 @@ const Faq: React.FC = () => {
           {((window as any).CMS_DATA?.faqs?.length > 0) ? (
             (window as any).CMS_DATA.faqs.map((faq: any) => (
               <FaqItem key={faq.id} title={faq.question}>
-                <div className="pb-5" dangerouslySetInnerHTML={{ __html: faq.answer }} />
+                <div
+                  className="whitespace-pre-line pb-5"
+                  dangerouslySetInnerHTML={{ __html: faq.answer }}
+                />
               </FaqItem>
             ))
           ) : (

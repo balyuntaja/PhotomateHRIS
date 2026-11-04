@@ -75,15 +75,12 @@ function BoothCard({
                   : "bg-linear-to-br from-[#e9edf4] to-[#d6deea]"
                 }`}
             >
-              <div className="text-center">
-                <span className="text-6xl">
-                  {isCollaborate ? "🤝" : "✨"}
-                </span>
+              <div className="px-6 text-center">
                 <p
-                  className={`mt-3 text-sm font-semibold tracking-widest ${isCollaborate ? "text-white/80" : "text-primary/70"
+                  className={`text-balance text-2xl font-extrabold leading-snug tracking-tight md:text-3xl ${isCollaborate ? "text-white" : "text-primary/80"
                     }`}
                 >
-                  {isCollaborate ? "GROW WITH PHOTOMATE" : "SOMETHING NEW"}
+                  {isCollaborate ? "Let's Collaborate" : "Coming Soon"}
                 </p>
               </div>
             </div>
