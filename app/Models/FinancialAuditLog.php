@@ -35,6 +35,7 @@ class FinancialAuditLog extends Model
         'transaction_type' => 'Jenis Transaksi',
         'amount' => 'Nominal',
         'category_id' => 'Sub Kategori',
+        'parent_category_id' => 'Kategori Utama',
         'account_id' => 'Akun',
         'party_id' => 'Dibayarkan / Diterima Oleh',
         'cabang_id' => 'Cabang',
@@ -119,6 +120,7 @@ class FinancialAuditLog extends Model
             'transaction_type' => FinancialTransaction::TYPE_LABELS[$value] ?? (string) $value,
             'payment_status' => FinancialTransaction::PAYMENT_STATUS_LABELS[$value] ?? (string) $value,
             'category_id' => $this->lookup('category', $value),
+            'parent_category_id' => $this->lookup('parent_category', $value),
             'account_id' => $this->lookup('account', $value),
             'party_id' => $this->lookup('party', $value),
             'cabang_id' => $this->lookup('cabang', $value),
@@ -151,6 +153,7 @@ class FinancialAuditLog extends Model
 
         $name = match ($type) {
             'category' => FinancialCategory::find($id)?->name,
+            'parent_category' => FinancialParentCategory::find($id)?->name,
             'account' => FinancialAccount::find($id)?->name,
             'party' => FinancialParty::find($id)?->name,
             'cabang' => Cabang::find($id)?->nama_cabang,

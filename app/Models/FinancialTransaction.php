@@ -51,6 +51,7 @@ class FinancialTransaction extends Model
         'transaction_type',
         'amount',
         'category_id',
+        'parent_category_id',
         'account_id',
         'party_id',
         'cabang_id',
@@ -88,6 +89,20 @@ class FinancialTransaction extends Model
 
     protected static function booted(): void
     {
+        static::saving(function (self $transaction): void {
+            if (blank($transaction->category_id)) {
+                return;
+            }
+
+            $parentId = FinancialCategory::query()
+                ->whereKey($transaction->category_id)
+                ->value('parent_category_id');
+
+            if (filled($parentId)) {
+                $transaction->parent_category_id = $parentId;
+            }
+        });
+
         static::creating(function (self $transaction): void {
             $transaction->created_by ??= auth()->id();
 
@@ -139,6 +154,11 @@ class FinancialTransaction extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(FinancialCategory::class, 'category_id');
+    }
+
+    public function parentCategory(): BelongsTo
+    {
+        return $this->belongsTo(FinancialParentCategory::class, 'parent_category_id');
     }
 
     public function account(): BelongsTo
@@ -204,6 +224,13 @@ class FinancialTransaction extends Model
     public function getTypeLabelAttribute(): string
     {
         return self::TYPE_LABELS[$this->transaction_type] ?? $this->transaction_type;
+    }
+
+    public function getCategoryLabelAttribute(): string
+    {
+        return $this->category?->name
+            ?? $this->parentCategory?->name
+            ?? '-';
     }
 
     public function getIsIncomeAttribute(): bool
@@ -339,7 +366,7 @@ class FinancialTransaction extends Model
             return '-';
         }
 
-        return $this->transaction_date->day . ' ' . MonthHelper::formatPeriod(
+        return $this->transaction_date->day.' '.MonthHelper::formatPeriod(
             (int) $this->transaction_date->month,
             (int) $this->transaction_date->year
         );
@@ -351,7 +378,7 @@ class FinancialTransaction extends Model
             return null;
         }
 
-        return asset('storage/' . $this->evidence_path);
+        return asset('storage/'.$this->evidence_path);
     }
 
     public function getEvidenceIsImageAttribute(): bool
@@ -386,6 +413,7 @@ class FinancialTransaction extends Model
             'transaction_type',
             'amount',
             'category_id',
+            'parent_category_id',
             'account_id',
             'party_id',
             'cabang_id',
@@ -420,6 +448,7 @@ class FinancialTransaction extends Model
         foreach ([
             'amount',
             'category_id',
+            'parent_category_id',
             'account_id',
             'party_id',
             'payment_method_id',
@@ -441,8 +470,8 @@ class FinancialTransaction extends Model
         }
 
         return $dateTime->day
-            . ' ' . MonthHelper::formatPeriod((int) $dateTime->month, (int) $dateTime->year)
-            . ' ' . $dateTime->format('H:i');
+            .' '.MonthHelper::formatPeriod((int) $dateTime->month, (int) $dateTime->year)
+            .' '.$dateTime->format('H:i');
     }
 
     /**

@@ -27,4 +27,9 @@ class FinancialParentCategory extends Model
     {
         return $this->hasMany(FinancialCategory::class, 'parent_category_id');
     }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(FinancialTransaction::class, 'parent_category_id');
+    }
 }

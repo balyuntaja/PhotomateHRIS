@@ -248,8 +248,8 @@ class KeuanganService
     public function categoryBreakdown(CarbonInterface $start, CarbonInterface $end, ?string $cabangId = null): array
     {
         $rows = $this->baseQuery($start, $end, $cabangId)
-            ->join('financial_categories', 'financial_categories.id', '=', 'financial_transactions.category_id')
-            ->leftJoin('financial_parent_categories', 'financial_parent_categories.id', '=', 'financial_categories.parent_category_id')
+            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'financial_transactions.category_id')
+            ->leftJoin('financial_parent_categories', 'financial_parent_categories.id', '=', 'financial_transactions.parent_category_id')
             ->selectRaw('financial_categories.name as category_name')
             ->selectRaw('financial_parent_categories.name as parent_name')
             ->selectRaw('financial_transactions.transaction_type as transaction_type')
@@ -287,7 +287,7 @@ class KeuanganService
 
             $parents[$type][$parentKey]['total'] += $total;
             $parents[$type][$parentKey]['items'][] = [
-                'name' => $row->category_name,
+                'name' => $row->category_name ?? 'Tanpa Sub Kategori',
                 'total' => $total,
             ];
         }
@@ -357,7 +357,7 @@ class KeuanganService
         int $limit = 8
     ): Collection {
         return $this->baseQuery($start, $end, $cabangId)
-            ->with(['category', 'cabang', 'paymentMethod'])
+            ->with(['category', 'parentCategory', 'cabang', 'paymentMethod'])
             ->orderByDesc('transaction_date')
             ->orderByDesc('id')
             ->limit($limit)
@@ -371,7 +371,7 @@ class KeuanganService
         ?int $accountId = null
     ): Builder {
         return $this->baseQuery($start, $end, $cabangId, $accountId)
-            ->with(['category', 'account', 'party', 'paymentMethod', 'submitter', 'creator', 'cabang'])
+            ->with(['category', 'parentCategory', 'account', 'party', 'paymentMethod', 'submitter', 'creator', 'cabang'])
             ->orderBy('transaction_date')
             ->orderBy('id');
     }
@@ -387,7 +387,7 @@ class KeuanganService
         ?int $accountId = null
     ): Builder {
         return $this->baseQuery($start, $end, $cabangId, $accountId)
-            ->with(['category', 'account', 'party', 'paymentMethod', 'submitter', 'creator', 'cabang'])
+            ->with(['category', 'parentCategory', 'account', 'party', 'paymentMethod', 'submitter', 'creator', 'cabang'])
             ->orderByDesc('transaction_date')
             ->orderByDesc('created_at')
             ->orderByDesc('id');
@@ -405,7 +405,7 @@ class KeuanganService
             $transaction->transaction_date?->format('Y-m-d') ?? '-',
             $transaction->type_label,
             $transaction->account?->name ?? 'Tanpa Akun',
-            $transaction->category?->name ?? '-',
+            $transaction->category_label,
             $transaction->description ?: '-',
             $transaction->payment_method_label,
             RupiahHelper::format($transaction->amount),

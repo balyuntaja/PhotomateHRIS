@@ -45,7 +45,7 @@ class LatestTransactionsWidget extends TableWidget
         return $table
             ->query(
                 $service->baseQuery($period['start'], $period['end'], $this->filters['cabang_id'] ?? null)
-                    ->with(['category', 'cabang', 'paymentMethod'])
+                    ->with(['category', 'parentCategory', 'cabang', 'paymentMethod'])
                     ->orderByDesc('transaction_date')
                     ->orderByDesc('id')
             )
@@ -56,7 +56,7 @@ class LatestTransactionsWidget extends TableWidget
 
                 Tables\Columns\TextColumn::make('description')
                     ->label('Deskripsi')
-                    ->description(fn (FinancialTransaction $record): ?string => $record->category?->name)
+                    ->description(fn (FinancialTransaction $record): ?string => $record->category_label)
                     ->placeholder('-')
                     ->limit(40)
                     ->wrap(),

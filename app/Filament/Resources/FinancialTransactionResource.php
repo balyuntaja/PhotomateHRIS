@@ -63,7 +63,7 @@ class FinancialTransactionResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['category.parentCategory', 'account', 'party', 'paymentMethod', 'creator', 'submitter', 'cabang']);
+        return parent::getEloquentQuery()->with(['category', 'parentCategory', 'account', 'party', 'paymentMethod', 'creator', 'submitter', 'cabang']);
     }
 
     public static function sourceLabel(?string $state): string
@@ -205,18 +205,11 @@ class FinancialTransactionResource extends Resource
         return Forms\Components\Select::make('parent_category_id')
             ->label('Kategori Utama')
             ->options(function (Get $get): array {
-                $type = $get('transaction_type') ?: FinancialTransaction::TYPE_INCOME;
                 $selectedParentId = $get('parent_category_id');
 
                 return FinancialParentCategory::query()
-                    ->where(function (Builder $query) use ($type, $selectedParentId): void {
-                        $query->where(function (Builder $query) use ($type): void {
-                            $query->where('is_active', true)
-                                ->whereHas('subcategories', function (Builder $query) use ($type): void {
-                                    $query->where('transaction_type', $type)
-                                        ->where('is_active', true);
-                                });
-                        });
+                    ->where(function (Builder $query) use ($selectedParentId): void {
+                        $query->where('is_active', true);
 
                         if (filled($selectedParentId)) {
                             $query->orWhere('id', $selectedParentId);
@@ -229,10 +222,11 @@ class FinancialTransactionResource extends Resource
             ->searchable()
             ->required()
             ->live()
+            ->exists('financial_parent_categories', 'id')
             ->afterStateUpdated(fn (Set $set) => $set('category_id', null))
-            ->dehydrated(false)
             ->validationMessages([
                 'required' => 'Kategori utama wajib dipilih.',
+                'exists' => 'Kategori utama tidak valid.',
             ]);
     }
 
@@ -265,9 +259,13 @@ class FinancialTransactionResource extends Resource
                     ->all();
             })
             ->searchable()
-            ->required()
             ->disabled(fn (Get $get): bool => blank($get('parent_category_id')))
+            ->helperText('Opsional. Pilih sub kategori jika transaksi perlu dirinci.')
             ->rule(fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                if (blank($value)) {
+                    return;
+                }
+
                 $parentId = $get('parent_category_id');
                 $type = $get('transaction_type') ?: FinancialTransaction::TYPE_INCOME;
 
@@ -280,10 +278,7 @@ class FinancialTransactionResource extends Resource
                 if (! $valid) {
                     $fail('Sub kategori tidak sesuai dengan kategori utama dan jenis transaksi.');
                 }
-            })
-            ->validationMessages([
-                'required' => 'Sub kategori wajib dipilih.',
-            ]);
+            });
     }
 
     public static function infolist(Infolist $infolist): Infolist
@@ -302,7 +297,7 @@ class FinancialTransactionResource extends Resource
                         ->weight('bold')
                         ->color(fn (FinancialTransaction $record): string => $record->is_income ? 'success' : 'danger'),
 
-                    Infolists\Components\TextEntry::make('category.parentCategory.name')
+                    Infolists\Components\TextEntry::make('parentCategory.name')
                         ->label('Kategori Utama')
                         ->placeholder('Belum dipetakan'),
 
@@ -434,7 +429,7 @@ class FinancialTransactionResource extends Resource
                     ->label('Dibayarkan / Disubmit Oleh')
                     ->toggleable(),
 
-                Tables\Columns\TextColumn::make('category.parentCategory.name')
+                Tables\Columns\TextColumn::make('parentCategory.name')
                     ->label('Kategori Utama')
                     ->placeholder('Belum dipetakan')
                     ->searchable()
@@ -512,17 +507,10 @@ class FinancialTransactionResource extends Resource
                         ->pluck('name', 'id')
                         ->all())
                     ->searchable()
-                    ->query(function (Builder $query, array $data): Builder {
-                        $parentId = $data['value'] ?? null;
-
-                        return $query->when(
-                            filled($parentId),
-                            fn (Builder $query): Builder => $query->whereHas(
-                                'category',
-                                fn (Builder $query): Builder => $query->where('parent_category_id', $parentId)
-                            )
-                        );
-                    }),
+                    ->query(fn (Builder $query, array $data): Builder => $query->when(
+                        filled($data['value'] ?? null),
+                        fn (Builder $query): Builder => $query->where('parent_category_id', $data['value'])
+                    )),
 
                 Tables\Filters\SelectFilter::make('category_id')
                     ->label('Sub Kategori')
@@ -601,7 +589,8 @@ class FinancialTransactionResource extends Resource
                     ->modalHeading('Edit Transaksi')
                     ->modalSubmitActionLabel('Simpan Perubahan')
                     ->mutateRecordDataUsing(function (array $data, FinancialTransaction $record): array {
-                        $data['parent_category_id'] = $record->category?->parent_category_id;
+                        $data['parent_category_id'] = $record->parent_category_id
+                            ?? $record->category?->parent_category_id;
 
                         return $data;
                     })

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\FinancialCategory;
 use App\Models\FinancialParentCategory;
+use App\Models\FinancialTransaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -87,6 +88,23 @@ class FinancialCategoryHierarchyTest extends TestCase
                 'Mapping parent salah untuk kategori '.$categoryName
             );
         }
+    }
+
+    public function test_transaksi_otomatis_mendapat_kategori_utama_dari_sub_kategori(): void
+    {
+        $category = FinancialCategory::query()
+            ->where('name', 'Tinta')
+            ->where('transaction_type', FinancialCategory::TYPE_EXPENSE)
+            ->firstOrFail();
+
+        $transaction = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+            'amount' => 100000,
+            'category_id' => $category->id,
+            'transaction_date' => now()->toDateString(),
+        ]);
+
+        $this->assertSame($category->parent_category_id, $transaction->parent_category_id);
     }
 
     public function test_kategori_pengeluaran_yang_ambigu_tidak_dipetakan_otomatis(): void

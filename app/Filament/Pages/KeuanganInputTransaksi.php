@@ -265,7 +265,7 @@ class KeuanganInputTransaksi extends Page implements HasForms
 
         Notification::make()
             ->title('Transaksi berhasil disimpan.')
-            ->body($transaction->type_label.' '.$transaction->formatted_amount.' · '.($transaction->category?->name ?? '-'))
+            ->body($transaction->type_label.' '.$transaction->formatted_amount.' · '.$transaction->category_label)
             ->success()
             ->send();
 

@@ -183,6 +183,38 @@ class KeuanganInputTransaksiTest extends TestCase
         $this->assertSame($this->managerFinance->nama_lengkap, $transaction->submitted_by_label);
     }
 
+    public function test_input_transaksi_boleh_disimpan_tanpa_sub_kategori(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $box = FinancialParentCategory::query()->where('name', 'Box')->firstOrFail();
+
+        Livewire::test(KeuanganInputTransaksi::class)
+            ->fillForm([
+                'account_id' => $this->express->id,
+                'period' => Carbon::today()->format('Y-m'),
+                'transaction_date' => Carbon::today()->toDateString(),
+                'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+                'parent_category_id' => $box->id,
+                'category_id' => null,
+                'amount' => '125.000',
+                'party_id' => $this->pihak->id,
+                'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
+            ])
+            ->call('simpan')
+            ->assertHasNoFormErrors()
+            ->assertNotified();
+
+        $transaction = FinancialTransaction::firstOrFail();
+
+        $this->assertNull($transaction->category_id);
+        $this->assertSame($box->id, $transaction->parent_category_id);
+        $this->assertSame('Box', $transaction->category_label);
+
+        Livewire::test(ListFinancialTransactions::class)
+            ->assertCanSeeTableRecords([$transaction]);
+    }
+
     public function test_preview_bukti_transaksi_memakai_url_relatif_same_origin(): void
     {
         $this->assertSame('/storage', config('filesystems.disks.public.url'));
@@ -315,7 +347,7 @@ class KeuanganInputTransaksiTest extends TestCase
         $this->assertSame('Supplier ABC', $transaction->counterparty);
     }
 
-    public function test_input_transaksi_menolak_transaksi_tanpa_akun_kategori_dan_pihak(): void
+    public function test_input_transaksi_menolak_transaksi_tanpa_akun_kategori_utama_dan_pihak(): void
     {
         $this->actingAs($this->managerFinance);
 
@@ -328,7 +360,6 @@ class KeuanganInputTransaksiTest extends TestCase
             ->assertHasFormErrors([
                 'account_id' => 'required',
                 'parent_category_id' => 'required',
-                'category_id' => 'required',
                 'party_id' => 'required',
             ]);
 
@@ -437,6 +468,22 @@ class KeuanganInputTransaksiTest extends TestCase
             ])
             ->set('data.parent_category_id', $transportasi->id)
             ->assertSet('data.category_id', null);
+    }
+
+    public function test_semua_kategori_utama_muncul_di_form_walau_belum_punya_sub_kategori(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $box = FinancialParentCategory::query()->where('name', 'Box')->firstOrFail();
+
+        $this->assertSame(0, $box->subcategories()->count());
+
+        Livewire::test(KeuanganInputTransaksi::class)
+            ->assertSuccessful()
+            ->assertSee('Box')
+            ->assertSee('Konsumsi')
+            ->assertSee('RnD')
+            ->assertSee('Tenant', escape: false);
     }
 
     public function test_input_transaksi_menolak_sub_kategori_dari_kategori_utama_lain(): void

@@ -217,7 +217,7 @@
                             <td>{{ $transaction->transaction_date?->format('d M Y') ?? '-' }}</td>
                             <td>{{ $transaction->type_label }}</td>
                             <td>{{ $transaction->account?->name ?? 'Tanpa Akun' }}</td>
-                            <td>{{ $transaction->category?->name ?? '-' }}</td>
+                            <td>{{ $transaction->category_label }}</td>
                             <td>{{ filled($transaction->description) ? \Illuminate\Support\Str::limit($transaction->description, 70) : '-' }}</td>
                             <td>{{ $transaction->payment_method_label }}</td>
                             <td class="text-right {{ $transaction->is_income ? 'text-income' : 'text-expense' }}">

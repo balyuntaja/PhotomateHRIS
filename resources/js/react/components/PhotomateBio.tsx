@@ -1,6 +1,6 @@
 import { FaInstagram, FaWhatsapp, FaTiktok, FaGlobe } from "react-icons/fa";
 import backgroundPink from "../assets/img/pink.png";
-import logoImg from "../assets/img/logophotomateblue.png";
+import logoImg from "../assets/img/logo.png";
 import putraPutriPertanianImg from "../assets/img/album_photostrip/bio_ppp.png";
 import halalBihalalImg from "../assets/img/album_photostrip/halbi_3c.png";
 import OptimizedImage from "./OptimizedImage";
@@ -9,6 +9,7 @@ import masLanMbakSmanekaImg from "../assets/img/album_photostrip/mas_lan_mbak.pn
 import munas_ftp_ubImg from "../assets/img/album_photostrip/COVER_MUNAS.png";
 import bioSmarihastaImg from "../assets/img/album_photostrip/bio_smarihasta.png";
 import bioSpaceSmanawaImg from "../assets/img/album_photostrip/cover_space.png";
+import backgroundBio from "../assets/img/background_bio.png";
 
 const photostrips = [
   {
@@ -72,9 +73,9 @@ export default function PhotomateBio() {
 
   return (
     <div
-      className="min-h-screen text-primary px-4 py-10"
+      className="min-h-screen text-white px-4 py-10"
       style={{
-        backgroundImage: `url(${backgroundPink})`,
+        backgroundImage: `url(${backgroundBio})`,
         backgroundRepeat: "repeat",
         backgroundPosition: "center",
         backgroundSize: "auto",
@@ -92,7 +93,7 @@ export default function PhotomateBio() {
           />
           <div className="space-y-1">
             <h1 className="text-3xl font-extrabold tracking-wide">{title}</h1>
-            <p className="text-base font-medium leading-relaxed text-primary max-w-md whitespace-pre-line">
+            <p className="text-base font-medium leading-relaxed text-white max-w-md whitespace-pre-line">
               {description}
             </p>
 
@@ -173,7 +174,7 @@ export default function PhotomateBio() {
                     </div>
 
                     {/* Title BELOW */}
-                    <div className="mt-2 text-base font-semibold text-center text-primary">
+                    <div className="mt-2 text-base font-semibold text-center text-white">
                       {item.title}
                     </div>
                   </a>
@@ -191,7 +192,7 @@ export default function PhotomateBio() {
             {whatsappUrl && (
               <a
                 href={whatsappUrl}
-                className="grid grid-cols-[28px_1fr_28px] items-center gap-3 bg-primary text-white px-4 py-4 rounded-xl hover:bg-primary-dark transition"
+                className="grid grid-cols-[28px_1fr_28px] items-center gap-3 bg-[#f5e4bc] text-[#863231] px-4 py-4 rounded-xl hover:bg-primary-dark transition"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -204,7 +205,7 @@ export default function PhotomateBio() {
             {instagramUrl && (
               <a
                 href={instagramUrl}
-                className="grid grid-cols-[28px_1fr_28px] items-center gap-3 bg-primary text-white px-4 py-4 rounded-xl hover:bg-primary-dark transition"
+                className="grid grid-cols-[28px_1fr_28px] items-center gap-3 bg-[#f5e4bc] text-[#863231] px-4 py-4 rounded-xl hover:bg-primary-dark transition"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -217,7 +218,7 @@ export default function PhotomateBio() {
             {tiktokUrl && (
               <a
                 href={tiktokUrl}
-                className="grid grid-cols-[28px_1fr_28px] items-center gap-3 bg-primary text-white px-4 py-4 rounded-xl hover:bg-primary-dark transition"
+                className="grid grid-cols-[28px_1fr_28px] items-center gap-3 bg-[#f5e4bc] text-[#863231] px-4 py-4 rounded-xl hover:bg-primary-dark transition"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -230,7 +231,7 @@ export default function PhotomateBio() {
             {websiteUrl && (
               <a
                 href={websiteUrl}
-                className="grid grid-cols-[28px_1fr_28px] items-center gap-3 bg-primary text-white px-4 py-4 rounded-xl hover:bg-primary-dark transition"
+                className="grid grid-cols-[28px_1fr_28px] items-center gap-3 bg-[#f5e4bc] text-[#863231] px-4 py-4 rounded-xl hover:bg-primary-dark transition"
                 target="_blank"
                 rel="noopener noreferrer"
               >

@@ -33,18 +33,18 @@ class ListFinancialTransactions extends ListRecords
                 ->color('success')
                 ->action(function (): StreamedResponse {
                     $records = $this->getFilteredTableQuery()
-                        ->with(['category', 'account', 'paymentMethod', 'submitter', 'creator', 'cabang'])
+                        ->with(['category', 'parentCategory', 'account', 'paymentMethod', 'submitter', 'creator', 'cabang'])
                         ->get();
 
                     $service = app(KeuanganService::class);
 
-                    $filename = 'transaksi-keuangan-photomate-' . now()->format('Ymd-His') . '.csv';
+                    $filename = 'transaksi-keuangan-photomate-'.now()->format('Ymd-His').'.csv';
 
                     return response()->streamDownload(function () use ($records, $service): void {
                         $handle = fopen('php://output', 'w');
 
                         // UTF-8 BOM agar terbaca otomatis oleh Microsoft Excel
-                        fputs($handle, "\xEF\xBB\xBF");
+                        fwrite($handle, "\xEF\xBB\xBF");
 
                         fputcsv($handle, KeuanganService::EXPORT_HEADERS);
 

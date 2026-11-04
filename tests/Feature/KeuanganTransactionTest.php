@@ -175,6 +175,34 @@ class KeuanganTransactionTest extends TestCase
         $this->assertDatabaseHas('financial_parent_categories', ['id' => $persediaan->id]);
     }
 
+    public function test_kategori_utama_tidak_dapat_dihapus_jika_dipakai_transaksi_tanpa_sub_kategori(): void
+    {
+        $admin = $this->makeUser('K0013', 'Admin', 'R01', 'admin.kategori.transaksi@photomate.id', []);
+
+        $this->actingAs($admin);
+
+        $box = FinancialParentCategory::query()->where('name', 'Box')->firstOrFail();
+
+        $transaction = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+            'amount' => 100000,
+            'parent_category_id' => $box->id,
+            'account_id' => $this->expressAccount->id,
+            'payment_method_id' => $this->cash->id,
+            'transaction_date' => Carbon::today()->toDateString(),
+        ]);
+
+        Livewire::test(ListFinancialParentCategories::class)
+            ->callTableAction('delete', $box)
+            ->assertNotified();
+
+        $this->assertDatabaseHas('financial_parent_categories', ['id' => $box->id]);
+        $this->assertDatabaseHas('financial_transactions', [
+            'id' => $transaction->id,
+            'parent_category_id' => $box->id,
+        ]);
+    }
+
     public function test_field_nominal_modal_edit_transaksi_memakai_mask_ribuan_indonesia(): void
     {
         $this->actingAs($this->managerFinance);

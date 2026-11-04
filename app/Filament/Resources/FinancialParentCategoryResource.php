@@ -104,10 +104,10 @@ class FinancialParentCategoryResource extends Resource
                     ->modalHeading('Hapus kategori utama ini?')
                     ->modalSubmitActionLabel('Hapus')
                     ->action(function (FinancialParentCategory $record): void {
-                        if ($record->subcategories()->exists()) {
+                        if ($record->subcategories()->exists() || $record->transactions()->withTrashed()->exists()) {
                             Notification::make()
-                                ->title('Kategori utama masih memiliki sub kategori')
-                                ->body('Pindahkan atau hapus sub kategori terlebih dahulu sebelum menghapus kategori utama ini.')
+                                ->title('Kategori utama masih dipakai')
+                                ->body('Pindahkan atau hapus sub kategori/transaksi terkait terlebih dahulu sebelum menghapus kategori utama ini.')
                                 ->warning()
                                 ->send();
 
