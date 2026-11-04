@@ -5,7 +5,7 @@
    THEME VARIABLES (Tailwind v4 @theme)
    ========================= */
 @theme {
-  --color-primary: #364e71;
+  --color-primary: #354b6d;
   --color-primary-dark: #2a3d58;
   --color-primary-light: #4a6a94;
 }
