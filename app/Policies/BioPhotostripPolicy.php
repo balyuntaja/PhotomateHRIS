@@ -15,7 +15,7 @@ class BioPhotostripPolicy
      */
     public function viewAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('view_any_bio::photostrip');
+        return $karyawan->can('view_any_bio_photostrip');
     }
 
     /**
@@ -23,7 +23,7 @@ class BioPhotostripPolicy
      */
     public function view(Karyawan $karyawan, BioPhotostrip $bioPhotostrip): bool
     {
-        return $karyawan->can('view_bio::photostrip');
+        return $karyawan->can('view_bio_photostrip');
     }
 
     /**
@@ -31,7 +31,7 @@ class BioPhotostripPolicy
      */
     public function create(Karyawan $karyawan): bool
     {
-        return $karyawan->can('create_bio::photostrip');
+        return $karyawan->can('create_bio_photostrip');
     }
 
     /**
@@ -39,7 +39,7 @@ class BioPhotostripPolicy
      */
     public function update(Karyawan $karyawan, BioPhotostrip $bioPhotostrip): bool
     {
-        return $karyawan->can('update_bio::photostrip');
+        return $karyawan->can('update_bio_photostrip');
     }
 
     /**
@@ -47,7 +47,7 @@ class BioPhotostripPolicy
      */
     public function delete(Karyawan $karyawan, BioPhotostrip $bioPhotostrip): bool
     {
-        return $karyawan->can('delete_bio::photostrip');
+        return $karyawan->can('delete_bio_photostrip');
     }
 
     /**
@@ -55,7 +55,7 @@ class BioPhotostripPolicy
      */
     public function deleteAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('delete_any_bio::photostrip');
+        return $karyawan->can('delete_any_bio_photostrip');
     }
 
     /**
@@ -63,7 +63,7 @@ class BioPhotostripPolicy
      */
     public function forceDelete(Karyawan $karyawan, BioPhotostrip $bioPhotostrip): bool
     {
-        return $karyawan->can('force_delete_bio::photostrip');
+        return $karyawan->can('force_delete_bio_photostrip');
     }
 
     /**
@@ -71,7 +71,7 @@ class BioPhotostripPolicy
      */
     public function forceDeleteAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('force_delete_any_bio::photostrip');
+        return $karyawan->can('force_delete_any_bio_photostrip');
     }
 
     /**
@@ -79,7 +79,7 @@ class BioPhotostripPolicy
      */
     public function restore(Karyawan $karyawan, BioPhotostrip $bioPhotostrip): bool
     {
-        return $karyawan->can('restore_bio::photostrip');
+        return $karyawan->can('restore_bio_photostrip');
     }
 
     /**
@@ -87,7 +87,7 @@ class BioPhotostripPolicy
      */
     public function restoreAny(Karyawan $karyawan): bool
     {
-        return $karyawan->can('restore_any_bio::photostrip');
+        return $karyawan->can('restore_any_bio_photostrip');
     }
 
     /**
@@ -95,7 +95,7 @@ class BioPhotostripPolicy
      */
     public function replicate(Karyawan $karyawan, BioPhotostrip $bioPhotostrip): bool
     {
-        return $karyawan->can('replicate_bio::photostrip');
+        return $karyawan->can('replicate_bio_photostrip');
     }
 
     /**
@@ -103,6 +103,6 @@ class BioPhotostripPolicy
      */
     public function reorder(Karyawan $karyawan): bool
     {
-        return $karyawan->can('reorder_bio::photostrip');
+        return $karyawan->can('reorder_bio_photostrip');
     }
 }
