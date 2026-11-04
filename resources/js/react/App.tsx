@@ -20,6 +20,7 @@ import Subscribe from "./components/Subscribe";
 import Gallery from "./components/Gallery";
 import BlogSection from "./components/BlogSection";
 import Faq from "./components/Faq";
+import PartnershipCta from "./components/PartnershipCta";
 
 const BlogPage = lazy(() => import("./pages/BlogPage"));
 const BlogDetailPage = lazy(() => import("./pages/BlogDetailPage"));
@@ -58,6 +59,7 @@ function HomePage() {
         <Gallery />
         <BlogSection />
         <Faq />
+        <PartnershipCta />
       </main>
       <Footer />
     </>
