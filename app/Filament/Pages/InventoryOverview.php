@@ -6,6 +6,7 @@ use App\Filament\Concerns\GroupedStockRecordResolver;
 use App\Filament\Resources\InventoryItemResource;
 use App\Filament\Resources\InventoryTransactionResource;
 use App\Models\InventoryStock;
+use App\Models\InventoryTransaction;
 use App\Services\InventoryService;
 use App\Utils\InventoryAccess;
 use App\Utils\InventoryBranches;
@@ -20,6 +21,7 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
 class InventoryOverview extends Page implements HasForms, HasTable
@@ -88,6 +90,25 @@ class InventoryOverview extends Page implements HasForms, HasTable
         return app(InventoryService::class)->summary($this->data['cabang_id'] ?? null);
     }
 
+    /**
+     * @return Collection<int, InventoryTransaction>
+     */
+    public function getRecentTransactions(): Collection
+    {
+        $branchIds = InventoryBranches::expandCabangIds($this->data['cabang_id'] ?? null);
+
+        return InventoryTransaction::query()
+            ->with(['item', 'cabang'])
+            ->when(
+                $branchIds !== null,
+                fn (Builder $query): Builder => $query->whereIn('cabang_id', $branchIds),
+            )
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(8)
+            ->get();
+    }
+
     public function table(Table $table): Table
     {
         return $table
@@ -95,8 +116,7 @@ class InventoryOverview extends Page implements HasForms, HasTable
             ->columns([
                 Tables\Columns\TextColumn::make('item.nama_barang')
                     ->label('Barang')
-                    ->weight('semibold')
-                    ->description(fn (InventoryStock $record): string => $record->item?->kode_barang ?? '-'),
+                    ->weight('semibold'),
 
                 Tables\Columns\TextColumn::make('inventory_branch_label')
                     ->label('Cabang')

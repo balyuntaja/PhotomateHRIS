@@ -27,26 +27,17 @@ class InventoryItemResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-archive-box';
 
-    protected static ?string $navigationLabel = 'Barang';
-
     protected static ?string $modelLabel = 'Barang';
 
     protected static ?string $pluralModelLabel = 'Barang';
 
-    protected static ?string $navigationGroup = 'Inventory';
-
-    protected static ?int $navigationSort = 2;
-
     protected static ?string $slug = 'inventory-barang';
+
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function canViewAny(): bool
     {
         return InventoryAccess::allowed(Auth::user());
-    }
-
-    public static function shouldRegisterNavigation(): bool
-    {
-        return static::canViewAny();
     }
 
     public static function getEloquentQuery(): Builder
@@ -65,6 +56,11 @@ class InventoryItemResource extends Resource
                     ->where('cabang_id', $group['cabang_id'])],
                 'min_stok',
             );
+
+            $query->withExists([
+                'stocks as registered_'.$key.'_exists' => fn (Builder $stockQuery): Builder => $stockQuery
+                    ->whereIn('cabang_id', $group['members']),
+            ]);
         }
 
         $memberIds = InventoryBranches::allMemberCabangIds(true);
@@ -85,19 +81,6 @@ class InventoryItemResource extends Resource
         return $form->schema([
             Forms\Components\Section::make('Informasi Barang')
                 ->schema([
-                    Forms\Components\TextInput::make('kode_barang')
-                        ->label('Kode Barang / SKU')
-                        ->required()
-                        ->maxLength(50)
-                        ->unique(ignoreRecord: true)
-                        ->autocomplete(false)
-                        ->placeholder('Contoh: KRT-2R')
-                        ->validationMessages([
-                            'required' => 'Kode barang wajib diisi.',
-                            'unique' => 'Kode barang sudah terdaftar. Buka barang tersebut lalu gunakan aksi Daftarkan ke Cabang untuk menambah stok di cabang lain.',
-                            'max' => 'Kode barang maksimal 50 karakter.',
-                        ]),
-
                     Forms\Components\TextInput::make('nama_barang')
                         ->label('Nama Barang')
                         ->required()
@@ -195,26 +178,16 @@ class InventoryItemResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('kode_barang')
-                    ->label('Kode / SKU')
-                    ->searchable()
-                    ->sortable()
-                    ->copyable()
-                    ->badge()
-                    ->color('gray'),
-
                 Tables\Columns\TextColumn::make('nama_barang')
                     ->label('Nama Barang')
                     ->searchable()
                     ->sortable()
-                    ->weight('semibold')
-                    ->description(fn (InventoryItem $record): string => filled($record->kategori) ? $record->kategori : 'Tanpa kategori'),
+                    ->weight('semibold'),
 
                 Tables\Columns\TextColumn::make('kategori')
                     ->label('Kategori')
-                    ->searchable()
-                    ->placeholder('-')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->sortable()
+                    ->placeholder('Tanpa kategori'),
 
                 Tables\Columns\TextColumn::make('satuan')
                     ->label('Satuan')
@@ -226,15 +199,15 @@ class InventoryItemResource extends Resource
                     ->formatStateUsing(fn (int $state): string => number_format($state, 0, ',', '.'))
                     ->alignCenter()
                     ->weight('semibold')
-                    ->tooltip('Total stok cabang Inventory (Express, Golio, Newspaper Janus)'),
+                    ->tooltip('Total stok seluruh cabang Inventory tempat barang terdaftar'),
 
-                Tables\Columns\TextColumn::make('branch_stock_count')
-                    ->label('Cabang')
+                Tables\Columns\TextColumn::make('registered_branch_count')
+                    ->label('Cabang Terdaftar')
                     ->formatStateUsing(fn (int $state): string => number_format($state, 0, ',', '.').' cabang')
                     ->alignCenter()
                     ->badge()
                     ->color('primary')
-                    ->tooltip('Jumlah cabang Inventory yang memiliki stok tersedia'),
+                    ->tooltip('Jumlah cabang Inventory yang memiliki data stok untuk barang ini'),
 
                 Tables\Columns\TextColumn::make('stock_status')
                     ->label('Status Stok')
@@ -256,7 +229,7 @@ class InventoryItemResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('nama_barang')
-            ->searchPlaceholder('Cari nama atau kode barang')
+            ->searchPlaceholder('Cari nama barang')
             ->filters([
                 Tables\Filters\SelectFilter::make('kategori')
                     ->label('Kategori')
@@ -321,10 +294,12 @@ class InventoryItemResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make()
-                    ->label('Lihat'),
+                    ->label('Lihat')
+                    ->url(fn (InventoryItem $record): string => static::getUrl('view', ['record' => $record])),
 
                 Tables\Actions\EditAction::make()
-                    ->label('Ubah'),
+                    ->label('Ubah')
+                    ->url(fn (InventoryItem $record): string => static::getUrl('edit', ['record' => $record])),
 
                 Tables\Actions\Action::make('nonaktifkan')
                     ->label('Nonaktifkan')
@@ -440,12 +415,6 @@ class InventoryItemResource extends Resource
         return $infolist->schema([
             Infolists\Components\Section::make('Informasi Barang')
                 ->schema([
-                    Infolists\Components\TextEntry::make('kode_barang')
-                        ->label('Kode Barang / SKU')
-                        ->badge()
-                        ->color('gray')
-                        ->copyable(),
-
                     Infolists\Components\TextEntry::make('nama_barang')
                         ->label('Nama Barang')
                         ->weight('semibold'),
@@ -482,13 +451,13 @@ class InventoryItemResource extends Resource
             Infolists\Components\Section::make('Ringkasan Stok')
                 ->schema([
                     Infolists\Components\TextEntry::make('total_stock')
-                        ->label('Total Stok Cabang Inventory')
+                        ->label('Total Stok Seluruh Cabang')
                         ->badge()
                         ->color('primary')
                         ->formatStateUsing(fn (int $state): string => number_format($state, 0, ',', '.')),
 
-                    Infolists\Components\TextEntry::make('branch_stock_count')
-                        ->label('Cabang Menyimpan')
+                    Infolists\Components\TextEntry::make('registered_branch_count')
+                        ->label('Cabang Terdaftar')
                         ->badge()
                         ->color('info')
                         ->formatStateUsing(fn (int $state): string => number_format($state, 0, ',', '.').' cabang'),

@@ -1,5 +1,6 @@
 <x-filament-panels::page>
     @php($summary = $this->getSummaryData())
+    @php($recentTransactions = $this->getRecentTransactions())
 
     <div class="space-y-6">
         <x-filament::section>
@@ -49,7 +50,7 @@
 
                     <x-filament::button
                         tag="a"
-                        href="{{ \App\Filament\Resources\InventoryItemResource::getUrl('index') }}"
+                        href="{{ \App\Filament\Pages\InventoryStockPage::getUrl(['tab' => 'barang']) }}"
                         icon="heroicon-m-archive-box"
                         color="gray"
                     >
@@ -69,7 +70,7 @@
                     </p>
                 </div>
 
-                <a href="{{ \App\Filament\Resources\InventoryItemResource::getUrl('index') }}" class="pm-section-link">
+                <a href="{{ \App\Filament\Pages\InventoryStockPage::getUrl(['tab' => 'barang']) }}" class="pm-section-link">
                     Kelola barang
                     <x-filament::icon icon="heroicon-m-arrow-right" class="h-3.5 w-3.5" />
                 </a>
@@ -158,7 +159,7 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-                    <a href="{{ \App\Filament\Pages\InventoryStocks::getUrl() }}" class="pm-section-link">
+                    <a href="{{ \App\Filament\Pages\InventoryStockPage::getUrl(['tab' => 'cabang']) }}" class="pm-section-link">
                         Distribusi per cabang
                         <x-filament::icon icon="heroicon-m-arrow-right" class="h-3.5 w-3.5" />
                     </a>
@@ -171,6 +172,71 @@
             </div>
 
             {{ $this->table }}
+        </section>
+
+        <section>
+            <div class="pm-section-head">
+                <div>
+                    <h3 class="pm-section-title">Aktivitas Transaksi Terbaru</h3>
+                    <p class="pm-section-subtitle">
+                        Pencatatan barang masuk, barang keluar, dan penyesuaian stok terbaru pada cakupan filter.
+                    </p>
+                </div>
+
+                <a href="{{ \App\Filament\Resources\InventoryTransactionResource::getUrl('index') }}" class="pm-section-link">
+                    Lihat riwayat stok
+                    <x-filament::icon icon="heroicon-m-arrow-right" class="h-3.5 w-3.5" />
+                </a>
+            </div>
+
+            <div class="pm-panel">
+                @if ($recentTransactions->isEmpty())
+                    <div class="pm-empty">
+                        <span class="pm-empty-icon">
+                            <x-filament::icon icon="heroicon-o-clock" class="h-5 w-5" />
+                        </span>
+                        <p class="pm-empty-title">Belum ada aktivitas stok</p>
+                        <p class="pm-empty-text">
+                            Transaksi barang masuk, barang keluar, dan penyesuaian akan tampil di sini.
+                        </p>
+                    </div>
+                @else
+                    <div class="pm-activity-list">
+                        @foreach ($recentTransactions as $transaction)
+                            <div class="pm-activity-item" wire:key="recent-transaction-{{ $transaction->id }}">
+                                <span class="pm-avatar">
+                                    <x-filament::icon
+                                        :icon="\App\Models\InventoryTransaction::TYPE_ICONS[$transaction->jenis_transaksi] ?? 'heroicon-m-arrows-right-left'"
+                                        class="h-4 w-4"
+                                    />
+                                </span>
+
+                                <div class="min-w-0 flex-1">
+                                    <p class="pm-activity-title">
+                                        {{ $transaction->item?->nama_barang ?? 'Barang tidak tersedia' }}
+                                    </p>
+                                    <p class="pm-activity-meta">
+                                        {{ $transaction->jenis_label }}
+                                        · {{ $transaction->inventory_branch_label }}
+                                        · {{ $transaction->created_at?->format('d M Y H:i') }}
+                                        @if (filled($transaction->user_name))
+                                            · {{ $transaction->user_name }}
+                                        @endif
+                                    </p>
+                                </div>
+
+                                <span class="pm-attention-amount">
+                                    @if ($transaction->jumlah_masuk > 0)
+                                        +{{ number_format($transaction->jumlah_masuk, 0, ',', '.') }}
+                                    @else
+                                        -{{ number_format($transaction->jumlah_keluar, 0, ',', '.') }}
+                                    @endif
+                                </span>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
         </section>
     </div>
 </x-filament-panels::page>

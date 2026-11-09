@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class InventoryItem extends Model
 {
@@ -49,11 +50,28 @@ class InventoryItem extends Model
     {
         static::creating(function (self $item): void {
             $item->created_by ??= auth()->id();
+
+            if (blank($item->kode_barang)) {
+                $item->kode_barang = static::generateInternalCode();
+            }
         });
 
         static::updating(function (self $item): void {
             $item->updated_by = auth()->id();
         });
+    }
+
+    /**
+     * Kode internal untuk memenuhi kolom wajib dan unique. Tidak ditampilkan
+     * di antarmuka Inventory.
+     */
+    protected static function generateInternalCode(): string
+    {
+        do {
+            $code = 'ITM-'.Str::upper(Str::random(10));
+        } while (static::query()->where('kode_barang', $code)->exists());
+
+        return $code;
     }
 
     public function stocks(): HasMany
@@ -94,6 +112,33 @@ class InventoryItem extends Model
     {
         return collect($this->inventoryBranchStockSummaries())
             ->filter(fn (array $summary): bool => $summary['stock'] > 0)
+            ->count();
+    }
+
+    public function getRegisteredBranchCountAttribute(): int
+    {
+        $count = 0;
+        $aggregatesLoaded = false;
+
+        foreach (InventoryBranches::ORDER as $key) {
+            $attribute = 'registered_'.$key.'_exists';
+
+            if (! array_key_exists($attribute, $this->attributes)) {
+                continue;
+            }
+
+            $aggregatesLoaded = true;
+            $count += (int) $this->attributes[$attribute];
+        }
+
+        if ($aggregatesLoaded) {
+            return $count;
+        }
+
+        return $this->stocks
+            ->map(fn (InventoryStock $stock): ?string => InventoryBranches::canonicalKeyForCabangId((string) $stock->cabang_id))
+            ->filter()
+            ->unique()
             ->count();
     }
 

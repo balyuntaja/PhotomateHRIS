@@ -3,7 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Pages\InventoryOverview;
-use App\Filament\Pages\InventoryStocks;
+use App\Filament\Pages\InventoryStockPage;
 use App\Filament\Resources\InventoryItemResource;
 use App\Filament\Resources\InventoryItemResource\Pages\CreateInventoryItem;
 use App\Filament\Resources\InventoryItemResource\Pages\EditInventoryItem;
@@ -91,7 +91,6 @@ class InventoryTest extends TestCase
     {
         Livewire::test(CreateInventoryItem::class)
             ->fillForm([
-                'kode_barang' => 'KRT-4R',
                 'nama_barang' => 'Kertas Foto 4R',
                 'kategori' => 'Kertas Foto',
                 'satuan' => 'pcs',
@@ -103,8 +102,9 @@ class InventoryTest extends TestCase
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $item = InventoryItem::query()->where('kode_barang', 'KRT-4R')->firstOrFail();
+        $item = InventoryItem::query()->where('nama_barang', 'Kertas Foto 4R')->firstOrFail();
 
+        $this->assertStringStartsWith('ITM-', $item->kode_barang);
         $this->assertSame(1, $item->stocks()->count());
 
         $stock = $item->stocks()->firstOrFail();
@@ -129,7 +129,6 @@ class InventoryTest extends TestCase
 
         Livewire::test(EditInventoryItem::class, ['record' => $item->getRouteKey()])
             ->fillForm([
-                'kode_barang' => $item->kode_barang,
                 'nama_barang' => 'Kertas Foto 2R Premium',
                 'kategori' => 'Kertas Foto',
                 'satuan' => 'rim',
@@ -644,7 +643,13 @@ class InventoryTest extends TestCase
             ->assertDontSee('Express Sewa')
             ->assertDontSee('Express Self Run');
 
-        $this->get('/admin/inventory-stok')
+        $this->get('/admin/inventory-persediaan')
+            ->assertOk()
+            ->assertSee('Express')
+            ->assertDontSee('Express Sewa')
+            ->assertDontSee('Express Self Run');
+
+        $this->get('/admin/inventory-persediaan?tab=cabang')
             ->assertOk()
             ->assertSee('Express')
             ->assertDontSee('Express Sewa')
@@ -676,12 +681,13 @@ class InventoryTest extends TestCase
 
             $this->assertFalse(InventoryAccess::allowed($user));
             $this->assertFalse(InventoryOverview::canAccess());
-            $this->assertFalse(InventoryStocks::canAccess());
+            $this->assertFalse(InventoryStockPage::canAccess());
             $this->assertFalse(InventoryItemResource::canViewAny());
             $this->assertFalse(InventoryTransactionResource::canViewAny());
 
             $this->get('/admin/inventory')->assertForbidden();
             $this->get('/admin/inventory-barang')->assertForbidden();
+            $this->get('/admin/inventory-persediaan')->assertForbidden();
             $this->get('/admin/inventory-stok')->assertForbidden();
             $this->get('/admin/inventory-riwayat')->assertForbidden();
 
@@ -705,7 +711,7 @@ class InventoryTest extends TestCase
         $this->actingAs($this->admin);
         $this->assertTrue(InventoryAccess::allowed($this->admin));
         $this->assertTrue(InventoryOverview::canAccess());
-        $this->assertTrue(InventoryStocks::canAccess());
+        $this->assertTrue(InventoryStockPage::canAccess());
 
         $superAdmin = $this->makeUser('SUP01', 'Super Admin Inventory', 'R09', 'super.admin@photomate.id', '9000000000000004', 'Super Admin');
 
@@ -754,9 +760,128 @@ class InventoryTest extends TestCase
         $this->get('/admin/inventory-barang')->assertOk();
         $this->get('/admin/inventory-barang/'.$item->id)->assertOk();
         $this->get('/admin/inventory-barang/'.$item->id.'/edit')->assertOk();
-        $this->get('/admin/inventory-stok')->assertOk();
+        $this->get('/admin/inventory-persediaan')->assertOk();
+        $this->get('/admin/inventory-persediaan?tab=cabang')->assertOk();
         $this->get('/admin/inventory-riwayat')->assertOk();
         $this->get('/admin/inventory-riwayat/create')->assertOk();
+    }
+
+    public function test_inventory_navigation_exposes_three_menus(): void
+    {
+        $this->assertTrue(InventoryOverview::shouldRegisterNavigation());
+        $this->assertTrue(InventoryStockPage::shouldRegisterNavigation());
+        $this->assertTrue(InventoryTransactionResource::shouldRegisterNavigation());
+        $this->assertFalse(InventoryItemResource::shouldRegisterNavigation());
+
+        $this->get('/admin/inventory')
+            ->assertOk()
+            ->assertSee('Ringkasan')
+            ->assertSee('Persediaan')
+            ->assertSee('Riwayat Stok');
+    }
+
+    public function test_persediaan_page_switches_between_item_and_branch_stock_tabs(): void
+    {
+        $item = $this->makeItem('KRT-2R', 'Kertas Foto 2R', 5, 'rim', $this->branchA, 7);
+        $stock = $item->stocks()->where('cabang_id', $this->branchA->cabang_id)->firstOrFail();
+
+        Livewire::test(InventoryStockPage::class)
+            ->assertSet('activeTab', 'barang')
+            ->assertSee('Daftar Barang')
+            ->assertSee($item->nama_barang)
+            ->assertDontSee('Stok Tersedia')
+            ->assertSee('Tambah Barang')
+            ->assertDontSee('Catat Transaksi')
+            ->assertTableActionHasUrl('view', InventoryItemResource::getUrl('view', ['record' => $item]), $item)
+            ->assertTableActionHasUrl('edit', InventoryItemResource::getUrl('edit', ['record' => $item]), $item)
+            ->call('setActiveTab', 'cabang')
+            ->assertSet('activeTab', 'cabang')
+            ->assertSee('Stok Tersedia')
+            ->assertSee($item->nama_barang)
+            ->assertSee('Catat Transaksi')
+            ->assertDontSee('Tambah Barang')
+            ->callTableAction('atur_minimum', $stock, ['min_stok' => 9])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame(9, (int) $stock->fresh()->min_stok);
+    }
+
+    public function test_persediaan_tables_search_by_item_name(): void
+    {
+        $paper = $this->makeItem('KRT-2R', 'Kertas Foto 2R', 5, 'rim', $this->branchA, 7);
+        $ink = $this->makeItem('TINTA-01', 'Tinta Printer', 5, 'botol', $this->branchA, 7);
+
+        $paperStock = $paper->stocks()->where('cabang_id', $this->branchA->cabang_id)->firstOrFail();
+        $inkStock = $ink->stocks()->where('cabang_id', $this->branchA->cabang_id)->firstOrFail();
+
+        Livewire::test(InventoryStockPage::class)
+            ->searchTable('Kertas Foto')
+            ->assertCanSeeTableRecords([$paper])
+            ->assertCanNotSeeTableRecords([$ink])
+            ->call('setActiveTab', 'cabang')
+            ->searchTable('Kertas Foto')
+            ->assertCanSeeTableRecords([$paperStock])
+            ->assertCanNotSeeTableRecords([$inkStock]);
+    }
+
+    public function test_sku_is_not_exposed_in_inventory_pages(): void
+    {
+        $item = $this->makeItem();
+        $this->record(InventoryTransaction::TYPE_IN, 3, $item, $this->branchA, null, 'Stok awal');
+
+        $this->get('/admin/inventory-persediaan')
+            ->assertOk()
+            ->assertDontSee('SKU')
+            ->assertDontSee($item->kode_barang);
+
+        $this->get('/admin/inventory-persediaan?tab=cabang')
+            ->assertOk()
+            ->assertDontSee('SKU')
+            ->assertDontSee($item->kode_barang);
+
+        $this->get('/admin/inventory-barang/'.$item->id)
+            ->assertOk()
+            ->assertDontSee('SKU')
+            ->assertDontSee($item->kode_barang);
+
+        $this->get('/admin/inventory-riwayat')
+            ->assertOk()
+            ->assertDontSee('SKU')
+            ->assertDontSee($item->kode_barang);
+    }
+
+    public function test_overview_shows_recent_stock_activity_and_respects_branch_filter(): void
+    {
+        $itemA = $this->makeItem('ACT-A', 'Aktivitas Golio', 1, 'pcs', $this->branchA, 3);
+        $itemB = $this->makeItem('ACT-B', 'Aktivitas Janus', 1, 'pcs', $this->branchB, 3);
+
+        Livewire::test(InventoryOverview::class)
+            ->assertSee('Aktivitas Transaksi Terbaru')
+            ->assertSee($itemA->nama_barang)
+            ->assertSee($itemB->nama_barang)
+            ->assertSee('Barang Masuk')
+            ->fillForm(['cabang_id' => $this->branchA->cabang_id])
+            ->assertSee($itemA->nama_barang)
+            ->assertDontSee($itemB->nama_barang);
+    }
+
+    public function test_registered_branch_count_includes_zero_stock_branches(): void
+    {
+        $item = $this->makeItem('REG-01', 'Barang Dua Cabang', 1, 'pcs', $this->branchA, 0);
+
+        $this->service->registerBranchStock($item, $this->branchB->cabang_id, 0, 1);
+
+        $this->assertSame(2, $item->fresh()->registered_branch_count);
+        $this->assertSame(
+            2,
+            InventoryItemResource::getEloquentQuery()->whereKey($item->id)->firstOrFail()->registered_branch_count,
+        );
+    }
+
+    public function test_old_stock_page_url_redirects_to_persediaan_branch_tab(): void
+    {
+        $this->get('/admin/inventory-stok')
+            ->assertRedirect(InventoryStockPage::getUrl(['tab' => 'cabang']));
     }
 
     private function makeUser(

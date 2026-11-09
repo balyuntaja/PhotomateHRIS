@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login as CustomLogin;
+use App\Filament\Pages\InventoryStockPage;
 use App\Filament\Pages\KeuanganInputTransaksi;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
@@ -84,16 +85,24 @@ class AdminPanelProvider extends PanelProvider
                 Route::get('keuangan-input-transaksi-v2', fn () => redirect()->to(
                     KeuanganInputTransaksi::getUrl(panel: $panel->getId())
                 ))->name('keuangan-input-transaksi-v2.redirect');
+
+                // Alamat lama Stok per Cabang diarahkan ke tab terkait pada halaman Persediaan.
+                Route::get('inventory-stok', function () use ($panel) {
+                    abort_unless(InventoryStockPage::canAccess(), 403);
+
+                    return redirect()->to(
+                        InventoryStockPage::getUrl(['tab' => 'cabang'], panel: $panel->getId())
+                    );
+                })->name('inventory-stok.redirect');
             })
             ->renderHook(
                 \Filament\View\PanelsRenderHook::BODY_END,
                 fn (): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString(
-                    '<script src="' . asset('js/queue-poster.js') . '"></script>' .
-                    '<script src="' . asset('js/rupiah.js') . '"></script>' .
-                    '<script src="' . asset('js/evidence-upload.js') . '?v=' . filemtime(public_path('js/evidence-upload.js')) . '"></script>'
+                    '<script src="'.asset('js/queue-poster.js').'"></script>'.
+                    '<script src="'.asset('js/rupiah.js').'"></script>'.
+                    '<script src="'.asset('js/evidence-upload.js').'?v='.filemtime(public_path('js/evidence-upload.js')).'"></script>'
                 )
-            )
-        ;
+            );
     }
 
     /**

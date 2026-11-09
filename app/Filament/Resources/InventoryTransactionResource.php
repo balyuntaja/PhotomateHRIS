@@ -36,7 +36,7 @@ class InventoryTransactionResource extends Resource
 
     protected static ?string $navigationGroup = 'Inventory';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $slug = 'inventory-riwayat';
 
@@ -100,10 +100,7 @@ class InventoryTransactionResource extends Resource
                         ->options(fn (): array => InventoryItem::query()
                             ->active()
                             ->orderBy('nama_barang')
-                            ->get()
-                            ->mapWithKeys(fn (InventoryItem $item): array => [
-                                $item->id => $item->kode_barang.' · '.$item->nama_barang,
-                            ])
+                            ->pluck('nama_barang', 'id')
                             ->all())
                         ->searchable()
                         ->required()
@@ -208,8 +205,7 @@ class InventoryTransactionResource extends Resource
                 Tables\Columns\TextColumn::make('item.nama_barang')
                     ->label('Barang')
                     ->searchable()
-                    ->weight('semibold')
-                    ->description(fn (InventoryTransaction $record): string => $record->item?->kode_barang ?? '-'),
+                    ->weight('semibold'),
 
                 Tables\Columns\TextColumn::make('inventory_branch_label')
                     ->label('Cabang')
@@ -274,7 +270,7 @@ class InventoryTransactionResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
-            ->searchPlaceholder('Cari nomor transaksi atau barang')
+            ->searchPlaceholder('Cari nomor transaksi atau nama barang')
             ->filters([
                 Tables\Filters\Filter::make('rentang_tanggal')
                     ->label('Rentang Tanggal')
@@ -300,10 +296,7 @@ class InventoryTransactionResource extends Resource
                     ->label('Barang')
                     ->options(fn (): array => InventoryItem::query()
                         ->orderBy('nama_barang')
-                        ->get()
-                        ->mapWithKeys(fn (InventoryItem $item): array => [
-                            $item->id => $item->kode_barang.' · '.$item->nama_barang,
-                        ])
+                        ->pluck('nama_barang', 'id')
                         ->all())
                     ->searchable(),
 
@@ -365,10 +358,6 @@ class InventoryTransactionResource extends Resource
 
                     Infolists\Components\TextEntry::make('item.nama_barang')
                         ->label('Barang'),
-
-                    Infolists\Components\TextEntry::make('item.kode_barang')
-                        ->label('Kode / SKU')
-                        ->placeholder('-'),
 
                     Infolists\Components\TextEntry::make('inventory_branch_label')
                         ->label('Cabang')
