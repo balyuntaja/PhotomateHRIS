@@ -215,33 +215,44 @@ class SessionWorkflowService
         }
 
         return DB::transaction(function () use ($report, $supervisor, $note) {
-            $this->pricingService->recalculateReport($report);
+            // Kunci baris rekap agar dua approval bersamaan tidak sama-sama lolos.
+            $locked = SessionReport::query()
+                ->whereKey($report->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            $report->status = SessionReport::STATUS_APPROVED;
-            $report->approved_by = $supervisor->karyawan_id;
-            $report->approved_at = now();
-            $report->saveQuietly();
+            if ($locked->status === SessionReport::STATUS_APPROVED) {
+                throw new RuntimeException('Rekap sesi ini sudah berstatus disetujui.');
+            }
+
+            $this->pricingService->recalculateReport($locked);
+
+            $locked->status = SessionReport::STATUS_APPROVED;
+            $locked->approved_by = $supervisor->karyawan_id;
+            $locked->approved_at = now();
+            $locked->saveQuietly();
 
             // Bonus harian Janus dihitung dari seluruh rekap approved pada hari yang sama,
             // sehingga angka bonus semua rekap hari itu diselaraskan setelah status berubah.
-            app(BranchBonusService::class)->syncDailyBonusAmounts($report);
+            app(BranchBonusService::class)->syncDailyBonusAmounts($locked);
 
-            $this->logAction($report, $supervisor, 'APPROVED', $note ?: 'Validated.');
+            $this->logAction($locked, $supervisor, 'APPROVED', $note ?: 'Validated.');
 
             // Catat transaksi keuangan otomatis (kategori Pendapatan Booth, ditentukan backend).
             // Bila kategori/mapping gagal, seluruh approval ikut dibatalkan dengan pesan jelas.
-            app(SessionReportFinancialService::class)->record($report, $supervisor);
+            app(SessionReportFinancialService::class)->record($locked, $supervisor);
+            app(TransactionAccountingService::class)->syncSessionReport($locked, $supervisor);
 
             // Notify submitter and crew
-            $notifiables = collect([$report->submitter])
-                ->merge($report->crews)
+            $notifiables = collect([$locked->submitter])
+                ->merge($locked->crews)
                 ->filter()
                 ->unique('karyawan_id');
 
             foreach ($notifiables as $crew) {
                 Notification::make()
                     ->title('Rekap Sesi Disetujui')
-                    ->body("Rekap sesi #{$report->report_number} telah disetujui oleh {$supervisor->nama_lengkap}.")
+                    ->body("Rekap sesi #{$locked->report_number} telah disetujui oleh {$supervisor->nama_lengkap}.")
                     ->success()
                     ->sendToDatabase($crew);
             }
@@ -249,10 +260,13 @@ class SessionWorkflowService
             // Send email notification to submitter and crew asynchronously via queue
             $validNotifiables = $notifiables->filter(fn ($c) => !empty($c->email));
             if ($validNotifiables->isNotEmpty()) {
-                EmailNotification::send($validNotifiables, new SessionApprovedNotification($report));
+                EmailNotification::send($validNotifiables, new SessionApprovedNotification($locked));
             }
 
+            // Pertahankan perilaku lama: instance yang diberikan pemanggil ikut diperbarui.
+            $report->refresh();
+
             return $report;
-        });
+        }, 3);
     }
 }

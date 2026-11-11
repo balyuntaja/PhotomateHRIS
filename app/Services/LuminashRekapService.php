@@ -23,6 +23,13 @@ class LuminashRekapService
 {
     public const REKAP_SOURCE_PREFIX = 'REKAP-';
 
+    private static bool $consolidating = false;
+
+    public static function isConsolidating(): bool
+    {
+        return self::$consolidating;
+    }
+
     public function rekapSourceId(string $date): string
     {
         return self::REKAP_SOURCE_PREFIX . $date;
@@ -52,75 +59,87 @@ class LuminashRekapService
             'dates' => [],
         ];
 
-        if ($dates === []) {
+        if ($dates === [] || self::$consolidating) {
             return $stats;
         }
 
-        return DB::transaction(function () use ($dates, $actor, $stats): array {
-            $category = $this->pendapatanBoothCategory();
-            $accountId = $this->golioAccount()->id;
-            $cabangId = $this->golioCabangId();
+        self::$consolidating = true;
 
-            foreach ($dates as $date) {
-                $components = $this->componentQuery($date, $cabangId, $category->id)->get();
+        try {
+            return DB::transaction(function () use ($dates, $actor, $stats): array {
+                $category = $this->pendapatanBoothCategory();
+                $accountId = $this->golioAccount()->id;
+                $cabangId = $this->golioCabangId();
 
-                if ($components->isEmpty()) {
-                    continue;
-                }
+                foreach ($dates as $date) {
+                    $components = $this->componentQuery($date, $cabangId, $category->id)->get();
 
-                $rekap = $this->findRekap($date);
+                    if ($components->isEmpty()) {
+                        $rekap = $this->findRekap($date);
 
-                if ($rekap && $rekap->trashed()) {
-                    // Baris rekap dihapus manual: hormati keputusan pengguna.
-                    continue;
-                }
+                        if ($rekap && ! $rekap->trashed()) {
+                            $rekap->delete();
+                        }
 
-                $total = (int) $components->sum('amount');
-                $count = $components->count();
-
-                $attributes = [
-                    'transaction_type' => FinancialTransaction::TYPE_INCOME,
-                    'amount' => $total,
-                    'category_id' => $category->id,
-                    'account_id' => $accountId,
-                    'cabang_id' => $cabangId,
-                    'payment_method_id' => null,
-                    'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
-                    'transaction_date' => $date,
-                    'period_year' => (int) Carbon::parse($date)->year,
-                    'period_month' => (int) Carbon::parse($date)->month,
-                    'description' => $this->description($count),
-                    'source_type' => LuminashImportService::SOURCE,
-                    'source_id' => $this->rekapSourceId($date),
-                ];
-
-                if ($rekap) {
-                    $rekap->fill($attributes)->save();
-                    $stats['updated']++;
-                } else {
-                    FinancialTransaction::create($attributes + [
-                        'created_by' => $actor?->karyawan_id,
-                        'submitted_by' => $actor?->karyawan_id,
-                        'submitted_by_name' => $actor?->nama_lengkap,
-                    ]);
-                    $stats['created']++;
-                }
-
-                foreach ($components as $component) {
-                    if ($component->trashed() || $component->is($rekap)) {
                         continue;
                     }
 
-                    $component->delete();
+                    $rekap = $this->findRekap($date);
+
+                    if ($rekap && $rekap->trashed()) {
+                        // Baris rekap dihapus manual: hormati keputusan pengguna.
+                        continue;
+                    }
+
+                    $total = (int) $components->sum('amount');
+                    $count = $components->count();
+
+                    $attributes = [
+                        'transaction_type' => FinancialTransaction::TYPE_INCOME,
+                        'amount' => $total,
+                        'category_id' => $category->id,
+                        'account_id' => $accountId,
+                        'cabang_id' => $cabangId,
+                        'payment_method_id' => null,
+                        'payment_status' => FinancialTransaction::PAYMENT_STATUS_LUNAS,
+                        'transaction_date' => $date,
+                        'period_year' => (int) Carbon::parse($date)->year,
+                        'period_month' => (int) Carbon::parse($date)->month,
+                        'description' => $this->description($count),
+                        'source_type' => LuminashImportService::SOURCE,
+                        'source_id' => $this->rekapSourceId($date),
+                    ];
+
+                    if ($rekap) {
+                        $rekap->fill($attributes)->save();
+                        $stats['updated']++;
+                    } else {
+                        FinancialTransaction::create($attributes + [
+                            'created_by' => $actor?->karyawan_id,
+                            'submitted_by' => $actor?->karyawan_id,
+                            'submitted_by_name' => $actor?->nama_lengkap,
+                        ]);
+                        $stats['created']++;
+                    }
+
+                    foreach ($components as $component) {
+                        if ($component->trashed() || $component->is($rekap)) {
+                            continue;
+                        }
+
+                        $component->delete();
+                    }
+
+                    $stats['components'] += $count;
+                    $stats['total'] += $total;
+                    $stats['dates'][] = $date;
                 }
 
-                $stats['components'] += $count;
-                $stats['total'] += $total;
-                $stats['dates'][] = $date;
-            }
-
-            return $stats;
-        });
+                return $stats;
+            }, 3);
+        } finally {
+            self::$consolidating = false;
+        }
     }
 
     /**

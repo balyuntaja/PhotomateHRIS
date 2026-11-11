@@ -13,11 +13,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 
 class FinancialTransaction extends Model
 {
     use HasFactory;
-    use SoftDeletes;
+    use SoftDeletes {
+        restore as protected softRestore;
+    }
 
     public const TYPE_INCOME = 'income';
 
@@ -86,6 +89,30 @@ class FinancialTransaction extends Model
      * @var array{old: array<string, mixed>, new: array<string, mixed>}|null
      */
     protected ?array $pendingAuditChanges = null;
+
+    /**
+     * Simpan transaksi beserta sinkronisasi/reversal jurnalnya dalam satu transaksi.
+     */
+    public function save(array $options = [])
+    {
+        return DB::transaction(fn () => parent::save($options), 3);
+    }
+
+    /**
+     * Soft delete transaksi beserta reversal jurnalnya dalam satu transaksi.
+     */
+    public function delete()
+    {
+        return DB::transaction(fn () => parent::delete(), 3);
+    }
+
+    /**
+     * Pulihkan transaksi beserta posting ulang jurnalnya dalam satu transaksi.
+     */
+    public function restore()
+    {
+        return DB::transaction(fn () => $this->softRestore(), 3);
+    }
 
     protected static function booted(): void
     {
@@ -199,6 +226,22 @@ class FinancialTransaction extends Model
     public function auditLogs(): HasMany
     {
         return $this->hasMany(FinancialAuditLog::class, 'financial_transaction_id');
+    }
+
+    public function journalEntries(): HasMany
+    {
+        return $this->hasMany(JournalEntry::class, 'reference_id')
+            ->where('reference_type', \App\Services\TransactionAccountingService::REF_FINANCIAL_TRANSACTION);
+    }
+
+    public function postedJournal(): ?JournalEntry
+    {
+        return $this->journalEntries()->where('status', JournalEntry::STATUS_POSTED)->first();
+    }
+
+    public function isJournalPosted(): bool
+    {
+        return $this->postedJournal() !== null;
     }
 
     public function scopePeriode(Builder $query, CarbonInterface $start, CarbonInterface $end): Builder

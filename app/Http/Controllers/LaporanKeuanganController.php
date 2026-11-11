@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Karyawan;
 use App\Services\LaporanKeuanganService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class LaporanKeuanganController extends Controller
 {
-    public function cetak(int $tahun, int $bulan)
+    public function cetak(Request $request, int $tahun, int $bulan)
     {
+        $this->authorizeReportAccess($request->user());
+
         try {
             $service = app(LaporanKeuanganService::class);
 
@@ -49,5 +53,17 @@ class LaporanKeuanganController extends Controller
 
             abort(500, 'Terjadi kesalahan saat membuat PDF laporan keuangan.');
         }
+    }
+
+    private function authorizeReportAccess(?Karyawan $user): void
+    {
+        abort_unless(
+            $user !== null
+                && ($user->isSuperAdmin()
+                    || $user->can('view_laporan_keuangan')
+                    || $user->can('view_any_laporan_keuangan')),
+            403,
+            'Anda tidak memiliki akses ke laporan keuangan.'
+        );
     }
 }

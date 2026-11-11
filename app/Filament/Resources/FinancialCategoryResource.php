@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\FinancialCategoryResource\Pages;
 use App\Models\FinancialCategory;
 use App\Models\FinancialParentCategory;
+use App\Services\AccountingMasterDataService;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
@@ -108,6 +109,14 @@ class FinancialCategoryResource extends Resource
                         ->label('Aktif')
                         ->helperText('Sub kategori nonaktif tidak muncul saat input transaksi baru.')
                         ->default(true),
+
+                    Forms\Components\Textarea::make('change_reason')
+                        ->label('Alasan Perubahan')
+                        ->rows(2)
+                        ->maxLength(500)
+                        ->required()
+                        ->helperText('Wajib diisi; disimpan pada audit trail master data.')
+                        ->columnSpanFull(),
                 ])
                 ->columns(2),
         ]);
@@ -175,7 +184,18 @@ class FinancialCategoryResource extends Resource
                     ->label('Edit')
                     ->modalHeading('Edit Sub Kategori')
                     ->modalSubmitActionLabel('Simpan Perubahan')
-                    ->successNotificationTitle('Sub kategori berhasil diperbarui.'),
+                    ->successNotificationTitle('Sub kategori berhasil diperbarui.')
+                    ->using(function (FinancialCategory $record, array $data): FinancialCategory {
+                        $reason = $data['change_reason'] ?? null;
+                        unset($data['change_reason']);
+
+                        return app(AccountingMasterDataService::class)->updateCategory(
+                            $record,
+                            $data,
+                            Auth::user(),
+                            $reason
+                        );
+                    }),
 
                 Tables\Actions\DeleteAction::make()
                     ->label('Hapus')
@@ -183,7 +203,11 @@ class FinancialCategoryResource extends Resource
                     ->modalSubmitActionLabel('Hapus')
                     ->action(function (FinancialCategory $record): void {
                         if ($record->isUsed()) {
-                            $record->update(['is_active' => false]);
+                            app(AccountingMasterDataService::class)->deactivateCategory(
+                                $record,
+                                Auth::user(),
+                                'Kategori sudah dipakai transaksi; dinonaktifkan melalui Filament'
+                            );
 
                             Notification::make()
                                 ->title('Sub kategori sudah dipakai transaksi')
@@ -194,7 +218,11 @@ class FinancialCategoryResource extends Resource
                             return;
                         }
 
-                        $record->delete();
+                        app(AccountingMasterDataService::class)->deleteCategory(
+                            $record,
+                            Auth::user(),
+                            'Penghapusan kategori melalui Filament'
+                        );
 
                         Notification::make()
                             ->title('Sub kategori berhasil dihapus.')

@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class FinancialParentCategory extends Model
 {
@@ -31,5 +32,10 @@ class FinancialParentCategory extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(FinancialTransaction::class, 'parent_category_id');
+    }
+
+    public function accountMapping(): HasOne
+    {
+        return $this->hasOne(CategoryAccountMapping::class, 'financial_parent_category_id');
     }
 }

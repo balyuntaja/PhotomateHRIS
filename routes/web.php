@@ -192,23 +192,27 @@ Route::get('/{any?}', function () {
     return view('react.app', compact('cmsData', 'seo'));
 })->where('any', '^(?!admin|livewire|api|slip-gaji|laporan|rekapitulasi|invoice|keuangan(?:/|$)|storage|qr(?:/|$)|q(?:/|$)).*');
 
-Route::get('/slip-gaji/cetak/{tahun}/{bulan}', [SlipGajiController::class, 'cetakSemuaSlipGaji'])
-    ->name('slip-gaji.cetak');
+Route::middleware('auth')->group(function () {
+    Route::get('/slip-gaji/cetak/{tahun}/{bulan}', [SlipGajiController::class, 'cetakSemuaSlipGaji'])
+        ->name('slip-gaji.cetak');
 
-Route::get('/slip-gaji/cetak-individual/{karyawan_id}/{tahun}/{bulan}', [SlipGajiController::class, 'cetakSlipGajiIndividual'])
-    ->name('slip-gaji.cetak-individual');
+    Route::get('/slip-gaji/cetak-individual/{karyawan_id}/{tahun}/{bulan}', [SlipGajiController::class, 'cetakSlipGajiIndividual'])
+        ->name('slip-gaji.cetak-individual');
 
-Route::get('/laporan-keuangan/cetak/{tahun}/{bulan}', [LaporanKeuanganController::class, 'cetak'])
-    ->name('laporan-keuangan.cetak');
+    Route::get('/laporan-keuangan/cetak/{tahun}/{bulan}', [LaporanKeuanganController::class, 'cetak'])
+        ->name('laporan-keuangan.cetak');
 
-Route::get('/laporan-kinerja/cetak/{tahun}/{bulan}', [LaporanKinerjaController::class, 'cetak'])
-    ->name('laporan-kinerja.cetak');
+    Route::get('/laporan-kinerja/cetak/{tahun}/{bulan}', [LaporanKinerjaController::class, 'cetak'])
+        ->name('laporan-kinerja.cetak');
 
-Route::get('/rekapitulasi-absensi/cetak', [RekapitulasiAbsensiController::class, 'cetak'])
-    ->name('rekapitulasi-absensi.pdf');
+    Route::get('/rekapitulasi-absensi/cetak', [RekapitulasiAbsensiController::class, 'cetak'])
+        ->name('rekapitulasi-absensi.pdf');
+});
 
-Route::get('/invoice/{invoice}/pdf', [InvoiceController::class, 'generatePdf'])
-    ->name('invoice.pdf');
-
+// Otorisasi ditangani di controller (guest dan user tanpa permission mendapat 403).
 Route::get('/keuangan/laporan/cetak', [KeuanganLaporanController::class, 'cetak'])
     ->name('keuangan.laporan.cetak');
+
+// Dapat diakses admin yang berwenang atau melalui temporary signed URL untuk customer.
+Route::get('/invoice/{invoice}/pdf', [InvoiceController::class, 'generatePdf'])
+    ->name('invoice.pdf');
