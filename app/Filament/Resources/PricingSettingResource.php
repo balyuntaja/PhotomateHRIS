@@ -61,7 +61,7 @@ class PricingSettingResource extends Resource
 
                         Forms\Components\TextInput::make('base_price')
                             ->label('Harga Sesi Pertama (Base Price)')
-                            ->prefix('Rp')
+                            ->rupiah()
                             ->numeric()
                             ->default(30000)
                             ->required()
@@ -69,7 +69,7 @@ class PricingSettingResource extends Resource
 
                         Forms\Components\TextInput::make('additional_session_price')
                             ->label('Harga Tambahan Per Sesi (Additional Price)')
-                            ->prefix('Rp')
+                            ->rupiah()
                             ->numeric()
                             ->default(15000)
                             ->required()

@@ -21,6 +21,8 @@ class KeuanganService
 
     public const PRESET_LAST_MONTH = 'last_month';
 
+    public const PRESET_THIS_YEAR = 'this_year';
+
     public const PRESET_CUSTOM = 'custom';
 
     public const DEFAULT_PRESET = self::PRESET_THIS_MONTH;
@@ -63,6 +65,7 @@ class KeuanganService
             self::PRESET_THIS_WEEK => 'Minggu Ini',
             self::PRESET_THIS_MONTH => 'Bulan Ini',
             self::PRESET_LAST_MONTH => 'Bulan Lalu',
+            self::PRESET_THIS_YEAR => 'Tahun Ini',
             self::PRESET_CUSTOM => 'Rentang Custom',
         ];
     }
@@ -125,6 +128,10 @@ class KeuanganService
                 $today->copy()->subMonthNoOverflow()->startOfMonth(),
                 $today->copy()->subMonthNoOverflow()->endOfMonth(),
             ],
+            self::PRESET_THIS_YEAR => [
+                $today->copy()->startOfYear(),
+                $today->copy()->endOfYear(),
+            ],
             self::PRESET_CUSTOM => [
                 $this->parseDate($dari, $today->copy()->startOfMonth()),
                 $this->parseDate($sampai, $today->copy()),
@@ -152,6 +159,10 @@ class KeuanganService
 
         if ($start->isSameMonth($end) && $start->isSameYear($end)) {
             return MonthHelper::formatPeriod((int) $start->month, (int) $start->year);
+        }
+
+        if ($start->copy()->startOfYear()->isSameDay($start) && $end->copy()->endOfYear()->isSameDay($end) && $start->year === $end->year) {
+            return 'Tahun '.$start->year;
         }
 
         return $start->format('d/m/Y').' - '.$end->format('d/m/Y');
@@ -430,6 +441,135 @@ class KeuanganService
             ->map(fn ($cabangId): string => (string) $cabangId)
             ->values()
             ->all();
+    }
+
+    /**
+     * Laporan Laba Rugi Photomate:
+     * - Pendapatan Usaha dikelompokkan per cabang/akun (Express, Janus, Golio, dan lainnya)
+     * - Beban Usaha dikelompokkan per Kategori Utama
+     * - Ringkasan Laba / Rugi = Total Pendapatan - Total Beban Usaha
+     *
+     * @return array{
+     *     pendapatan: array{rows: array<string, int>, total: int},
+     *     beban: array{rows: array<string, int>, total: int},
+     *     ringkasan: array{total_pendapatan: int, total_beban: int, laba_rugi: int, status: string, status_label: string}
+     * }
+     */
+    public function labaRugiReport(
+        CarbonInterface $start,
+        CarbonInterface $end,
+        ?int $accountId = null,
+        bool $includeZeroStandardCategories = false
+    ): array {
+        // 1. Agregasi Pendapatan Usaha per cabang/akun
+        $incomeRows = $this->baseQuery($start, $end, null, $accountId)
+            ->where('financial_transactions.transaction_type', FinancialTransaction::TYPE_INCOME)
+            ->leftJoin('financial_accounts', 'financial_accounts.id', '=', 'financial_transactions.account_id')
+            ->leftJoin('cabang', 'cabang.cabang_id', '=', 'financial_transactions.cabang_id')
+            ->selectRaw("
+                CASE 
+                    WHEN LOWER(financial_accounts.name) LIKE '%express%' OR LOWER(cabang.nama_cabang) LIKE '%express%' THEN 'Express'
+                    WHEN LOWER(financial_accounts.name) LIKE '%janus%' OR LOWER(cabang.nama_cabang) LIKE '%janus%' THEN 'Janus'
+                    WHEN LOWER(financial_accounts.name) LIKE '%golio%' OR LOWER(cabang.nama_cabang) LIKE '%golio%' THEN 'Golio'
+                    ELSE COALESCE(financial_accounts.name, cabang.nama_cabang, 'Lain-lain')
+                END as branch_group,
+                SUM(financial_transactions.amount) as total
+            ")
+            ->groupBy('branch_group')
+            ->get();
+
+        $pendapatanRows = [
+            'Express' => 0,
+            'Janus' => 0,
+            'Golio' => 0,
+        ];
+        $pendapatanLain = [];
+
+        foreach ($incomeRows as $row) {
+            $group = (string) $row->branch_group;
+            $amt = (int) $row->total;
+
+            if (array_key_exists($group, $pendapatanRows)) {
+                $pendapatanRows[$group] = $amt;
+            } else {
+                $pendapatanLain[$group] = $amt;
+            }
+        }
+
+        $allPendapatanRows = array_merge($pendapatanRows, $pendapatanLain);
+        $totalPendapatan = (int) array_sum($allPendapatanRows);
+
+        // 2. Agregasi Beban Usaha per Kategori Utama
+        $expenseRows = $this->baseQuery($start, $end, null, $accountId)
+            ->where('financial_transactions.transaction_type', FinancialTransaction::TYPE_EXPENSE)
+            ->leftJoin('financial_parent_categories as direct_parent', 'direct_parent.id', '=', 'financial_transactions.parent_category_id')
+            ->leftJoin('financial_categories', 'financial_categories.id', '=', 'financial_transactions.category_id')
+            ->leftJoin('financial_parent_categories as cat_parent', 'cat_parent.id', '=', 'financial_categories.parent_category_id')
+            ->selectRaw("
+                COALESCE(direct_parent.name, cat_parent.name, financial_categories.name, 'Lain-lain') as parent_name,
+                SUM(financial_transactions.amount) as total
+            ")
+            ->groupBy('parent_name')
+            ->orderByDesc('total')
+            ->get();
+
+        $standardBebanCategories = [
+            'Box',
+            'Transportasi',
+            'Pengadaan Peralatan',
+            'Gaji',
+            'Persediaan',
+            'Konsumsi',
+            'Langganan',
+        ];
+
+        $bebanRows = [];
+        $totalBeban = 0;
+
+        if ($includeZeroStandardCategories) {
+            $bebanRows = array_fill_keys($standardBebanCategories, 0);
+        }
+
+        foreach ($expenseRows as $row) {
+            $name = trim((string) $row->parent_name);
+            $amt = (int) $row->total;
+
+            if ($amt > 0 || $includeZeroStandardCategories) {
+                $bebanRows[$name] = ($bebanRows[$name] ?? 0) + $amt;
+            }
+            $totalBeban += $amt;
+        }
+
+        // 3. Ringkasan Laba / Rugi
+        $labaRugi = $totalPendapatan - $totalBeban;
+        if ($labaRugi > 0) {
+            $status = 'laba';
+            $statusLabel = 'Laba';
+        } elseif ($labaRugi < 0) {
+            $status = 'rugi';
+            $statusLabel = 'Rugi';
+        } else {
+            $status = 'impas';
+            $statusLabel = 'Impas';
+        }
+
+        return [
+            'pendapatan' => [
+                'rows' => $allPendapatanRows,
+                'total' => $totalPendapatan,
+            ],
+            'beban' => [
+                'rows' => $bebanRows,
+                'total' => $totalBeban,
+            ],
+            'ringkasan' => [
+                'total_pendapatan' => $totalPendapatan,
+                'total_beban' => $totalBeban,
+                'laba_rugi' => $labaRugi,
+                'status' => $status,
+                'status_label' => $statusLabel,
+            ],
+        ];
     }
 
     /**

@@ -39,32 +39,31 @@ class EditGajiKaryawanAction
           ->schema([
             Forms\Components\TextInput::make('gaji_pokok_display')
               ->label('Gaji Pokok')
+              ->rupiah()
               ->disabled()
-              ->dehydrated(false)
-              ->prefix('Rp'),
+              ->dehydrated(false),
 
             Forms\Components\TextInput::make('total_tunjangan_display')
               ->label('Total Tunjangan')
+              ->rupiah()
               ->disabled()
-              ->dehydrated(false)
-              ->prefix('Rp'),
+              ->dehydrated(false),
 
             Forms\Components\TextInput::make('total_lembur')
               ->label('Upah Lembur')
-              ->numeric()
-              ->prefix('Rp')
-              ->step(1)
+              ->rupiah()
               ->minValue(0)
               ->extraAttributes([
                 'data-field' => 'total_lembur',
-                'onchange' => 'recalculateClientSide()'
+                'onchange' => 'recalculateClientSide()',
+                'oninput' => 'recalculateClientSide()'
               ]),
 
             Forms\Components\TextInput::make('penghasilan_bruto_display')
               ->label('Penghasilan Bruto')
+              ->rupiah()
               ->disabled()
-              ->dehydrated(false)
-              ->prefix('Rp'),
+              ->dehydrated(false),
           ])
           ->columns(2),
 
@@ -122,13 +121,12 @@ class EditGajiKaryawanAction
           ->schema([
             Forms\Components\TextInput::make('penyesuaian')
               ->label('Penyesuaian')
-              ->numeric()
-              ->prefix('Rp')
-              ->step(1)
+              ->rupiah(allowNegative: true)
               ->helperText('Masukkan nilai positif untuk penambahan, negatif untuk pengurangan')
               ->extraAttributes([
                 'data-field' => 'penyesuaian',
-                'onchange' => 'recalculateClientSide()'
+                'onchange' => 'recalculateClientSide()',
+                'oninput' => 'recalculateClientSide()'
               ]),
 
             Forms\Components\Textarea::make('catatan_penyesuaian')
@@ -144,15 +142,15 @@ class EditGajiKaryawanAction
           ->schema([
             Forms\Components\TextInput::make('total_potongan_display')
               ->label('Total Potongan')
+              ->rupiah()
               ->disabled()
-              ->dehydrated(false)
-              ->prefix('Rp'),
+              ->dehydrated(false),
 
             Forms\Components\TextInput::make('gaji_bersih_display')
               ->label('Gaji Bersih')
+              ->rupiah()
               ->disabled()
               ->dehydrated(false)
-              ->prefix('Rp')
               ->extraAttributes([
                 'style' => 'font-weight: bold; color: #059669;'
               ]),
@@ -173,15 +171,20 @@ class EditGajiKaryawanAction
                         <script>
                         function recalculateClientSide() {
                             setTimeout(() => {
-                                const gajiPokok = parseFloat(document.querySelector("input[name=\\"gaji_pokok\\"]")?.value || 0);
-                                const totalTunjangan = parseFloat(document.querySelector("input[name=\\"total_tunjangan\\"]")?.value || 0);
-                                const totalLembur = parseFloat(document.querySelector("input[name=\\"total_lembur\\"]")?.value || 0);
+                                const parseClean = (el) => {
+                                    const val = (typeof el === "string" ? document.querySelector(el) : el)?.value;
+                                    if (!val) return 0;
+                                    return parseFloat(val.toString().replace(/\./g, "").replace(/,/g, ".")) || 0;
+                                };
+                                const gajiPokok = parseClean(document.querySelector("input[name=\\"gaji_pokok\\"]"));
+                                const totalTunjangan = parseClean(document.querySelector("input[name=\\"total_tunjangan\\"]"));
+                                const totalLembur = parseClean(document.querySelector("input[name=\\"total_lembur\\"]"));
                                 
-                                const potonganAlfa = parseFloat(document.querySelector("input[name=\\"potongan_alfa\\"]")?.value || 0);
-                                const potonganTerlambat = parseFloat(document.querySelector("input[name=\\"potongan_terlambat\\"]")?.value || 0);
-                                const potonganBpjs = parseFloat(document.querySelector("input[name=\\"potongan_bpjs\\"]")?.value || 0);
-                                const potonganPph21 = parseFloat(document.querySelector("input[name=\\"potongan_pph21\\"]")?.value || 0);
-                                const penyesuaian = parseFloat(document.querySelector("input[name=\\"penyesuaian\\"]")?.value || 0);
+                                const potonganAlfa = parseClean(document.querySelector("input[name=\\"potongan_alfa\\"]"));
+                                const potonganTerlambat = parseClean(document.querySelector("input[name=\\"potongan_terlambat\\"]"));
+                                const potonganBpjs = parseClean(document.querySelector("input[name=\\"potongan_bpjs\\"]"));
+                                const potonganPph21 = parseClean(document.querySelector("input[name=\\"potongan_pph21\\"]"));
+                                const penyesuaian = parseClean(document.querySelector("input[name=\\"penyesuaian\\"]"));
                                 
                                 const penghasilanBruto = gajiPokok + totalTunjangan + totalLembur;
                                 const totalPotongan = potonganAlfa + potonganTerlambat + potonganBpjs + potonganPph21;
@@ -340,12 +343,12 @@ class EditGajiKaryawanAction
       $totalTunjangan = (float) $detail->total_tunjangan;
 
       // Get new values from form
-      $totalLembur = (float) ($data['total_lembur'] ?? 0);
-      $potonganAlfa = (float) ($data['potongan_alfa'] ?? 0);
-      $potonganTerlambat = (float) ($data['potongan_terlambat'] ?? 0);
-      $potonganBpjs = (float) ($data['potongan_bpjs'] ?? 0);
-      $potonganPph21 = (float) ($data['potongan_pph21'] ?? 0);
-      $penyesuaian = (float) ($data['penyesuaian'] ?? 0);
+      $totalLembur = RupiahHelper::toFloat($data['total_lembur'] ?? 0);
+      $potonganAlfa = RupiahHelper::toFloat($data['potongan_alfa'] ?? 0);
+      $potonganTerlambat = RupiahHelper::toFloat($data['potongan_terlambat'] ?? 0);
+      $potonganBpjs = RupiahHelper::toFloat($data['potongan_bpjs'] ?? 0);
+      $potonganPph21 = RupiahHelper::toFloat($data['potongan_pph21'] ?? 0);
+      $penyesuaian = RupiahHelper::toFloat($data['penyesuaian'] ?? 0);
 
       // Calculate totals
       $penghasilanBruto = $gajiPokok + $totalTunjangan + $totalLembur;

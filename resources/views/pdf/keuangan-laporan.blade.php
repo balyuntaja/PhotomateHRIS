@@ -6,20 +6,20 @@
     <title>{{ $judulDokumen }} - {{ $periode }}</title>
     <style>
         @page {
-            margin: 30px 30px 65px 30px;
+            margin: 25px 30px 45px 30px;
         }
 
         body {
             font-family: 'DejaVu Sans', sans-serif;
             font-size: 11px;
             color: #333;
+            margin: 0;
+            padding: 0;
         }
 
-        /* Header dirender di dalam setiap blok halaman (bukan fixed),
-           agar tidak bertabrakan dengan konten dan tetap muncul tiap halaman. */
         .header {
-            position: static;
             width: 100%;
+            margin-bottom: 5px;
         }
 
         .logo {
@@ -41,26 +41,27 @@
         .table-no-border td,
         .table-no-border th {
             border: none;
-        }
-
-        .page-block {
-            page-break-after: always;
+            padding: 0;
         }
 
         h2 {
-            font-size: 14px;
-            margin: 12px 0 8px;
+            font-size: 13px;
+            margin: 10px 0 6px;
+            page-break-after: avoid;
+            break-after: avoid;
         }
 
         h3 {
-            font-size: 13px;
-            margin: 12px 0 8px;
+            font-size: 12px;
+            margin: 12px 0 6px;
+            page-break-after: avoid;
+            break-after: avoid;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         th,
@@ -91,10 +92,18 @@
         }
 
         .meta-info {
-            margin-top: 12px;
+            margin-top: 6px;
             margin-bottom: 4px;
-            font-size: 11px;
+            font-size: 10px;
             color: #555;
+            line-height: 1.4;
+        }
+
+        .summary-table {
+            width: 100%;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            margin-bottom: 8px;
         }
 
         .summary-table th {
@@ -106,6 +115,20 @@
             table-layout: fixed;
             font-size: 9px;
             margin-bottom: 0;
+            border-collapse: collapse;
+        }
+
+        .transactions-table thead {
+            display: table-header-group;
+        }
+
+        .transactions-table tbody {
+            display: table-row-group;
+        }
+
+        .transactions-table tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .transactions-table th,
@@ -120,9 +143,16 @@
         }
 
         .totals-table {
-            width: 60%;
-            margin-left: 40%;
-            margin-top: 12px;
+            width: 50%;
+            margin-left: 50%;
+            margin-top: 10px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+        }
+
+        .totals-table tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
 
         .totals-table th {
@@ -141,204 +171,116 @@
     @php
         $transactions = $transactions ?? collect();
         $accountName = $accountName ?? 'Semua Akun';
-        $firstPageRows = 8;
-        $nextPageRows = 12;
         $rowNumber = 0;
-
-        $pages = collect();
-        if ($transactions->isNotEmpty()) {
-            $pages->push($transactions->take($firstPageRows)->values());
-            $pages = $pages->merge(
-                $transactions->slice($firstPageRows)->values()->chunk($nextPageRows)->values()
-            );
-        }
     @endphp
 
-    @forelse ($pages as $pageTransactions)
-        <div class="{{ $loop->last ? '' : 'page-block' }}">
-            @include('pdf.partials.laporan-header', [
-                'judulDokumen' => $judulDokumen,
-                'periode' => $periode,
-                'accountName' => $accountName,
-            ])
+    @include('pdf.partials.laporan-header', [
+        'judulDokumen' => $judulDokumen,
+        'periode' => $periode,
+        'accountName' => $accountName,
+    ])
 
-            @if ($loop->first)
-                <div class="meta-info">
-                    <strong>Periode:</strong> {{ $period['label'] }}<br>
-                    <strong>Akun:</strong> {{ $accountName }}
-                </div>
+    <div class="meta-info">
+        <strong>Periode:</strong> {{ $period['label'] }}<br>
+        <strong>Akun:</strong> {{ $accountName }}
+    </div>
 
-                <h2>Ringkasan</h2>
-                <table class="summary-table">
-                    <thead>
-                        <tr>
-                            <th>Keterangan</th>
-                            <th class="text-right">Nominal</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>Total Pemasukan</td>
-                            <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['income']) }}</td>
-                        </tr>
-                        <tr>
-                            <td>Total Pengeluaran</td>
-                            <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['expense']) }}</td>
-                        </tr>
-                        <tr>
-                            <td>Saldo</td>
-                            <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['balance']) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            @endif
+    <h2>Ringkasan</h2>
+    <table class="summary-table">
+        <thead>
+            <tr>
+                <th>Keterangan</th>
+                <th class="text-right">Nominal</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Total Pemasukan</td>
+                <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['income']) }}</td>
+            </tr>
+            <tr>
+                <td>Total Pengeluaran</td>
+                <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['expense']) }}</td>
+            </tr>
+            <tr>
+                <td>Saldo</td>
+                <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['balance']) }}</td>
+            </tr>
+        </tbody>
+    </table>
 
-            <h3>Rincian Transaksi{{ $loop->first ? '' : ' (lanjutan)' }}</h3>
+    <h3>Rincian Transaksi</h3>
 
-            <table class="transactions-table">
-                <thead>
-                    <tr>
-                        <th class="text-center" style="width: 4%;">No</th>
-                        <th style="width: 9%;">Tanggal</th>
-                        <th style="width: 8%;">Jenis</th>
-                        <th style="width: 12%;">Akun</th>
-                        <th style="width: 12%;">Kategori</th>
-                        <th style="width: 18%;">Deskripsi</th>
-                        <th style="width: 10%;">Metode</th>
-                        <th class="text-right" style="width: 12%;">Nominal</th>
-                        <th style="width: 15%;">Dibayarkan / Disubmit Oleh</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($pageTransactions as $transaction)
-                        @php($rowNumber++)
-                        <tr>
-                            <td class="text-center">{{ $rowNumber }}</td>
-                            <td>{{ $transaction->transaction_date?->format('d M Y') ?? '-' }}</td>
-                            <td>{{ $transaction->type_label }}</td>
-                            <td>{{ $transaction->account?->name ?? 'Tanpa Akun' }}</td>
-                            <td>{{ $transaction->category_label }}</td>
-                            <td>{{ filled($transaction->description) ? \Illuminate\Support\Str::limit($transaction->description, 70) : '-' }}</td>
-                            <td>{{ $transaction->payment_method_label }}</td>
-                            <td class="text-right {{ $transaction->is_income ? 'text-income' : 'text-expense' }}">
-                                {{ $transaction->signed_formatted_amount }}
-                            </td>
-                            <td>{{ $transaction->recording_info_name }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-
-            @if ($loop->last)
-                <table class="totals-table">
-                    <tbody>
-                        <tr>
-                            <th>Total Pemasukan</th>
-                            <td class="text-right text-income">{{ \App\Utils\RupiahHelper::format($summary['income']) }}</td>
-                        </tr>
-                        <tr>
-                            <th>Total Pengeluaran</th>
-                            <td class="text-right text-expense">{{ \App\Utils\RupiahHelper::format($summary['expense']) }}</td>
-                        </tr>
-                        <tr class="balance">
-                            <th>Saldo</th>
-                            <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['balance']) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            @endif
-        </div>
-    @empty
-        @include('pdf.partials.laporan-header', [
-            'judulDokumen' => $judulDokumen,
-            'periode' => $periode,
-            'accountName' => $accountName,
-        ])
-
-        <div class="meta-info">
-            <strong>Periode:</strong> {{ $period['label'] }}<br>
-            <strong>Akun:</strong> {{ $accountName }}
-        </div>
-
-        <h2>Ringkasan</h2>
-        <table class="summary-table">
-            <thead>
+    <table class="transactions-table">
+        <thead>
+            <tr>
+                <th class="text-center" style="width: 4%;">No</th>
+                <th style="width: 9%;">Tanggal</th>
+                <th style="width: 8%;">Jenis</th>
+                <th style="width: 12%;">Akun</th>
+                <th style="width: 12%;">Kategori</th>
+                <th style="width: 18%;">Deskripsi</th>
+                <th style="width: 10%;">Metode</th>
+                <th class="text-right" style="width: 12%;">Nominal</th>
+                <th style="width: 15%;">Dibayarkan / Disubmit Oleh</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse ($transactions as $transaction)
+                @php($rowNumber++)
                 <tr>
-                    <th>Keterangan</th>
-                    <th class="text-right">Nominal</th>
+                    <td class="text-center">{{ $rowNumber }}</td>
+                    <td>{{ $transaction->transaction_date?->format('d M Y') ?? '-' }}</td>
+                    <td>{{ $transaction->type_label }}</td>
+                    <td>{{ $transaction->account?->name ?? 'Tanpa Akun' }}</td>
+                    <td>{{ $transaction->category_label }}</td>
+                    <td>{{ filled($transaction->description) ? \Illuminate\Support\Str::limit($transaction->description, 70) : '-' }}</td>
+                    <td>{{ $transaction->payment_method_label }}</td>
+                    <td class="text-right {{ $transaction->is_income ? 'text-income' : 'text-expense' }}">
+                        {{ $transaction->signed_formatted_amount }}
+                    </td>
+                    <td>{{ $transaction->recording_info_name }}</td>
                 </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Total Pemasukan</td>
-                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['income']) }}</td>
-                </tr>
-                <tr>
-                    <td>Total Pengeluaran</td>
-                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['expense']) }}</td>
-                </tr>
-                <tr>
-                    <td>Saldo</td>
-                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['balance']) }}</td>
-                </tr>
-            </tbody>
-        </table>
-
-        <h3>Rincian Transaksi</h3>
-        <table class="transactions-table">
-            <thead>
-                <tr>
-                    <th class="text-center" style="width: 4%;">No</th>
-                    <th style="width: 9%;">Tanggal</th>
-                    <th style="width: 8%;">Jenis</th>
-                    <th style="width: 12%;">Akun</th>
-                    <th style="width: 12%;">Kategori</th>
-                    <th style="width: 18%;">Deskripsi</th>
-                    <th style="width: 10%;">Metode</th>
-                    <th class="text-right" style="width: 12%;">Nominal</th>
-                    <th style="width: 15%;">Dibayarkan / Disubmit Oleh</th>
-                </tr>
-            </thead>
-            <tbody>
+            @empty
                 <tr>
                     <td colspan="9" class="text-center">Belum ada transaksi pada periode ini.</td>
                 </tr>
-            </tbody>
-        </table>
+            @endforelse
+        </tbody>
+    </table>
 
-        <table class="totals-table">
-            <tbody>
-                <tr>
-                    <th>Total Pemasukan</th>
-                    <td class="text-right text-income">{{ \App\Utils\RupiahHelper::format($summary['income']) }}</td>
-                </tr>
-                <tr>
-                    <th>Total Pengeluaran</th>
-                    <td class="text-right text-expense">{{ \App\Utils\RupiahHelper::format($summary['expense']) }}</td>
-                </tr>
-                <tr class="balance">
-                    <th>Saldo</th>
-                    <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['balance']) }}</td>
-                </tr>
-            </tbody>
-        </table>
-    @endforelse
+    <table class="totals-table">
+        <tbody>
+            <tr>
+                <th>Total Pemasukan</th>
+                <td class="text-right text-income">{{ \App\Utils\RupiahHelper::format($summary['income']) }}</td>
+            </tr>
+            <tr>
+                <th>Total Pengeluaran</th>
+                <td class="text-right text-expense">{{ \App\Utils\RupiahHelper::format($summary['expense']) }}</td>
+            </tr>
+            <tr class="balance">
+                <th>Saldo</th>
+                <td class="text-right">{{ \App\Utils\RupiahHelper::format($summary['balance']) }}</td>
+            </tr>
+        </tbody>
+    </table>
 
     {{-- Footer setiap halaman: identitas laporan, nomor halaman, tanggal cetak --}}
     <script type="text/php">
         if (isset($pdf)) {
             $font = $fontMetrics->getFont('DejaVu Sans');
             $color = [0.42, 0.45, 0.50];
-            $y = $pdf->get_height() - 35;
+            $y = $pdf->get_height() - 30;
 
-            $pdf->page_text(36, $y, {!! json_encode('Laporan Keuangan Photomate - ' . $periode) !!}, $font, 8, $color);
+            $pdf->page_text(30, $y, {!! json_encode('Laporan Keuangan Photomate - ' . $periode) !!}, $font, 8, $color);
 
             $pageLabelWidth = $fontMetrics->getTextWidth('Halaman 10 dari 10', $font, 8);
             $pdf->page_text(($pdf->get_width() - $pageLabelWidth) / 2, $y, 'Halaman {PAGE_NUM} dari {PAGE_COUNT}', $font, 8, $color);
 
             $printedLabel = {!! json_encode('Dicetak pada: ' . $tanggalCetak) !!};
             $printedLabelWidth = $fontMetrics->getTextWidth($printedLabel, $font, 8);
-            $pdf->page_text($pdf->get_width() - 36 - $printedLabelWidth, $y, $printedLabel, $font, 8, $color);
+            $pdf->page_text($pdf->get_width() - 30 - $printedLabelWidth, $y, $printedLabel, $font, 8, $color);
         }
     </script>
 </body>

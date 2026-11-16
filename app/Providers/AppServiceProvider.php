@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Utils\RupiahHelper;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\TextInput;
 use Filament\Support\Colors\Color;
 use Filament\Support\Facades\FilamentColor;
+use Filament\Support\RawJs;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -39,6 +42,29 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Invoice::observe(\App\Observers\InvoiceObserver::class);
 
         DateTimePicker::configureUsing(fn(DateTimePicker $component) => $component->native(false));
+
+        TextInput::macro('rupiah', function (?string $prefix = 'Rp', bool $allowNegative = false): static {
+            /** @var TextInput $this */
+            if ($prefix !== null) {
+                $this->prefix($prefix);
+            }
+
+            $maskJs = $allowNegative
+                ? "\$input.startsWith('-') ? '-' + \$money(\$input.slice(1), '.', ',', 0) : \$money(\$input, '.', ',', 0)"
+                : "\$money(\$input, '.', ',', 0)";
+
+            return $this
+                ->mask(RawJs::make($maskJs))
+                ->stripCharacters(['.', ','])
+                ->formatStateUsing(fn ($state): ?string => filled($state) ? RupiahHelper::number($state) : (is_string($state) ? $state : null))
+                ->dehydrateStateUsing(function ($state) use ($allowNegative) {
+                    if (blank($state)) {
+                        return null;
+                    }
+                    $clean = RupiahHelper::toFloat($state);
+                    return $allowNegative ? (int) round($clean) : max(0, (int) round($clean));
+                });
+        });
 
         FilamentColor::register([
             // Default colors

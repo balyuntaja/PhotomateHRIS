@@ -51,7 +51,7 @@ final class RupiahHelper
             return 0.0;
         }
 
-        if (is_numeric($normalized)) {
+        if (preg_match('/^-?\d+$/', $normalized)) {
             return (float) $normalized;
         }
 
@@ -67,9 +67,18 @@ final class RupiahHelper
             $normalized = str_replace('.', '', $normalized);
             $normalized = str_replace(',', '.', $normalized);
         } else {
+            // Format Indonesia tanpa desimal: titik = ribuan
             $normalized = str_replace('.', '', $normalized);
         }
 
         return is_numeric($normalized) ? (float) $normalized : 0.0;
+    }
+
+    /**
+     * Normalisasi nilai menjadi integer rupiah bersih tanpa desimal.
+     */
+    public static function toInt(mixed $value): int
+    {
+        return (int) round(self::toFloat($value));
     }
 }

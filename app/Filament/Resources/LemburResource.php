@@ -81,12 +81,10 @@ class LemburResource extends Resource
                             ->seconds(false),
                         Forms\Components\TextInput::make('total_insentif')
                             ->label('Total Insentif (Rp)')
-                            ->numeric()
-                            ->prefix('Rp')
+                            ->rupiah()
                             ->placeholder('Akan dihitung otomatis saat disetujui')
                             ->disabled()
-                            ->dehydrated(false)
-                            ->formatStateUsing(fn($state) => $state ? RupiahHelper::number($state) : null),
+                            ->dehydrated(false),
                     ])
                     ->columns(2),
 
