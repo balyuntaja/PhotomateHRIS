@@ -43,6 +43,48 @@ class SessionWorkflowService
     }
 
     /**
+     * Check if the report belongs to the user (user is submitter or crew member on duty).
+     */
+    public function isOwnReport(?Karyawan $user, ?SessionReport $report): bool
+    {
+        if (!$user || !$report) {
+            return false;
+        }
+
+        if (!empty($report->submitted_by) && (string) $report->submitted_by === (string) $user->karyawan_id) {
+            return true;
+        }
+
+        if ($report->relationLoaded('crews')) {
+            return $report->crews->contains(function ($crew) use ($user) {
+                return (string) $crew->karyawan_id === (string) $user->karyawan_id;
+            });
+        }
+
+        return $report->crews()->where('karyawan.karyawan_id', $user->karyawan_id)->exists();
+    }
+
+    /**
+     * Determine whether the user can approve or request revision on the report.
+     */
+    public function canApprove(?Karyawan $user, ?SessionReport $report): bool
+    {
+        if (!$user || !$report) {
+            return false;
+        }
+
+        if (!$this->isSupervisorOrAdmin($user)) {
+            return false;
+        }
+
+        if ($this->isOwnReport($user, $report)) {
+            return false;
+        }
+
+        return $report->isWaitingApproval();
+    }
+
+    /**
      * Batas waktu input/edit/delete rekap sesi (tanggal rekap + 2 hari pukul 23:59:59)
      * hanya berlaku untuk crew (Karyawan). Supervisor/Admin tidak dibatasi.
      */
@@ -162,6 +204,10 @@ class SessionWorkflowService
             throw new RuntimeException('Anda tidak memiliki hak akses sebagai Supervisor untuk meminta revisi.');
         }
 
+        if ($this->isOwnReport($supervisor, $report)) {
+            throw new RuntimeException('Anda tidak dapat meminta revisi pada rekap sesi Anda sendiri.');
+        }
+
         if ($report->status === SessionReport::STATUS_APPROVED) {
             throw new RuntimeException('Rekap sesi yang sudah disetujui tidak dapat direvisi.');
         }
@@ -208,6 +254,10 @@ class SessionWorkflowService
     {
         if (!$this->isSupervisorOrAdmin($supervisor)) {
             throw new RuntimeException('Anda tidak memiliki hak akses sebagai Supervisor untuk menyetujui rekap.');
+        }
+
+        if ($this->isOwnReport($supervisor, $report)) {
+            throw new RuntimeException('Anda tidak dapat menyetujui rekap sesi Anda sendiri.');
         }
 
         if ($report->status === SessionReport::STATUS_APPROVED) {

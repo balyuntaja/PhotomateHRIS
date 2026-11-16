@@ -116,12 +116,20 @@ class SessionReportPolicy
             return false;
         }
 
+        if ($this->isCrewOnReport($user, $report)) {
+            return false;
+        }
+
         return $this->isSupervisorOrAdmin($user);
     }
 
     public function requestRevision(Karyawan $user, SessionReport $report): bool
     {
         if ($report->isApproved()) {
+            return false;
+        }
+
+        if ($this->isCrewOnReport($user, $report)) {
             return false;
         }
 
