@@ -8,6 +8,12 @@ class InvoiceItem extends Model
 {
     protected $guarded = [];
 
+    protected $casts = [
+        'price' => 'float',
+        'amount' => 'float',
+        'device_count' => 'integer',
+    ];
+
     protected ?bool $isTbaTemp = null;
 
     public function invoice()

@@ -26,6 +26,9 @@ class Invoice extends Model
         'invoice_date' => 'date',
         'max_dp_date' => 'date',
         'due_date' => 'date',
+        'subtotal' => 'float',
+        'discount' => 'float',
+        'total' => 'float',
         'down_payment' => 'float',
         'dp_date' => 'date',
     ];

@@ -206,8 +206,8 @@ class InvoiceResource extends Resource
                                     ->default(0)
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(function (Get $get, Set $set) {
-                                        $price = RupiahHelper::toFloat($get('price') ?? 0);
-                                        $deviceCount = intval($get('device_count') ?? 1);
+                                        $price = RupiahHelper::toInt($get('price') ?? 0);
+                                        $deviceCount = max(1, intval($get('device_count') ?? 1));
                                         $set('amount', $price * $deviceCount);
                                         self::updateTotals($get, $set);
                                     })
@@ -220,8 +220,8 @@ class InvoiceResource extends Resource
                                     ->default(1)
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(function (Get $get, Set $set) {
-                                        $price = RupiahHelper::toFloat($get('price') ?? 0);
-                                        $deviceCount = intval($get('device_count') ?? 1);
+                                        $price = RupiahHelper::toInt($get('price') ?? 0);
+                                        $deviceCount = max(1, intval($get('device_count') ?? 1));
                                         $set('amount', $price * $deviceCount);
                                         self::updateTotals($get, $set);
                                     })
@@ -304,8 +304,8 @@ class InvoiceResource extends Resource
                             ->visible(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
                             ->required(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
                             ->live(onBlur: true)
-                            ->helperText(fn(Get $get) => 'Sisa Pembayaran: ' . RupiahHelper::format(max(0, RupiahHelper::toFloat($get('total') ?? 0) - RupiahHelper::toFloat($get('down_payment') ?? 0))))
-                            ->maxValue(fn(Get $get) => RupiahHelper::toFloat($get('total') ?? 0))
+                            ->helperText(fn(Get $get) => 'Sisa Pembayaran: ' . RupiahHelper::format(max(0, RupiahHelper::toInt($get('total') ?? 0) - RupiahHelper::toInt($get('down_payment') ?? 0))))
+                            ->maxValue(fn(Get $get) => RupiahHelper::toInt($get('total') ?? 0))
                             ->minValue(0),
                         DatePicker::make('dp_date')
                             ->label('Tanggal Bayar DP')
@@ -440,13 +440,13 @@ class InvoiceResource extends Resource
 
         if (is_array($items)) {
             foreach ($items as $item) {
-                $price = RupiahHelper::toFloat($item['price'] ?? 0);
-                $deviceCount = intval($item['device_count'] ?? 1);
+                $price = RupiahHelper::toInt($item['price'] ?? 0);
+                $deviceCount = max(1, intval($item['device_count'] ?? 1));
 
                 // If price is 0 but amount is set (legacy safeguard), use amount,
                 // otherwise calculate on-the-fly using price * deviceCount.
-                $itemAmount = RupiahHelper::toFloat($item['amount'] ?? 0);
-                if ($price == 0 && $itemAmount > 0) {
+                $itemAmount = RupiahHelper::toInt($item['amount'] ?? 0);
+                if ($price === 0 && $itemAmount > 0) {
                     $subtotal += $itemAmount;
                 } else {
                     $subtotal += ($price * $deviceCount);
@@ -454,7 +454,7 @@ class InvoiceResource extends Resource
             }
         }
 
-        $discount = RupiahHelper::toFloat($get('discount') ?? 0);
+        $discount = RupiahHelper::toInt($get('discount') ?? 0);
         $total = max(0, $subtotal - $discount);
 
         $set('subtotal', $subtotal);

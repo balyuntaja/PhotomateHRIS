@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\FinancialTransactionResource\Pages\ListFinancialTransactions;
 use App\Filament\Resources\InvoiceResource;
+use App\Filament\Resources\InvoiceResource\Pages\CreateInvoice;
+use App\Filament\Resources\InvoiceResource\Pages\EditInvoice;
 use App\Filament\Resources\PricingSettingResource;
 use App\Forms\Components\RupiahInput;
 use App\Models\Cabang;
@@ -52,21 +54,26 @@ class GlobalRupiahFormattingTest extends TestCase
             'create_keuangan_transaction',
             'update_keuangan_transaction',
             'delete_keuangan_transaction',
+            'view_any_invoice',
+            'view_invoice',
+            'create_invoice',
+            'update_invoice',
+            'delete_invoice',
         ];
 
         foreach ($permissions as $permission) {
             Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
         }
 
-        $superAdminRole = Role::firstOrCreate(
-            ['name' => 'super_admin', 'guard_name' => 'web'],
-            ['role_id' => 'R99']
+        $adminRole = Role::firstOrCreate(
+            ['name' => 'Admin', 'guard_name' => 'web'],
+            ['role_id' => 'R01']
         );
-        $superAdminRole->syncPermissions($permissions);
+        $adminRole->syncPermissions($permissions);
 
         $this->user = Karyawan::create([
             'karyawan_id' => 'K9999',
-            'role_id' => 'R99',
+            'role_id' => 'R01',
             'perusahaan_id' => 'P0001',
             'nik' => '999999999999',
             'nama_lengkap' => 'Admin Tester',
@@ -76,7 +83,7 @@ class GlobalRupiahFormattingTest extends TestCase
             'jenis_kelamin' => 'Laki-laki',
             'alamat' => 'Jakarta',
         ]);
-        $this->user->assignRole($superAdminRole);
+        $this->user->assignRole($adminRole);
     }
 
     public function test_rupiah_helper_formats_and_parses_consistently(): void
@@ -90,6 +97,32 @@ class GlobalRupiahFormattingTest extends TestCase
 
         // Format with Rp prefix
         $this->assertSame('Rp 1.000.000', RupiahHelper::format(1000000));
+
+        // Test cases from specification
+        $this->assertSame(30000.0, RupiahHelper::toFloat('30.000'));
+        $this->assertSame('Rp 30.000', RupiahHelper::format('30.000'));
+        $this->assertSame('Rp 30.000', RupiahHelper::format(30000));
+        $this->assertSame('Rp 30.000', RupiahHelper::format('30000.00'));
+
+        $this->assertSame(150000.0, RupiahHelper::toFloat('150.000'));
+        $this->assertSame('Rp 150.000', RupiahHelper::format('150.000'));
+        $this->assertSame('Rp 150.000', RupiahHelper::format(150000));
+        $this->assertSame('Rp 150.000', RupiahHelper::format('150000.00'));
+
+        $this->assertSame(1000000.0, RupiahHelper::toFloat('1.000.000'));
+        $this->assertSame('Rp 1.000.000', RupiahHelper::format('1.000.000'));
+        $this->assertSame('Rp 1.000.000', RupiahHelper::format(1000000));
+        $this->assertSame('Rp 1.000.000', RupiahHelper::format('1000000.00'));
+
+        $this->assertSame(2199000.0, RupiahHelper::toFloat('2.199.000'));
+        $this->assertSame('Rp 2.199.000', RupiahHelper::format('2.199.000'));
+        $this->assertSame('Rp 2.199.000', RupiahHelper::format(2199000));
+        $this->assertSame('Rp 2.199.000', RupiahHelper::format('2199000.00'));
+
+        $this->assertSame(15000000.0, RupiahHelper::toFloat('15.000.000'));
+        $this->assertSame('Rp 15.000.000', RupiahHelper::format('15.000.000'));
+        $this->assertSame('Rp 15.000.000', RupiahHelper::format(15000000));
+        $this->assertSame('Rp 15.000.000', RupiahHelper::format('15000000.00'));
 
         // Parsing from Indonesian dot-separated format into float/int
         $this->assertSame(1000.0, RupiahHelper::toFloat('1.000'));
@@ -278,5 +311,195 @@ class GlobalRupiahFormattingTest extends TestCase
         $this->assertSame(1, $pricingService->calculateSessionsFromPrice(RupiahHelper::toFloat('30.000')));
         $this->assertSame(2, $pricingService->calculateSessionsFromPrice(RupiahHelper::toFloat('45.000')));
         $this->assertSame(3, $pricingService->calculateSessionsFromPrice(RupiahHelper::toFloat('60.000')));
+    }
+
+    public function test_create_invoice_page_saves_correct_amounts(): void
+    {
+        $this->actingAs($this->user);
+
+        $test = Livewire::test(CreateInvoice::class)
+            ->assertSuccessful();
+
+        $items = $test->get('data.invoiceItems');
+        $uuid = array_key_first($items);
+
+        $test->fillForm([
+            'client_name' => 'Klien Baru Gold',
+            'event_name' => 'Wedding Gold 2026',
+            'event_location' => 'Malang',
+            'person_in_charge' => 'PIC Gold',
+            'event_date' => '2026-11-20',
+            'event_end_date' => '2026-11-20',
+            'invoice_date' => '2026-11-18',
+            'due_date' => '2026-11-25',
+            'invoiceItems' => [
+                $uuid => [
+                    'item_type' => 'service',
+                    'service_description' => 'Sewa Photobooth Paket Gold',
+                    'is_tba' => false,
+                    'start_time' => '10:00',
+                    'end_time' => '13:00',
+                    'duration' => '3 Jam',
+                    'price' => '2.199.000',
+                    'device_count' => 1,
+                    'amount' => '2.199.000',
+                ],
+            ],
+            'subtotal' => '2.199.000',
+            'discount' => '0',
+            'total' => '2.199.000',
+            'status' => 'Belum Dibayar',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+        $invoice = Invoice::where('client_name', 'Klien Baru Gold')->first();
+        $this->assertNotNull($invoice);
+        $this->assertEquals(2199000, $invoice->subtotal);
+        $this->assertEquals(2199000, $invoice->total);
+        $this->assertEquals(2199000, $invoice->invoiceItems()->first()->price);
+        $this->assertEquals(2199000, $invoice->invoiceItems()->first()->amount);
+    }
+
+    public function test_invoice_edit_page_does_not_inflate_amounts(): void
+    {
+        $this->actingAs($this->user);
+
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-TEST-GOLD-001',
+            'client_name' => 'Rayz UMM Hotel',
+            'event_name' => 'Wedding Gold',
+            'person_in_charge' => 'Manager',
+            'invoice_date' => now()->toDateString(),
+            'due_date' => now()->addDays(7)->toDateString(),
+            'event_date' => now()->toDateString(),
+            'event_end_date' => now()->toDateString(),
+            'event_location' => 'Ballroom Rayz',
+            'subtotal' => 2199000,
+            'discount' => 0,
+            'total' => 2199000,
+            'down_payment' => 0,
+            'status' => 'Belum Dibayar',
+        ]);
+
+        $item = InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'service_description' => 'Sewa Photobooth Paket Gold',
+            'duration' => '3 Jam',
+            'time_range' => '10:00 - 13:00',
+            'price' => 2199000,
+            'device_count' => 1,
+            'amount' => 2199000,
+        ]);
+
+        $component = Livewire::test(EditInvoice::class, ['record' => $invoice->getKey()])
+            ->assertSuccessful();
+
+        $formData = $component->get('data');
+        // Total and subtotal in form data must be formatted as Rupiah string
+        $this->assertEquals('2.199.000', $formData['subtotal']);
+        $this->assertEquals('2.199.000', $formData['total']);
+
+        $component->call('save')
+            ->assertHasNoFormErrors();
+
+        $invoice->refresh();
+
+        // Nominal MUST stay 2.199.000, NOT 219.900.000
+        $this->assertEquals(2199000, $invoice->subtotal);
+        $this->assertEquals(2199000, $invoice->total);
+        $this->assertEquals(2199000, $invoice->invoiceItems()->first()->price);
+        $this->assertEquals(2199000, $invoice->invoiceItems()->first()->amount);
+    }
+
+    public function test_invoice_edit_with_down_payment_and_remaining_calculation(): void
+    {
+        $this->actingAs($this->user);
+
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-TEST-DP-001',
+            'client_name' => 'Klien DP',
+            'event_name' => 'Acara DP',
+            'person_in_charge' => 'PIC',
+            'invoice_date' => now()->toDateString(),
+            'due_date' => now()->addDays(7)->toDateString(),
+            'event_date' => now()->toDateString(),
+            'event_end_date' => now()->toDateString(),
+            'event_location' => 'Malang',
+            'subtotal' => 2199000,
+            'discount' => 0,
+            'total' => 2199000,
+            'down_payment' => 1000000,
+            'status' => 'Sebagian Dibayar',
+            'dp_date' => now()->toDateString(),
+        ]);
+
+        InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'service_description' => 'Sewa Photobooth Paket Gold',
+            'duration' => '3 Jam',
+            'time_range' => '10:00 - 13:00',
+            'price' => 2199000,
+            'device_count' => 1,
+            'amount' => 2199000,
+        ]);
+
+        $component = Livewire::test(EditInvoice::class, ['record' => $invoice->getKey()])
+            ->assertSuccessful();
+
+        $formData = $component->get('data');
+        $this->assertEquals('1.000.000', $formData['down_payment']);
+        $this->assertEquals('2.199.000', $formData['total']);
+
+        $component->call('save')
+            ->assertHasNoFormErrors();
+
+        $invoice->refresh();
+
+        $this->assertEquals(2199000, $invoice->total);
+        $this->assertEquals(1000000, $invoice->down_payment);
+        $this->assertEquals(1199000, $invoice->total - $invoice->down_payment);
+    }
+
+    public function test_invoice_pdf_view_renders_correct_amounts(): void
+    {
+        $this->actingAs($this->user);
+
+        $invoice = Invoice::create([
+            'invoice_number' => 'INV-TEST-PDF-001',
+            'client_name' => 'Rayz UMM Hotel',
+            'event_name' => 'Wedding Gold',
+            'person_in_charge' => 'Manager',
+            'invoice_date' => now()->toDateString(),
+            'due_date' => now()->addDays(7)->toDateString(),
+            'event_date' => now()->toDateString(),
+            'event_end_date' => now()->toDateString(),
+            'event_location' => 'Ballroom Rayz',
+            'subtotal' => 2199000,
+            'discount' => 0,
+            'total' => 2199000,
+            'down_payment' => 1099500,
+            'status' => 'Sebagian Dibayar',
+            'dp_date' => now()->toDateString(),
+        ]);
+
+        InvoiceItem::create([
+            'invoice_id' => $invoice->id,
+            'service_description' => 'Sewa Photobooth Paket Gold',
+            'duration' => '3 Jam',
+            'time_range' => '10:00 - 13:00',
+            'price' => 2199000,
+            'device_count' => 1,
+            'amount' => 2199000,
+        ]);
+
+        $rendered = view('pdf.invoice', ['invoice' => $invoice->load('invoiceItems')])->render();
+
+        // Must contain 2.199.000
+        $this->assertStringContainsString('2.199.000', $rendered);
+        $this->assertStringContainsString('Rp 2.199.000', $rendered);
+
+        // Must NOT contain 219.900.000
+        $this->assertStringNotContainsString('219.900.000', $rendered);
     }
 }
