@@ -205,7 +205,7 @@ class SessionReportResource extends Resource
 
                                 Forms\Components\TextInput::make('amount')
                                     ->label('Harga / Nominal')
-                                    ->prefix('Rp')
+                                    ->rupiah()
                                     ->numeric()
                                     ->minValue(0)
                                     ->default(30000)
@@ -223,7 +223,7 @@ class SessionReportResource extends Resource
                                         180000,
                                     ])
                                     ->afterStateUpdated(function (Forms\Set $set, $state) use ($pricingService) {
-                                        $amt = (float) $state;
+                                        $amt = RupiahHelper::toFloat($state);
                                         $sessions = $pricingService->calculateSessionsFromPrice($amt);
                                         $set('session_count', $sessions);
                                     })
@@ -233,7 +233,7 @@ class SessionReportResource extends Resource
                                 Forms\Components\Placeholder::make('calculated_session_display')
                                     ->label('Jumlah Lembar')
                                     ->content(function (Get $get) use ($pricingService) {
-                                        $amt = (float) ($get('amount') ?? 0);
+                                        $amt = RupiahHelper::toFloat($get('amount') ?? 0);
                                         if ($amt <= 0 && $get('session_count')) {
                                             $sessions = (int) $get('session_count');
                                         } else {
@@ -263,7 +263,7 @@ class SessionReportResource extends Resource
                             ])
                             ->columns(['default' => 12, 'md' => 12])
                             ->itemLabel(function (array $state) use ($pricingService): ?string {
-                                $amt = (float) ($state['amount'] ?? 30000);
+                                $amt = RupiahHelper::toFloat($state['amount'] ?? 30000);
                                 $method = strtoupper($state['payment_method'] ?? 'CASH');
                                 $methodLabel = $method === 'QRIS' ? 'QRIS' : 'Tunai';
                                 $sheets = $pricingService->calculateSessionsFromPrice($amt);

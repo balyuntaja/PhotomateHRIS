@@ -141,9 +141,7 @@ class KaryawanResource extends Resource
 
                         Forms\Components\TextInput::make('gaji_pokok')
                             ->label('Gaji Pokok')
-                            ->numeric()
-                            ->prefix('Rp')
-                            ->step(0.01),
+                            ->rupiah(),
                     ])
                     ->columns(2),
 

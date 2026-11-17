@@ -186,13 +186,10 @@ class FinancialTransactionResource extends Resource
     {
         return Forms\Components\TextInput::make('amount')
             ->label('Nominal')
-            ->prefix('Rp')
-            ->required()
-            ->mask(RawJs::make('$money($input, \',\', \'.\', 0)'))
-            ->stripCharacters(['.', ','])
+            ->rupiah()
             ->numeric()
+            ->required()
             ->minValue(1)
-            ->formatStateUsing(fn ($state): ?string => filled($state) ? RupiahHelper::number($state) : $state)
             ->validationMessages([
                 'required' => 'Nominal wajib diisi.',
                 'numeric' => 'Nominal harus berupa angka.',

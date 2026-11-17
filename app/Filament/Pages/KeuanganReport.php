@@ -26,7 +26,7 @@ class KeuanganReport extends Page implements HasForms, HasTable
 
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
 
-    protected static ?string $navigationLabel = 'Laporan';
+    protected static ?string $navigationLabel = 'Laporan Detail Transaksi';
 
     protected static ?string $navigationGroup = 'Keuangan';
 
@@ -271,13 +271,26 @@ class KeuanganReport extends Page implements HasForms, HasTable
                 ->icon('heroicon-o-printer')
                 ->color('primary')
                 ->visible(fn (): bool => Auth::user()?->isSuperAdmin() || (Auth::user()?->can('print_keuangan_report') ?? false))
-                ->url(fn (): string => route('keuangan.laporan.cetak', [
-                    'periode' => $this->data['periode'] ?? KeuanganService::DEFAULT_PRESET,
-                    'dari' => $this->data['dari'] ?? null,
-                    'sampai' => $this->data['sampai'] ?? null,
-                    'account_id' => $this->data['account_id'] ?? null,
-                ]))
-                ->openUrlInNewTab(),
+                ->modalHeading('Pilih Format Cetak PDF')
+                ->modalWidth('xl')
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('Tutup')
+                ->modalContent(fn () => view('filament.pages.actions.keuangan-cetak-pdf-modal', [
+                    'paramsDetail' => [
+                        'format' => 'detail',
+                        'periode' => $this->data['periode'] ?? KeuanganService::DEFAULT_PRESET,
+                        'dari' => $this->data['dari'] ?? null,
+                        'sampai' => $this->data['sampai'] ?? null,
+                        'account_id' => $this->data['account_id'] ?? null,
+                    ],
+                    'paramsLabaRugi' => [
+                        'format' => 'laba_rugi',
+                        'periode' => $this->data['periode'] ?? KeuanganService::DEFAULT_PRESET,
+                        'dari' => $this->data['dari'] ?? null,
+                        'sampai' => $this->data['sampai'] ?? null,
+                        'account_id' => $this->data['account_id'] ?? null,
+                    ],
+                ])),
         ];
     }
 }

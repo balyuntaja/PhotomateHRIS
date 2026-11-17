@@ -209,6 +209,36 @@
             </div>
             @endif
         </div>
+        @elseif($report->isApproved())
+        <div class="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-bold text-xs">i</span>
+                    <span class="font-bold text-sm text-gray-800 dark:text-gray-200">Target Bonus Harian Belum Tercapai (&lt; 30 Sesi)</span>
+                </div>
+                <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+                    Bonus: Rp 0
+                </span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-gray-200 dark:border-gray-700 text-xs">
+                <div class="p-2.5 bg-white/70 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <span class="text-gray-500 block">Total Sesi Hari Ini:</span>
+                    <span class="text-base font-bold text-gray-900 dark:text-gray-100">{{ $bonusDetails['day_total_sessions'] }} Sesi</span>
+                    <span class="text-[10px] text-gray-400 block">(Target: ≥ 30 sesi)</span>
+                </div>
+                <div class="p-2.5 bg-white/70 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <span class="text-gray-500 block">Kekurangan Target:</span>
+                    <span class="text-base font-bold text-gray-700 dark:text-gray-300">{{ $bonusDetails['remaining_sessions'] }} Sesi</span>
+                    <span class="text-[10px] text-gray-400 block">Untuk mencapai 30 sesi</span>
+                </div>
+                <div class="p-2.5 bg-white/70 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <span class="text-gray-500 block">Total Bonus Cabang:</span>
+                    <span class="text-base font-bold font-mono text-gray-700 dark:text-gray-300">{{ \App\Utils\RupiahHelper::format(0) }}</span>
+                    <span class="text-[10px] text-gray-400 block">Target belum tercapai</span>
+                </div>
+            </div>
+        </div>
         @else
         <div class="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-100 space-y-1.5">
             <div class="flex items-center justify-between flex-wrap gap-2">

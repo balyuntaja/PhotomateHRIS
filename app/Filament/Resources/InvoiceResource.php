@@ -201,13 +201,13 @@ class InvoiceResource extends Resource
                                     ->columnSpan(1),
                                 TextInput::make('price')
                                     ->label('Harga')
-                                    ->prefix('Rp')
+                                    ->rupiah()
                                     ->numeric()
                                     ->required()
-                                    ->default(0.00)
+                                    ->default(0)
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(function (Get $get, Set $set) {
-                                        $price = floatval($get('price') ?? 0);
+                                        $price = RupiahHelper::toFloat($get('price') ?? 0);
                                         $deviceCount = intval($get('device_count') ?? 1);
                                         $set('amount', $price * $deviceCount);
                                         self::updateTotals($get, $set);
@@ -221,7 +221,7 @@ class InvoiceResource extends Resource
                                     ->default(1)
                                     ->live(onBlur: true)
                                     ->afterStateUpdated(function (Get $get, Set $set) {
-                                        $price = floatval($get('price') ?? 0);
+                                        $price = RupiahHelper::toFloat($get('price') ?? 0);
                                         $deviceCount = intval($get('device_count') ?? 1);
                                         $set('amount', $price * $deviceCount);
                                         self::updateTotals($get, $set);
@@ -229,11 +229,11 @@ class InvoiceResource extends Resource
                                     ->columnSpan(1),
                                 TextInput::make('amount')
                                     ->label('Total')
-                                    ->prefix('Rp')
+                                    ->rupiah()
                                     ->numeric()
                                     ->required()
                                     ->readOnly()
-                                    ->default(0.00)
+                                    ->default(0)
                                     ->columnSpan(1),
                             ])
                             ->live()
@@ -245,24 +245,24 @@ class InvoiceResource extends Resource
                 Forms\Components\Section::make('Perhitungan')
                     ->schema([
                         TextInput::make('subtotal')
-                            ->prefix('Rp')
-                            ->required()
+                            ->rupiah()
                             ->numeric()
+                            ->required()
                             ->readOnly()
-                            ->default(0.00),
+                            ->default(0),
                         TextInput::make('discount')
-                            ->prefix('Rp')
-                            ->required()
+                            ->rupiah()
                             ->numeric()
-                            ->default(0.00)
+                            ->required()
+                            ->default(0)
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn(Get $get, Set $set) => self::updateTotals($get, $set)),
                         TextInput::make('total')
-                            ->prefix('Rp')
-                            ->required()
+                            ->rupiah()
                             ->numeric()
+                            ->required()
                             ->readOnly()
-                            ->default(0.00),
+                            ->default(0),
                     ])->columns(3),
 
                 Forms\Components\Section::make('Metode Pembayaran')
@@ -299,14 +299,14 @@ class InvoiceResource extends Resource
                             }),
                         TextInput::make('down_payment')
                             ->label('Down Payment (DP) yang Dibayar')
-                            ->prefix('Rp')
+                            ->rupiah()
                             ->numeric()
-                            ->default(0.00)
+                            ->default(0)
                             ->visible(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
                             ->required(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
                             ->live(onBlur: true)
-                            ->helperText(fn(Get $get) => 'Sisa Pembayaran: ' . RupiahHelper::format(max(0, floatval($get('total') ?? 0) - floatval($get('down_payment') ?? 0))))
-                            ->maxValue(fn(Get $get) => floatval($get('total') ?? 0))
+                            ->helperText(fn(Get $get) => 'Sisa Pembayaran: ' . RupiahHelper::format(max(0, RupiahHelper::toFloat($get('total') ?? 0) - RupiahHelper::toFloat($get('down_payment') ?? 0))))
+                            ->maxValue(fn(Get $get) => RupiahHelper::toFloat($get('total') ?? 0))
                             ->minValue(0),
                         DatePicker::make('dp_date')
                             ->label('Tanggal Bayar DP')
@@ -434,27 +434,28 @@ class InvoiceResource extends Resource
         ];
     }
 
-    public static function updateTotals(Get $get, Set $set): void
+    public static function updateTotals(Get|callable $get, Set|callable $set): void
     {
         $items = $get('invoiceItems');
         $subtotal = 0;
 
         if (is_array($items)) {
             foreach ($items as $item) {
-                $price = floatval($item['price'] ?? 0);
+                $price = RupiahHelper::toFloat($item['price'] ?? 0);
                 $deviceCount = intval($item['device_count'] ?? 1);
 
                 // If price is 0 but amount is set (legacy safeguard), use amount,
                 // otherwise calculate on-the-fly using price * deviceCount.
-                if ($price == 0 && floatval($item['amount'] ?? 0) > 0) {
-                    $subtotal += floatval($item['amount'] ?? 0);
+                $itemAmount = RupiahHelper::toFloat($item['amount'] ?? 0);
+                if ($price == 0 && $itemAmount > 0) {
+                    $subtotal += $itemAmount;
                 } else {
                     $subtotal += ($price * $deviceCount);
                 }
             }
         }
 
-        $discount = floatval($get('discount') ?? 0);
+        $discount = RupiahHelper::toFloat($get('discount') ?? 0);
         $total = max(0, $subtotal - $discount);
 
         $set('subtotal', $subtotal);

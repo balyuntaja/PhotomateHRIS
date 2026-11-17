@@ -606,10 +606,13 @@ class KeuanganDashboardReportTest extends TestCase
 
         $html = $this->renderPdfTemplate(['transactions' => $transactions]);
 
-        // 45 transaksi -> 8 + 12 + 12 + 12 + 1 = 5 halaman, tiap halaman punya header sendiri.
-        $this->assertSame(5, substr_count($html, '<table class="transactions-table"'));
-        $this->assertSame(5, substr_count($html, '<table class="table-no-border"'));
-        $this->assertSame(4, substr_count($html, 'Rincian Transaksi (lanjutan)'));
+        // Continuous table: 1 tabel transaksi tunggal tanpa pemecahan manual
+        $this->assertSame(1, substr_count($html, '<table class="transactions-table"'));
+        $this->assertSame(1, substr_count($html, '<table class="table-no-border"'));
+        $this->assertStringNotContainsString('Rincian Transaksi (lanjutan)', $html);
+        $this->assertStringNotContainsString('page-break-after: always', $html);
+        $this->assertStringContainsString('display: table-header-group', $html);
+        $this->assertStringContainsString('break-inside: avoid', $html);
         $this->assertSame(45, substr_count($html, '<td class="text-center">'));
         $this->assertStringContainsString('<td class="text-center">45</td>', $html);
 
@@ -624,7 +627,41 @@ class KeuanganDashboardReportTest extends TestCase
         ]));
         $dompdf->render();
 
-        $this->assertSame(5, $dompdf->getCanvas()->get_page_count());
+        // 45 transaksi mengalir secara continuous dalam 2 halaman (jauh lebih efisien dari 5 halaman manual)
+        $this->assertSame(2, $dompdf->getCanvas()->get_page_count());
+    }
+
+    public function test_template_pdf_mengalir_dalam_satu_halaman_saat_konten_muat(): void
+    {
+        $transactions = collect();
+
+        // 12 transaksi (sebelumnya terpotong menjadi 2 halaman akibat batas 8 baris)
+        for ($index = 1; $index <= 12; $index++) {
+            $transactions->push($this->makeTransaction(
+                FinancialTransaction::TYPE_INCOME,
+                500000 + $index,
+                $this->incomeCategory->id,
+                null,
+                Carbon::today()->subDays($index)->toDateString(),
+                "Transaksi halaman satu {$index}"
+            ));
+        }
+
+        $html = $this->renderPdfTemplate(['transactions' => $transactions]);
+
+        $dompdf = new Dompdf();
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'landscape');
+        $dompdf->setOptions(new Options([
+            'dpi' => 150,
+            'defaultFont' => 'sans-serif',
+            'isRemoteEnabled' => true,
+            'isPhpEnabled' => true,
+        ]));
+        $dompdf->render();
+
+        // 12 transaksi tetap muat dalam 1 halaman tanpa split buatan
+        $this->assertSame(1, $dompdf->getCanvas()->get_page_count());
     }
 
     public function test_pdf_menggunakan_filter_dan_urutan_transaksi_yang_sama_dengan_halaman_laporan(): void
@@ -670,6 +707,257 @@ class KeuanganDashboardReportTest extends TestCase
             ],
             (new KeuanganDashboard)->getWidgets()
         );
+    }
+
+    public function test_cetak_pdf_modal_menampilkan_pilihan_format_laporan(): void
+    {
+        $this->actingAs($this->financeUser);
+
+        Livewire::test(KeuanganReport::class)
+            ->assertActionVisible('cetak')
+            ->mountAction('cetak')
+            ->assertSee('Laporan Detail Transaksi')
+            ->assertSee('Laporan Laba Rugi Booth')
+            ->assertSee('format=detail')
+            ->assertSee('format=laba_rugi');
+    }
+
+    public function test_cetak_pdf_format_laba_rugi_menghasilkan_pdf_dengan_nama_file_yang_sesuai(): void
+    {
+        $this->seedContohTransaksi();
+
+        $response = $this->actingAs($this->financeUser)
+            ->get('/keuangan/laporan/cetak?periode=this_month&format=laba_rugi')
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $disposition = (string) $response->headers->get('content-disposition');
+        $this->assertStringContainsString('laporan-laba-rugi-', $disposition);
+    }
+
+    public function test_template_pdf_laba_rugi_menghitung_pendapatan_beban_dan_status_laba(): void
+    {
+        $golioAccount = FinancialAccount::where('name', 'Golio')->firstOrFail();
+        $boxParent = \App\Models\FinancialParentCategory::where('name', 'Box')->firstOrFail();
+        $gajiParent = \App\Models\FinancialParentCategory::where('name', 'Gaji')->firstOrFail();
+
+        $boxCategory = FinancialCategory::firstOrCreate(
+            ['name' => 'Box Kardus', 'transaction_type' => FinancialCategory::TYPE_EXPENSE],
+            ['parent_category_id' => $boxParent->id, 'is_active' => true]
+        );
+        $boxCategory->update(['parent_category_id' => $boxParent->id]);
+
+        $gajiCategory = FinancialCategory::where('name', 'Gaji')->first()
+            ?? FinancialCategory::create([
+                'name' => 'Gaji Pokok',
+                'transaction_type' => FinancialCategory::TYPE_EXPENSE,
+                'parent_category_id' => $gajiParent->id,
+                'is_active' => true,
+            ]);
+        $gajiCategory->update(['parent_category_id' => $gajiParent->id]);
+
+        $today = Carbon::today()->toDateString();
+
+        // Income Express: 5.000.000
+        $this->makeTransaction(FinancialTransaction::TYPE_INCOME, 5000000, $this->incomeCategory->id, 'C0005', $today, 'Express Income', $this->expressAccount->id);
+        // Income Janus: 3.000.000
+        $this->makeTransaction(FinancialTransaction::TYPE_INCOME, 3000000, $this->incomeCategory->id, 'C0004', $today, 'Janus Income', $this->janusAccount->id);
+        // Income Golio: 2.000.000
+        $this->makeTransaction(FinancialTransaction::TYPE_INCOME, 2000000, $this->incomeCategory->id, null, $today, 'Golio Income', $golioAccount->id);
+
+        // Expense Box: 1.000.000
+        $this->makeTransaction(FinancialTransaction::TYPE_EXPENSE, 1000000, $boxCategory->id, 'C0005', $today, 'Beli Box', $this->expressAccount->id, $boxParent->id);
+        // Expense Gaji: 2.500.000
+        $this->makeTransaction(FinancialTransaction::TYPE_EXPENSE, 2500000, $gajiCategory->id, 'C0004', $today, 'Gaji Crew', $this->janusAccount->id, $gajiParent->id);
+
+        $html = $this->renderLabaRugiPdfTemplate();
+
+        $this->assertStringContainsString('Laporan Laba Rugi Booth', $html);
+        $this->assertStringContainsString('Pendapatan Usaha', $html);
+        $this->assertStringContainsString('Beban Usaha', $html);
+        $this->assertStringContainsString('Express', $html);
+        $this->assertStringContainsString('Janus', $html);
+        $this->assertStringContainsString('Golio', $html);
+        $this->assertStringContainsString('Rp 5.000.000', $html);
+        $this->assertStringContainsString('Rp 3.000.000', $html);
+        $this->assertStringContainsString('Rp 2.000.000', $html);
+        $this->assertStringContainsString('Total Pendapatan', $html);
+        $this->assertStringContainsString('Rp 10.000.000', $html);
+
+        $this->assertStringContainsString('Box', $html);
+        $this->assertStringContainsString('Rp 1.000.000', $html);
+        $this->assertStringContainsString('Gaji', $html);
+        $this->assertStringContainsString('Rp 2.500.000', $html);
+        $this->assertStringContainsString('Transportasi', $html);
+        $this->assertStringContainsString('Pengadaan Peralatan', $html);
+        $this->assertStringContainsString('Persediaan', $html);
+        $this->assertStringContainsString('Konsumsi', $html);
+        $this->assertStringContainsString('Langganan', $html);
+        $this->assertStringContainsString('Rp 0', $html);
+
+        $this->assertStringContainsString('Total Beban Usaha', $html);
+        $this->assertStringContainsString('Rp 3.500.000', $html);
+
+        $this->assertStringContainsString('Status: Laba', $html);
+        $this->assertStringContainsString('Laba Bersih', $html);
+        $this->assertStringContainsString('Rp 6.500.000', $html);
+    }
+
+    public function test_template_pdf_laba_rugi_menghitung_status_rugi_dan_impas(): void
+    {
+        $boxParent = \App\Models\FinancialParentCategory::where('name', 'Box')->firstOrFail();
+        $boxCategory = FinancialCategory::firstOrCreate(
+            ['name' => 'Box Kardus', 'transaction_type' => FinancialCategory::TYPE_EXPENSE],
+            ['parent_category_id' => $boxParent->id, 'is_active' => true]
+        );
+        $boxCategory->update(['parent_category_id' => $boxParent->id]);
+
+        $today = Carbon::today()->toDateString();
+
+        // Income 1.000.000, Expense 3.000.000 -> Rugi 2.000.000
+        $this->makeTransaction(FinancialTransaction::TYPE_INCOME, 1000000, $this->incomeCategory->id, 'C0005', $today, 'Express Income', $this->expressAccount->id);
+        $this->makeTransaction(FinancialTransaction::TYPE_EXPENSE, 3000000, $boxCategory->id, 'C0005', $today, 'Expense Box', $this->expressAccount->id, $boxParent->id);
+
+        $htmlRugi = $this->renderLabaRugiPdfTemplate();
+        $this->assertStringContainsString('Status: Rugi', $htmlRugi);
+        $this->assertStringContainsString('Rugi Bersih', $htmlRugi);
+        $this->assertStringContainsString('-Rp 2.000.000', $htmlRugi);
+
+        // Tambah income 2.000.000 -> Total Income 3.000.000, Expense 3.000.000 -> Impas
+        $this->makeTransaction(FinancialTransaction::TYPE_INCOME, 2000000, $this->incomeCategory->id, 'C0005', $today, 'Express Income Extra', $this->expressAccount->id);
+        $htmlImpas = $this->renderLabaRugiPdfTemplate();
+        $this->assertStringContainsString('Status: Impas', $htmlImpas);
+        $this->assertStringContainsString('Impas Bersih', $htmlImpas);
+        $this->assertStringContainsString('Rp 0', $htmlImpas);
+    }
+
+    public function test_cetak_pdf_laba_rugi_mengikuti_filter_akun(): void
+    {
+        $today = Carbon::today()->toDateString();
+
+        $this->makeTransaction(FinancialTransaction::TYPE_INCOME, 5000000, $this->incomeCategory->id, 'C0005', $today, 'Express Income', $this->expressAccount->id);
+        $this->makeTransaction(FinancialTransaction::TYPE_INCOME, 3000000, $this->incomeCategory->id, 'C0004', $today, 'Janus Income', $this->janusAccount->id);
+
+        $htmlJanus = $this->renderLabaRugiPdfTemplate(['accountId' => $this->janusAccount->id]);
+
+        $this->assertStringContainsString('Janus', $htmlJanus);
+        $this->assertStringContainsString('Rp 3.000.000', $htmlJanus);
+        $this->assertStringNotContainsString('Rp 5.000.000', $htmlJanus);
+    }
+
+    /**
+     * @param  array{accountId?: ?int}  $overrides
+     */
+    protected function renderLabaRugiPdfTemplate(array $overrides = []): string
+    {
+        $service = app(KeuanganService::class);
+        $period = $service->resolvePeriod(KeuanganService::PRESET_THIS_MONTH);
+        $accountId = $overrides['accountId'] ?? null;
+        $accountName = $accountId ? (FinancialAccount::find($accountId)?->name ?? 'Semua Akun') : 'Semua Akun';
+
+        $transactions = $service
+            ->transactionsForReport($period['start'], $period['end'], null, $accountId)
+            ->with(['account', 'cabang', 'category.parentCategory', 'parentCategory'])
+            ->get();
+
+        $incomeTransactions = $transactions->where('transaction_type', FinancialTransaction::TYPE_INCOME);
+
+        $pendapatanRows = [
+            'Express' => 0,
+            'Janus' => 0,
+            'Golio' => 0,
+        ];
+        $pendapatanLain = [];
+
+        foreach ($incomeTransactions as $transaction) {
+            $amount = (int) $transaction->amount;
+            $accName = strtolower($transaction->account?->name ?? '');
+            $cabName = strtolower($transaction->cabang?->nama_cabang ?? '');
+
+            if (str_contains($accName, 'express') || str_contains($cabName, 'express')) {
+                $pendapatanRows['Express'] += $amount;
+            } elseif (str_contains($accName, 'janus') || str_contains($cabName, 'janus')) {
+                $pendapatanRows['Janus'] += $amount;
+            } elseif (str_contains($accName, 'golio') || str_contains($cabName, 'golio')) {
+                $pendapatanRows['Golio'] += $amount;
+            } else {
+                $label = $transaction->account?->name ?: ($transaction->cabang?->nama_cabang ?: 'Lain-lain');
+                $pendapatanLain[$label] = ($pendapatanLain[$label] ?? 0) + $amount;
+            }
+        }
+
+        $totalPendapatan = (int) $incomeTransactions->sum('amount');
+
+        $expenseTransactions = $transactions->where('transaction_type', FinancialTransaction::TYPE_EXPENSE);
+
+        $standardBebanCategories = [
+            'Box',
+            'Transportasi',
+            'Pengadaan Peralatan',
+            'Gaji',
+            'Persediaan',
+            'Konsumsi',
+            'Langganan',
+        ];
+
+        $bebanRows = array_fill_keys($standardBebanCategories, 0);
+        $bebanLain = [];
+
+        foreach ($expenseTransactions as $transaction) {
+            $amount = (int) $transaction->amount;
+            $categoryName = $transaction->parentCategory?->name
+                ?: $transaction->category?->parentCategory?->name
+                ?: $transaction->category?->name;
+
+            $matchedKey = null;
+            foreach ($standardBebanCategories as $std) {
+                if (strcasecmp(trim((string) $categoryName), $std) === 0) {
+                    $matchedKey = $std;
+                    break;
+                }
+            }
+
+            if ($matchedKey !== null) {
+                $bebanRows[$matchedKey] += $amount;
+            } else {
+                $otherLabel = filled($categoryName) ? trim((string) $categoryName) : 'Lain-lain';
+                $bebanLain[$otherLabel] = ($bebanLain[$otherLabel] ?? 0) + $amount;
+            }
+        }
+
+        $totalBebanUsaha = (int) $expenseTransactions->sum('amount');
+
+        $labaRugi = $totalPendapatan - $totalBebanUsaha;
+        if ($labaRugi > 0) {
+            $statusLabel = 'Laba';
+            $statusType = 'laba';
+        } elseif ($labaRugi < 0) {
+            $statusLabel = 'Rugi';
+            $statusType = 'rugi';
+        } else {
+            $statusLabel = 'Impas';
+            $statusType = 'impas';
+        }
+
+        $tanggalCetak = now()->day . ' '
+            . MonthHelper::formatPeriod((int) now()->month, (int) now()->year);
+
+        return view('pdf.keuangan-laba-rugi', [
+            'period' => $period,
+            'accountName' => $accountName,
+            'pendapatanRows' => $pendapatanRows,
+            'pendapatanLain' => $pendapatanLain,
+            'totalPendapatan' => $totalPendapatan,
+            'bebanRows' => $bebanRows,
+            'bebanLain' => $bebanLain,
+            'totalBebanUsaha' => $totalBebanUsaha,
+            'labaRugi' => $labaRugi,
+            'statusLabel' => $statusLabel,
+            'statusType' => $statusType,
+            'judulDokumen' => 'Laporan Laba Rugi Booth',
+            'periode' => $period['label'],
+            'tanggalCetak' => $tanggalCetak,
+        ])->render();
     }
 
     /**
@@ -746,12 +1034,14 @@ class KeuanganDashboardReportTest extends TestCase
         ?string $cabangId,
         string $date,
         string $description = 'Transaksi uji',
-        ?int $accountId = null
+        ?int $accountId = null,
+        ?int $parentCategoryId = null
     ): FinancialTransaction {
         return FinancialTransaction::create([
             'transaction_type' => $type,
             'amount' => $amount,
             'category_id' => $categoryId,
+            'parent_category_id' => $parentCategoryId,
             'account_id' => $accountId,
             'cabang_id' => $cabangId,
             'payment_method_id' => $this->paymentMethod->id,
