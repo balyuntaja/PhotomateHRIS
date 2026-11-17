@@ -2,9 +2,7 @@
 
 namespace App\Models;
 
-use DomainException;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
@@ -28,9 +26,6 @@ class Invoice extends Model
         'invoice_date' => 'date',
         'max_dp_date' => 'date',
         'due_date' => 'date',
-        'subtotal' => 'float',
-        'discount' => 'float',
-        'total' => 'float',
         'down_payment' => 'float',
         'dp_date' => 'date',
     ];
@@ -40,45 +35,9 @@ class Invoice extends Model
         return $this->hasMany(InvoiceItem::class);
     }
 
-    /**
-     * Simpan invoice beserta sinkronisasi transaksi keuangan dan jurnalnya
-     * dalam satu transaksi database. Kegagalan jurnal membatalkan invoice.
-     */
-    public function save(array $options = [])
-    {
-        return DB::transaction(fn () => parent::save($options), 3);
-    }
-
-    /**
-     * Hapus invoice beserta pembatalan transaksi keuangan dan reversal jurnal.
-     */
-    public function delete()
-    {
-        return DB::transaction(fn () => parent::delete(), 3);
-    }
-
-    public function journalEntries(): \Illuminate\Database\Eloquent\Relations\HasMany
-    {
-        return $this->hasMany(JournalEntry::class, 'reference_id')
-            ->where('reference_type', \App\Services\TransactionAccountingService::REF_INVOICE);
-    }
-
     protected static function boot()
     {
         parent::boot();
-
-        static::saving(function ($invoice) {
-            $total = (float) ($invoice->total ?? 0);
-            $downPayment = (float) ($invoice->down_payment ?? 0);
-
-            if ($downPayment < 0) {
-                throw new DomainException('Total pembayaran DP tidak boleh negatif.');
-            }
-
-            if ($downPayment > $total) {
-                throw new DomainException('Total pembayaran DP tidak boleh melebihi total tagihan invoice.');
-            }
-        });
 
         static::creating(function ($invoice) {
             if (!$invoice->invoice_number) {

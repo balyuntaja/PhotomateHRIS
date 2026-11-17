@@ -555,7 +555,6 @@ class LuminashImportService
             }
 
             app(LuminashRekapService::class)->consolidateDates(array_keys($importedDates), $user);
-            app(TransactionAccountingService::class)->syncLuminashConsolidation(array_keys($importedDates), $user);
 
             $batch->update([
                 'imported_count' => $counts[LuminashImportRow::RESULT_IMPORTED],
@@ -569,7 +568,7 @@ class LuminashImportService
             ]);
 
             return $batch->refresh();
-        }, 3);
+        });
     }
 
     private function buildSessionNote(array $row): string

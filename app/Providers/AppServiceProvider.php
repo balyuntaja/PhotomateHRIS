@@ -40,11 +40,6 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Support\Facades\Gate::policy(\App\Models\InventoryTransaction::class, \App\Policies\InventoryTransactionPolicy::class);
 
         \App\Models\Invoice::observe(\App\Observers\InvoiceObserver::class);
-        \App\Models\FinancialTransaction::observe(\App\Observers\FinancialTransactionObserver::class);
-        \App\Models\SessionReport::observe(\App\Observers\SessionReportObserver::class);
-        \App\Models\FinancialCategory::observe(\App\Observers\AccountingMasterDataAuditObserver::class);
-        \App\Models\CategoryAccountMapping::observe(\App\Observers\AccountingMasterDataAuditObserver::class);
-        \App\Models\ChartOfAccount::observe(\App\Observers\AccountingMasterDataAuditObserver::class);
 
         DateTimePicker::configureUsing(fn(DateTimePicker $component) => $component->native(false));
 

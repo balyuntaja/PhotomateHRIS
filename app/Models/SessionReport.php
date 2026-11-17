@@ -2,14 +2,12 @@
 
 namespace App\Models;
 
-use App\Services\LuminashImportService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
@@ -107,43 +105,9 @@ class SessionReport extends Model
         'validation_issues' => 'array',
     ];
 
-    /**
-     * Simpan rekap sesi beserta sinkronisasi jurnal pendapatannya dalam satu transaksi.
-     */
-    public function save(array $options = [])
-    {
-        return DB::transaction(fn () => parent::save($options), 3);
-    }
-
-    /**
-     * Hapus rekap sesi beserta reversal jurnal pendapatannya dalam satu transaksi.
-     */
-    public function delete()
-    {
-        return DB::transaction(fn () => parent::delete(), 3);
-    }
-
     protected static function boot()
     {
         parent::boot();
-
-        static::saving(function ($model) {
-            if (blank($model->invoice_id)) {
-                return;
-            }
-
-            $golioCabangId = LuminashImportService::golioCabangId();
-            $eventNote = (string) $model->event_note;
-            $isLuminash = (filled($golioCabangId) && (string) $model->cabang_id === (string) $golioCabangId)
-                || str_starts_with($eventNote, 'Impor Luminash CSV')
-                || str_starts_with($eventNote, 'Tambahan impor Luminash CSV');
-
-            if ($isLuminash) {
-                throw new \DomainException(
-                    'Rekap Luminash/Golio tidak dapat ditautkan ke invoice karena pendapatannya sudah diakui pada jurnal rekap harian.'
-                );
-            }
-        });
 
         static::creating(function ($model) {
             if (empty($model->report_number)) {
@@ -316,12 +280,6 @@ class SessionReport extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class, 'invoice_id');
-    }
-
-    public function journalEntries(): \Illuminate\Database\Eloquent\Relations\HasMany
-    {
-        return $this->hasMany(JournalEntry::class, 'reference_id')
-            ->where('reference_type', \App\Services\TransactionAccountingService::REF_SESSION_REPORT);
     }
 
     public function event(): BelongsTo

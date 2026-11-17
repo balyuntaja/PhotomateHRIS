@@ -5,10 +5,7 @@ namespace App\Filament\Resources\FinancialCategoryResource\Pages;
 use App\Filament\Resources\FinancialCategoryResource;
 use App\Filament\Resources\FinancialParentCategoryResource;
 use App\Filament\Resources\Pages\ListRecords;
-use App\Models\FinancialCategory;
-use App\Services\AccountingMasterDataService;
 use Filament\Actions;
-use Illuminate\Support\Facades\Auth;
 
 class ListFinancialCategories extends ListRecords
 {
@@ -25,13 +22,7 @@ class ListFinancialCategories extends ListRecords
                 ->modalHeading('Tambah Sub Kategori')
                 ->modalSubmitActionLabel('Simpan')
                 ->createAnother(false)
-                ->successNotificationTitle('Sub kategori berhasil disimpan.')
-                ->using(function (array $data): FinancialCategory {
-                    $reason = $data['change_reason'] ?? null;
-                    unset($data['change_reason']);
-
-                    return app(AccountingMasterDataService::class)->createCategory($data, Auth::user(), $reason);
-                }),
+                ->successNotificationTitle('Sub kategori berhasil disimpan.'),
 
             Actions\Action::make('kategori_utama')
                 ->label('Kelola Kategori Utama')

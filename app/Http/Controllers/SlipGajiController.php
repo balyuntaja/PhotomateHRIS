@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Karyawan;
 use App\Models\Penggajian;
 use App\Services\AbsensiService;
 use App\Services\TunjanganService;
@@ -37,10 +36,8 @@ class SlipGajiController extends Controller
   /**
    * Cetak semua slip gaji untuk periode tertentu
    */
-  public function cetakSemuaSlipGaji(Request $request, int $tahun, int $bulan)
+  public function cetakSemuaSlipGaji(int $tahun, int $bulan)
   {
-    $this->authorizeSlipGajiAccess($request->user());
-
     try {
       // Validasi periode
       $penggajianExists = Penggajian::where('periode_bulan', $bulan)
@@ -94,10 +91,8 @@ class SlipGajiController extends Controller
   /**
    * Cetak slip gaji individual
    */
-  public function cetakSlipGajiIndividual(Request $request, string $karyawan_id, int $tahun, int $bulan)
+  public function cetakSlipGajiIndividual(string $karyawan_id, int $tahun, int $bulan)
   {
-    $this->authorizeSlipGajiAccess($request->user(), $karyawan_id);
-
     try {
       // Ambil data penggajian karyawan
       $penggajian = Penggajian::where('karyawan_id', $karyawan_id)
@@ -175,28 +170,6 @@ class SlipGajiController extends Controller
       'tahun' => $tahun,
       'bulan' => $bulan
     ]);
-  }
-
-  /**
-   * Pastikan user berwenang melihat slip gaji sendiri atau seluruh slip gaji.
-   */
-  private function authorizeSlipGajiAccess(?Karyawan $user, ?string $karyawanId = null): void
-  {
-    abort_unless($user !== null, 403, 'Anda tidak memiliki akses ke slip gaji.');
-
-    if ($karyawanId !== null && (string) $user->karyawan_id === (string) $karyawanId) {
-      return;
-    }
-
-    abort_unless(
-      $user->isSuperAdmin()
-        || $user->can('view_any_slip_gaji')
-        || $user->can('view_slip_gaji')
-        || $user->can('view_any_penggajian')
-        || $user->can('view_penggajian'),
-      403,
-      'Anda tidak memiliki akses ke slip gaji.'
-    );
   }
 
   /**

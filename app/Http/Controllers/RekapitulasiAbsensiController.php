@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Karyawan;
 use App\Services\RekapitulasiAbsensiService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -12,8 +11,6 @@ class RekapitulasiAbsensiController extends Controller
 {
     public function cetak(Request $request)
     {
-        $this->authorizeReportAccess($request->user());
-
         try {
             /** @var RekapitulasiAbsensiService $service */
             $service = app(RekapitulasiAbsensiService::class);
@@ -58,15 +55,5 @@ class RekapitulasiAbsensiController extends Controller
 
             abort(500, 'Terjadi kesalahan saat membuat PDF rekapitulasi absensi.');
         }
-    }
-
-    private function authorizeReportAccess(?Karyawan $user): void
-    {
-        abort_unless(
-            $user !== null
-                && ($user->isSuperAdmin() || $user->can('view_any_absensi')),
-            403,
-            'Anda tidak memiliki akses ke rekapitulasi absensi.'
-        );
     }
 }

@@ -7277,10 +7277,6 @@ input:where([type='file']):focus {
     grid-template-columns: var(--cols-md);
   }
 
-  .md\:grid-cols-4 {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .md\:flex-row {
     flex-direction: row;
   }

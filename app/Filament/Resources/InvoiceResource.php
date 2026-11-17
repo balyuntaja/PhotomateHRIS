@@ -3,7 +3,6 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\InvoiceResource\Pages;
-use App\Http\Controllers\InvoiceController;
 use App\Models\Invoice;
 use App\Utils\RupiahHelper;
 use Filament\Forms;
@@ -401,7 +400,7 @@ class InvoiceResource extends Resource
                     Action::make('pdf')
                         ->label('Download PDF')
                         ->icon('heroicon-o-document-arrow-down')
-                        ->url(fn(Invoice $record) => InvoiceController::temporaryPdfUrl($record))
+                        ->url(fn(Invoice $record) => route('invoice.pdf', $record))
                         ->openUrlInNewTab(),
                     Action::make('markAsPaid')
                         ->label('Mark as Paid')
