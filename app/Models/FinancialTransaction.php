@@ -221,6 +221,48 @@ class FinancialTransaction extends Model
         return $query->when(filled($type), fn (Builder $q): Builder => $q->where('transaction_type', $type));
     }
 
+    /**
+     * Filter transaksi berdasarkan nama kategori utama (parent category),
+     * memeriksa parent_category_id, relasi sub kategori, dan nama kategori langsung.
+     */
+    public function scopeWhereParentCategory(Builder $query, string $parentName): Builder
+    {
+        $parentId = FinancialParentCategory::query()
+            ->where('name', $parentName)
+            ->value('id');
+
+        $categoryIds = FinancialCategory::query()
+            ->where(function (Builder $q) use ($parentId, $parentName): void {
+                if ($parentId) {
+                    $q->where('parent_category_id', $parentId);
+                }
+                $q->orWhere('name', $parentName);
+            })
+            ->pluck('id');
+
+        return $query->where(function (Builder $q) use ($parentId, $categoryIds, $parentName): void {
+            if ($parentId) {
+                $q->where('financial_transactions.parent_category_id', $parentId);
+            }
+            if ($categoryIds->isNotEmpty()) {
+                $q->orWhereIn('financial_transactions.category_id', $categoryIds);
+            }
+            $q->orWhereHas('parentCategory', fn (Builder $p): Builder => $p->where('name', $parentName));
+            $q->orWhereHas('category', fn (Builder $c): Builder => $c->where('name', $parentName)
+                ->orWhereHas('parentCategory', fn (Builder $p): Builder => $p->where('name', $parentName)));
+        });
+    }
+
+    /**
+     * Filter khusus untuk transaksi pemasukan dengan kategori utama 'Pendapatan Booth'.
+     */
+    public function scopeBoothIncome(Builder $query): Builder
+    {
+        return $query
+            ->where('financial_transactions.transaction_type', self::TYPE_INCOME)
+            ->whereParentCategory(FinancialParentCategory::NAME_INCOME);
+    }
+
     public function getTypeLabelAttribute(): string
     {
         return self::TYPE_LABELS[$this->transaction_type] ?? $this->transaction_type;

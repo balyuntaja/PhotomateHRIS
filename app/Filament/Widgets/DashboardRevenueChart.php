@@ -2,6 +2,7 @@
 
 namespace App\Filament\Widgets;
 
+use App\Models\FinancialTransaction;
 use App\Models\SessionReport;
 use App\Utils\MonthHelper;
 use Filament\Support\RawJs;
@@ -33,20 +34,20 @@ class DashboardRevenueChart extends ChartWidget
         $start = $months->first()->copy()->startOfMonth();
         $end = now()->endOfMonth();
 
-        $rows = SessionReport::query()
-            ->where('status', SessionReport::STATUS_APPROVED)
-            ->whereBetween('report_date', [$start->toDateString(), $end->toDateString()])
-            ->get(['report_date', 'grand_total_amount']);
+        $rows = FinancialTransaction::query()
+            ->boothIncome()
+            ->whereBetween('transaction_date', [$start->toDateString(), $end->toDateString()])
+            ->get(['transaction_date', 'amount']);
 
         $totals = $months
             ->mapWithKeys(fn (Carbon $month): array => [$month->format('Y-m') => 0])
             ->all();
 
         foreach ($rows as $row) {
-            $key = $row->report_date?->format('Y-m');
+            $key = $row->transaction_date?->format('Y-m');
 
             if ($key !== null && array_key_exists($key, $totals)) {
-                $totals[$key] += (int) $row->grand_total_amount;
+                $totals[$key] += (int) $row->amount;
             }
         }
 

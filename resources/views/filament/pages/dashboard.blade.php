@@ -24,10 +24,15 @@
     $canApprove = SessionApprovalResource::canAccess();
     $canViewTransactions = $user?->isSuperAdmin() || ($user?->can('view_any_keuangan_transaction') ?? false);
 
-    $paymentTotal = $metrics['qris_revenue'] + $metrics['cash_revenue'];
+    $otherRevenue = (int) ($metrics['other_revenue'] ?? 0);
+    $paymentTotal = $metrics['qris_revenue'] + $metrics['cash_revenue'] + $otherRevenue;
+    if ($paymentTotal <= 0 && $metrics['revenue'] > 0) {
+        $paymentTotal = $metrics['revenue'];
+    }
     $totalPayment = max(1, $paymentTotal);
     $qrisShare = (int) round($metrics['qris_revenue'] / $totalPayment * 100);
     $cashShare = (int) round($metrics['cash_revenue'] / $totalPayment * 100);
+    $otherShare = $otherRevenue > 0 ? (int) max(0, 100 - $qrisShare - $cashShare) : 0;
 @endphp
 
 <x-filament-panels::page class="fi-dashboard-page">
@@ -84,7 +89,7 @@
                 <div>
                     <h3 class="pm-section-title">Ringkasan Bisnis</h3>
                     <p class="pm-section-subtitle">
-                        Performa {{ $metrics['period_label'] }} berdasarkan rekap sesi yang telah disetujui.
+                        Performa bisnis {{ $metrics['period_label'] }} dari seluruh cabang.
                     </p>
                 </div>
                 <a href="{{ $reportsUrl }}" class="pm-section-link">
@@ -155,7 +160,7 @@
                 <div class="pm-panel-header">
                     <div>
                         <p class="pm-panel-title">Tren Pendapatan</p>
-                        <p class="pm-panel-subtitle">Rekap sesi approved · 6 bulan terakhir</p>
+                        <p class="pm-panel-subtitle">Pendapatan booth · 6 bulan terakhir</p>
                     </div>
                     <span class="hidden rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 sm:inline-flex">
                         {{ $metrics['period_label'] }}
@@ -171,7 +176,7 @@
                                 <x-filament::icon icon="heroicon-o-chart-bar" class="h-5 w-5" />
                             </span>
                             <p class="pm-empty-title">Belum ada tren pendapatan</p>
-                            <p class="pm-empty-text">Grafik akan muncul setelah rekap sesi disetujui.</p>
+                            <p class="pm-empty-text">Grafik akan muncul setelah transaksi pendapatan booth tercatat.</p>
                         </div>
                     @endif
                 </div>
@@ -204,8 +209,7 @@
                             <div class="pm-bar-fill" style="width: {{ $qrisShare }}%"></div>
                         </div>
                         <span class="pm-payment-meta">
-                            {{ $qrisShare }}% · {{ number_format($metrics['qris_sessions'], 0, ',', '.') }} sesi ·
-                            {{ number_format($metrics['qris_transactions'], 0, ',', '.') }} transaksi
+                            {{ $qrisShare }}% · {{ number_format($metrics['qris_transactions'], 0, ',', '.') }} transaksi
                         </span>
                     </div>
 
@@ -221,13 +225,30 @@
                             <div class="pm-bar-fill pm-bar-fill--cream" style="width: {{ $cashShare }}%"></div>
                         </div>
                         <span class="pm-payment-meta">
-                            {{ $cashShare }}% · {{ number_format($metrics['cash_sessions'], 0, ',', '.') }} sesi ·
-                            {{ number_format($metrics['cash_transactions'], 0, ',', '.') }} transaksi
+                            {{ $cashShare }}% · {{ number_format($metrics['cash_transactions'], 0, ',', '.') }} transaksi
                         </span>
                     </div>
 
+                    @if ($otherRevenue > 0 || ($metrics['other_transactions'] ?? 0) > 0)
+                        <div class="pm-payment-row">
+                            <div class="pm-payment-top">
+                                <span class="pm-payment-label">
+                                    <x-filament::icon icon="heroicon-m-credit-card" class="h-4 w-4 text-violet-600" />
+                                    Lainnya
+                                </span>
+                                <span class="pm-payment-amount">{{ RupiahHelper::format($otherRevenue) }}</span>
+                            </div>
+                            <div class="pm-bar">
+                                <div class="pm-bar-fill" style="width: {{ $otherShare }}%; background-color: #8b5cf6;"></div>
+                            </div>
+                            <span class="pm-payment-meta">
+                                {{ $otherShare }}% · {{ number_format($metrics['other_transactions'] ?? 0, 0, ',', '.') }} transaksi
+                            </span>
+                        </div>
+                    @endif
+
                     <div class="mt-3 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-white/5">
-                        <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Total QRIS + tunai</span>
+                        <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Total seluruh pembayaran</span>
                         <span class="text-sm font-bold tabular-nums text-slate-900 dark:text-white">
                             {{ RupiahHelper::format($paymentTotal) }}
                         </span>

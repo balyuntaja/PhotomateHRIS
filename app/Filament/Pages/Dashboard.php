@@ -9,10 +9,13 @@ use App\Models\Absensi;
 use App\Models\Cabang;
 use App\Models\Cuti;
 use App\Models\EmployeeSchedule;
+use App\Models\FinancialTransaction;
 use App\Models\Izin;
 use App\Models\Karyawan;
 use App\Models\Perusahaan;
 use App\Models\SessionReport;
+use App\Services\BranchInputModeService;
+use App\Services\SessionReportFinancialService;
 use App\Services\SessionWorkflowService;
 use App\Utils\MonthHelper;
 use Filament\Pages\Dashboard as BaseDashboard;
@@ -42,32 +45,127 @@ class Dashboard extends BaseDashboard
     {
         $widget = app(SessionOverviewWidget::class);
         $widget->filter = 'this_month';
+        $widgetData = $widget->getViewData();
 
-        $data = $widget->getViewData();
-        $approved = $widget->getFilteredReportsQuery()
-            ->where('status', SessionReport::STATUS_APPROVED);
+        $start = now()->startOfMonth();
+        $end = now()->endOfMonth();
+
+        // 1. Total Pendapatan & Ringkasan Pembayaran dari Transaksi Keuangan (Pendapatan Booth)
+        $boothTransactions = FinancialTransaction::query()
+            ->boothIncome()
+            ->periode($start, $end)
+            ->with('paymentMethod')
+            ->get();
+
+        $revenue = (int) $boothTransactions->sum('amount');
+        $financialTransactionsCount = $boothTransactions->count();
+
+        $qrisRevenue = 0;
+        $qrisTransactions = 0;
+        $cashRevenue = 0;
+        $cashTransactions = 0;
+        $otherRevenue = 0;
+        $otherTransactions = 0;
+
+        // Ambil referensi rekap sesi jika ada transaksi hasil konsolidasi rekap sesi
+        $sessionReportSourceIds = $boothTransactions
+            ->where('source_type', SessionReportFinancialService::SOURCE)
+            ->pluck('source_id')
+            ->filter()
+            ->unique();
+
+        $sessionReports = $sessionReportSourceIds->isNotEmpty()
+            ? SessionReport::query()->whereIn('id', $sessionReportSourceIds)->get()->keyBy(fn ($r) => (string) $r->id)
+            : collect();
+
+        foreach ($boothTransactions as $trx) {
+            $methodName = $trx->paymentMethod ? strtoupper(trim($trx->paymentMethod->name)) : null;
+
+            if ($methodName === 'QRIS') {
+                $qrisRevenue += (int) $trx->amount;
+                $qrisTransactions += 1;
+            } elseif (in_array($methodName, ['CASH', 'TUNAI'], true)) {
+                $cashRevenue += (int) $trx->amount;
+                $cashTransactions += 1;
+            } elseif ($methodName !== null) {
+                $otherRevenue += (int) $trx->amount;
+                $otherTransactions += 1;
+            } else {
+                // payment_method_id null: cek apakah hasil konsolidasi rekap sesi
+                $report = $sessionReports->get((string) $trx->source_id);
+                if ($report) {
+                    $repQris = (int) $report->total_qris_amount;
+                    $repCash = (int) $report->total_cash_amount;
+                    $repOther = max(0, (int) $trx->amount - ($repQris + $repCash));
+
+                    $qrisRevenue += $repQris;
+                    $cashRevenue += $repCash;
+                    $otherRevenue += $repOther;
+
+                    if ($repQris > 0) {
+                        $qrisTransactions += max(1, (int) $report->total_qris_transactions);
+                    }
+                    if ($repCash > 0) {
+                        $cashTransactions += max(1, (int) $report->total_cash_transactions);
+                    }
+                    if ($repOther > 0) {
+                        $otherTransactions += 1;
+                    }
+                } elseif ($trx->source_type === 'luminash') {
+                    $qrisRevenue += (int) $trx->amount;
+                    $qrisTransactions += 1;
+                } else {
+                    $otherRevenue += (int) $trx->amount;
+                    $otherTransactions += 1;
+                }
+            }
+        }
+
+        $effectiveTotalTransactions = max(
+            $financialTransactionsCount,
+            $qrisTransactions + $cashTransactions + $otherTransactions
+        );
+
+        // 2. Total Sesi dari Rekap Sesi yang sudah Approved
+        $approvedReports = SessionReport::query()
+            ->where('status', SessionReport::STATUS_APPROVED)
+            ->whereBetween('report_date', [$start->toDateString(), $end->toDateString()])
+            ->with('cabang')
+            ->get();
+
+        $inputModeService = app(BranchInputModeService::class);
+        $totalSessions = 0;
+
+        foreach ($approvedReports as $report) {
+            if ($report->cabang && $inputModeService->usesManualSessionInput($report->cabang)) {
+                $totalSessions += (int) ($report->wedding_total_sessions ?: $report->total_transactions ?: $report->total_sessions);
+            } else {
+                $detailSessionSum = (int) $report->transactions()->sum('session_count');
+                $totalSessions += max((int) $report->total_sessions, $detailSessionSum);
+            }
+        }
 
         return [
             'period_label' => MonthHelper::formatPeriod((int) now()->month, (int) now()->year),
-            'revenue' => (int) $data['grandTotalRevenue'],
-            'sessions' => (int) $data['totalSessions'],
-            'transactions' => (int) (clone $approved)->sum('total_transactions'),
-            'qris_revenue' => (int) $data['qrisRevenue'],
-            'qris_sessions' => (int) $data['qrisSessions'],
-            'qris_transactions' => (int) (clone $approved)->sum('total_qris_transactions'),
-            'cash_revenue' => (int) $data['cashRevenue'],
-            'cash_sessions' => (int) $data['cashSessions'],
-            'cash_transactions' => (int) (clone $approved)->sum('total_cash_transactions'),
+            'revenue' => $revenue,
+            'sessions' => $totalSessions,
+            'transactions' => $effectiveTotalTransactions,
+            'qris_revenue' => $qrisRevenue,
+            'qris_transactions' => $qrisTransactions,
+            'cash_revenue' => $cashRevenue,
+            'cash_transactions' => $cashTransactions,
+            'other_revenue' => $otherRevenue,
+            'other_transactions' => $otherTransactions,
             'employees' => Karyawan::query()->count(),
             'branches' => Cabang::query()->count(),
             'companies' => Perusahaan::query()->count(),
-            'average_per_session' => (int) $data['totalSessions'] > 0
-                ? (int) round((int) $data['grandTotalRevenue'] / (int) $data['totalSessions'])
+            'average_per_session' => $totalSessions > 0
+                ? (int) round($revenue / $totalSessions)
                 : 0,
-            'waiting_approval' => (int) $data['waitingApprovalCount'],
-            'revision' => (int) $data['revisionCount'],
-            'approved' => (int) $data['approvedCount'],
-            'draft' => (int) $data['draftCount'],
+            'waiting_approval' => (int) $widgetData['waitingApprovalCount'],
+            'revision' => (int) $widgetData['revisionCount'],
+            'approved' => (int) $widgetData['approvedCount'],
+            'draft' => (int) $widgetData['draftCount'],
         ];
     }
 
@@ -303,9 +401,9 @@ class Dashboard extends BaseDashboard
 
     public function hasRevenueHistory(): bool
     {
-        return SessionReport::query()
-            ->where('status', SessionReport::STATUS_APPROVED)
-            ->whereDate('report_date', '>=', now()->startOfMonth()->subMonthsNoOverflow(5))
+        return FinancialTransaction::query()
+            ->boothIncome()
+            ->whereDate('transaction_date', '>=', now()->startOfMonth()->subMonthsNoOverflow(5))
             ->exists();
     }
 
