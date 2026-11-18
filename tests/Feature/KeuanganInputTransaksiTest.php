@@ -136,7 +136,7 @@ class KeuanganInputTransaksiTest extends TestCase
 
         Livewire::test(KeuanganInputTransaksi::class)
             ->assertSuccessful()
-            ->assertSeeHtml('x-mask:dynamic="$money($input, \'.\', \',\', 0)"');
+            ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"');
     }
 
     public function test_input_transaksi_menyimpan_transaksi_beserta_akun_periode_dan_pihak(): void

@@ -132,7 +132,7 @@ class KeuanganLabaRugiReport extends Page implements HasForms
             $filters['period']['start'],
             $filters['period']['end'],
             $filters['accountId'],
-            false
+            true
         );
 
         return [

@@ -212,7 +212,7 @@ class KeuanganTransactionTest extends TestCase
         Livewire::test(ListFinancialTransactions::class)
             ->mountTableAction('edit', $transaction)
             ->assertTableActionDataSet(['amount' => '1.500.000'])
-            ->assertSeeHtml('x-mask:dynamic="$money($input, \'.\', \',\', 0)"');
+            ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"');
     }
 
     public function test_modal_edit_transaksi_mengisi_kategori_utama_dari_sub_kategori_tersimpan(): void
@@ -235,7 +235,7 @@ class KeuanganTransactionTest extends TestCase
 
         Livewire::test(KeuanganInputTransaksi::class)
             ->assertSuccessful()
-            ->assertSeeHtml('x-mask:dynamic="$money($input, \'.\', \',\', 0)"');
+            ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"');
     }
 
     public function test_edit_transaksi_memakai_nilai_numerik_setelah_mask_ribuan(): void

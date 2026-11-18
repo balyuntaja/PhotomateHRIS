@@ -239,7 +239,7 @@ class GlobalRupiahFormattingTest extends TestCase
         Livewire::test(ListFinancialTransactions::class)
             ->mountTableAction('edit', $transaction)
             ->assertTableActionDataSet(['amount' => '1.000.000'])
-            ->assertSeeHtml('x-mask:dynamic="$money($input, \'.\', \',\', 0)"')
+            ->assertSeeHtml('x-mask:dynamic="$money($input, \',\', \'.\', 0)"')
             ->callTableAction('edit', $transaction, ['amount' => '2.500.000'])
             ->assertHasNoTableActionErrors();
 
@@ -501,5 +501,98 @@ class GlobalRupiahFormattingTest extends TestCase
 
         // Must NOT contain 219.900.000
         $this->assertStringNotContainsString('219.900.000', $rendered);
+    }
+
+    public function test_invoice_repeater_realtime_calculation(): void
+    {
+        $this->actingAs($this->user);
+
+        $test = Livewire::test(CreateInvoice::class)
+            ->assertSuccessful();
+
+        $items = $test->get('data.invoiceItems');
+        $uuid = array_key_first($items);
+
+        $test->set("data.invoiceItems.{$uuid}.service_description", 'Sewa Photobooth Paket Gold');
+        $this->assertEquals(2199000, $test->get("data.invoiceItems.{$uuid}.price"));
+        $this->assertEquals(2199000, $test->get("data.invoiceItems.{$uuid}.amount"));
+        $this->assertEquals(2199000, $test->get('data.subtotal'));
+        $this->assertEquals(2199000, $test->get('data.total'));
+
+        // Scenario 1: Price 3.000.000 with quantity 1 -> Total Rp 3.000.000
+        $test->set("data.invoiceItems.{$uuid}.price", '3.000.000');
+        $this->assertEquals('3.000.000', $test->get("data.invoiceItems.{$uuid}.price"));
+        $this->assertEquals(3000000, $test->get("data.invoiceItems.{$uuid}.amount"));
+        $this->assertEquals(3000000, $test->get('data.subtotal'));
+        $this->assertEquals(3000000, $test->get('data.total'));
+
+        // Scenario 2: Price 1.000.000 with quantity 1 -> Total Rp 1.000.000
+        $test->set("data.invoiceItems.{$uuid}.price", '1.000.000');
+        $this->assertEquals('1.000.000', $test->get("data.invoiceItems.{$uuid}.price"));
+        $this->assertEquals(1000000, $test->get("data.invoiceItems.{$uuid}.amount"));
+        $this->assertEquals(1000000, $test->get('data.subtotal'));
+        $this->assertEquals(1000000, $test->get('data.total'));
+
+        // Scenario 3: Price 2.199.000 with quantity 2 -> Total Rp 4.398.000
+        $test->set("data.invoiceItems.{$uuid}.price", '2.199.000');
+        $test->set("data.invoiceItems.{$uuid}.device_count", 2);
+        $this->assertEquals(4398000, $test->get("data.invoiceItems.{$uuid}.amount"));
+        $this->assertEquals(4398000, $test->get('data.subtotal'));
+        $this->assertEquals(4398000, $test->get('data.total'));
+
+        // Scenario 4 & 5: Save invoice and open again
+        $test->fillForm([
+            'client_name' => 'Klien Multi Item',
+            'event_name' => 'Acara Multi Item',
+            'event_location' => 'Malang',
+            'person_in_charge' => 'PIC Multi',
+            'event_date' => '2026-11-20',
+            'event_end_date' => '2026-11-20',
+            'invoice_date' => '2026-11-18',
+            'due_date' => '2026-11-25',
+            'status' => 'Belum Dibayar',
+            'invoiceItems' => [
+                $uuid => [
+                    'item_type' => 'service',
+                    'service_description' => 'Sewa Photobooth Paket Gold',
+                    'is_tba' => false,
+                    'start_time' => '10:00',
+                    'end_time' => '13:00',
+                    'duration' => '3 Jam',
+                    'price' => '2.199.000',
+                    'device_count' => 2,
+                    'amount' => '4.398.000',
+                ],
+            ],
+            'subtotal' => '4.398.000',
+            'discount' => '0',
+            'total' => '4.398.000',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+        $savedInvoice = Invoice::where('client_name', 'Klien Multi Item')->first();
+        $this->assertNotNull($savedInvoice);
+        $this->assertEquals(4398000, $savedInvoice->subtotal);
+        $this->assertEquals(4398000, $savedInvoice->total);
+
+        $savedItem = $savedInvoice->invoiceItems()->first();
+        $this->assertEquals(2199000, $savedItem->price);
+        $this->assertEquals(2, $savedItem->device_count);
+        $this->assertEquals(4398000, $savedItem->amount);
+
+        // Open again via EditInvoice
+        $editComponent = Livewire::test(EditInvoice::class, ['record' => $savedInvoice->getKey()])
+            ->assertSuccessful();
+
+        $editData = $editComponent->get('data');
+        $this->assertEquals('4.398.000', $editData['subtotal']);
+        $this->assertEquals('4.398.000', $editData['total']);
+
+        $editItems = $editData['invoiceItems'];
+        $itemUuid = array_key_first($editItems);
+        $this->assertEquals('2.199.000', $editItems[$itemUuid]['price']);
+        $this->assertEquals(2, $editItems[$itemUuid]['device_count']);
+        $this->assertEquals('4.398.000', $editItems[$itemUuid]['amount']);
     }
 }

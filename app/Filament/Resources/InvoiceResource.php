@@ -109,17 +109,12 @@ class InvoiceResource extends Resource
                                         'product' => 'Barang / Item',
                                     ])
                                     ->default('service')
-                                    ->dehydrated(false)
-                                    ->afterStateHydrated(function (Get $get, Set $set, $record) {
-                                        if ($record && $record->time_range === 'TBA') {
-                                            $set('item_type', 'service');
-                                            return;
-                                        }
-                                        $duration = $get('duration');
-                                        if ($duration === '-' || (empty($get('start_time')) && empty($get('end_time')))) {
-                                            $set('item_type', 'product');
-                                        } else {
-                                            $set('item_type', 'service');
+                                    ->required()
+                                    ->afterStateHydrated(function (Select $component, $state, $record) {
+                                        if (blank($state) && $record) {
+                                            $isProduct = ($record->duration === '-' || empty($record->duration)) &&
+                                                         (empty($record->time_range) || $record->time_range === '-');
+                                            $component->state($isProduct ? 'product' : 'service');
                                         }
                                     })
                                     ->live()
@@ -134,7 +129,6 @@ class InvoiceResource extends Resource
                                             self::calculateDuration($get, $set);
                                         }
                                     })
-                                    ->required()
                                     ->columnSpan(1),
                                 TextInput::make('service_description')
                                     ->datalist([
@@ -201,7 +195,6 @@ class InvoiceResource extends Resource
                                 TextInput::make('price')
                                     ->label('Harga')
                                     ->rupiah()
-                                    ->numeric()
                                     ->required()
                                     ->default(0)
                                     ->live(onBlur: true)
@@ -216,6 +209,7 @@ class InvoiceResource extends Resource
                                     ->label('Jumlah (Device)')
                                     ->numeric()
                                     ->integer()
+                                    ->minValue(1)
                                     ->required()
                                     ->default(1)
                                     ->live(onBlur: true)
@@ -229,7 +223,6 @@ class InvoiceResource extends Resource
                                 TextInput::make('amount')
                                     ->label('Total')
                                     ->rupiah()
-                                    ->numeric()
                                     ->required()
                                     ->readOnly()
                                     ->default(0)
@@ -245,20 +238,17 @@ class InvoiceResource extends Resource
                     ->schema([
                         TextInput::make('subtotal')
                             ->rupiah()
-                            ->numeric()
                             ->required()
                             ->readOnly()
                             ->default(0),
                         TextInput::make('discount')
                             ->rupiah()
-                            ->numeric()
                             ->required()
                             ->default(0)
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn(Get $get, Set $set) => self::updateTotals($get, $set)),
                         TextInput::make('total')
                             ->rupiah()
-                            ->numeric()
                             ->required()
                             ->readOnly()
                             ->default(0),
@@ -299,7 +289,6 @@ class InvoiceResource extends Resource
                         TextInput::make('down_payment')
                             ->label('Down Payment (DP) yang Dibayar')
                             ->rupiah()
-                            ->numeric()
                             ->default(0)
                             ->visible(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
                             ->required(fn(Get $get) => $get('status') === 'Sebagian Dibayar')
@@ -435,7 +424,7 @@ class InvoiceResource extends Resource
 
     public static function updateTotals(Get|callable $get, Set|callable $set): void
     {
-        $items = $get('invoiceItems');
+        $items = $get('invoiceItems') ?? $get('../../invoiceItems');
         $subtotal = 0;
 
         if (is_array($items)) {
@@ -454,11 +443,16 @@ class InvoiceResource extends Resource
             }
         }
 
-        $discount = RupiahHelper::toInt($get('discount') ?? 0);
+        $discount = RupiahHelper::toInt($get('discount') ?? $get('../../discount') ?? 0);
         $total = max(0, $subtotal - $discount);
 
-        $set('subtotal', $subtotal);
-        $set('total', $total);
+        if ($get('invoiceItems') !== null) {
+            $set('subtotal', $subtotal);
+            $set('total', $total);
+        } else {
+            $set('../../subtotal', $subtotal);
+            $set('../../total', $total);
+        }
     }
 
     public static function calculateDuration(Get $get, Set $set): void

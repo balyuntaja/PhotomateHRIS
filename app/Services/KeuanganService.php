@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Cabang;
+use App\Models\FinancialCategory;
+use App\Models\FinancialParentCategory;
 use App\Models\FinancialTransaction;
 use App\Utils\MonthHelper;
 use App\Utils\RupiahHelper;
@@ -444,9 +446,33 @@ class KeuanganService
     }
 
     /**
+     * Mengambil daftar nama seluruh kategori utama Beban Usaha dari master data.
+     * Mengikuti struktur hierarki parent-child kategori keuangan yang terdaftar di database.
+     *
+     * @return array<string>
+     */
+    public function getExpenseParentCategoryNames(): array
+    {
+        // 1. Kategori utama aktif dari financial_parent_categories (kecuali kategori pemasukan)
+        $parentCategories = FinancialParentCategory::query()
+            ->where('is_active', true)
+            ->where('name', '!=', FinancialParentCategory::NAME_INCOME)
+            ->orderBy('id')
+            ->pluck('name')
+            ->all();
+
+        // 2. Pastikan 'Lain-lain' selalu tersedia sebagai penampung fallback jika belum terdaftar
+        if (! in_array('Lain-lain', $parentCategories, true)) {
+            $parentCategories[] = 'Lain-lain';
+        }
+
+        return array_values(array_unique($parentCategories));
+    }
+
+    /**
      * Laporan Laba Rugi Photomate:
      * - Pendapatan Usaha dikelompokkan per cabang/akun (Express, Janus, Golio, dan lainnya)
-     * - Beban Usaha dikelompokkan per Kategori Utama
+     * - Beban Usaha dikelompokkan per Kategori Utama (seluruh kategori utama Beban Usaha selalu ditampilkan)
      * - Ringkasan Laba / Rugi = Total Pendapatan - Total Beban Usaha
      *
      * @return array{
@@ -459,7 +485,7 @@ class KeuanganService
         CarbonInterface $start,
         CarbonInterface $end,
         ?int $accountId = null,
-        bool $includeZeroStandardCategories = false
+        bool $includeZeroParentCategories = true
     ): array {
         // 1. Agregasi Pendapatan Usaha per cabang/akun
         $incomeRows = $this->baseQuery($start, $end, null, $accountId)
@@ -506,35 +532,24 @@ class KeuanganService
             ->leftJoin('financial_categories', 'financial_categories.id', '=', 'financial_transactions.category_id')
             ->leftJoin('financial_parent_categories as cat_parent', 'cat_parent.id', '=', 'financial_categories.parent_category_id')
             ->selectRaw("
-                COALESCE(direct_parent.name, cat_parent.name, financial_categories.name, 'Lain-lain') as parent_name,
+                COALESCE(direct_parent.name, cat_parent.name, 'Lain-lain') as parent_name,
                 SUM(financial_transactions.amount) as total
             ")
             ->groupBy('parent_name')
-            ->orderByDesc('total')
             ->get();
 
-        $standardBebanCategories = [
-            'Box',
-            'Transportasi',
-            'Pengadaan Peralatan',
-            'Gaji',
-            'Persediaan',
-            'Konsumsi',
-            'Langganan',
-        ];
+        $masterBebanCategories = $this->getExpenseParentCategoryNames();
 
-        $bebanRows = [];
+        $bebanRows = $includeZeroParentCategories
+            ? array_fill_keys($masterBebanCategories, 0)
+            : [];
         $totalBeban = 0;
-
-        if ($includeZeroStandardCategories) {
-            $bebanRows = array_fill_keys($standardBebanCategories, 0);
-        }
 
         foreach ($expenseRows as $row) {
             $name = trim((string) $row->parent_name);
             $amt = (int) $row->total;
 
-            if ($amt > 0 || $includeZeroStandardCategories) {
+            if ($amt > 0 || $includeZeroParentCategories) {
                 $bebanRows[$name] = ($bebanRows[$name] ?? 0) + $amt;
             }
             $totalBeban += $amt;

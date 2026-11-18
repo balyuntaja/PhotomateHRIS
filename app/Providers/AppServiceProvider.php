@@ -50,13 +50,22 @@ class AppServiceProvider extends ServiceProvider
             }
 
             $maskJs = $allowNegative
-                ? "\$input.startsWith('-') ? '-' + \$money(\$input.slice(1), '.', ',', 0) : \$money(\$input, '.', ',', 0)"
-                : "\$money(\$input, '.', ',', 0)";
+                ? "\$input.startsWith('-') ? '-' + \$money(\$input.slice(1), ',', '.', 0) : \$money(\$input, ',', '.', 0)"
+                : "\$money(\$input, ',', '.', 0)";
 
             return $this
+                ->type('text')
+                ->inputMode('numeric')
                 ->mask(RawJs::make($maskJs))
                 ->stripCharacters(['.', ','])
                 ->formatStateUsing(fn ($state): ?string => filled($state) ? RupiahHelper::number($state) : (is_string($state) ? $state : null))
+                ->mutateStateForValidationUsing(function ($state) use ($allowNegative) {
+                    if (blank($state)) {
+                        return null;
+                    }
+                    $clean = RupiahHelper::toFloat($state);
+                    return $allowNegative ? (int) round($clean) : max(0, (int) round($clean));
+                })
                 ->dehydrateStateUsing(function ($state) use ($allowNegative) {
                     if (blank($state)) {
                         return null;

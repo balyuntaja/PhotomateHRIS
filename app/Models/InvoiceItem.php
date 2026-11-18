@@ -9,9 +9,16 @@ class InvoiceItem extends Model
     protected $guarded = [];
 
     protected $casts = [
+        'item_type' => 'string',
         'price' => 'float',
         'amount' => 'float',
         'device_count' => 'integer',
+    ];
+
+    protected $appends = [
+        'is_tba',
+        'start_time',
+        'end_time',
     ];
 
     protected ?bool $isTbaTemp = null;
