@@ -84,6 +84,7 @@ class FinancialCategoryResource extends Resource
                         })
                         ->searchable()
                         ->required()
+                        ->live()
                         ->exists('financial_parent_categories', 'id')
                         ->validationMessages([
                             'required' => 'Kategori utama wajib dipilih.',
@@ -96,12 +97,15 @@ class FinancialCategoryResource extends Resource
                         ->maxLength(100)
                         ->rules([
                             fn (Get $get, ?FinancialCategory $record) => Rule::unique('financial_categories', 'name')
-                                ->where(fn ($query) => $query->where('transaction_type', $get('transaction_type')))
+                                ->where(fn ($query) => $query
+                                    ->where('parent_category_id', $get('parent_category_id'))
+                                    ->where('transaction_type', $get('transaction_type'))
+                                )
                                 ->ignore($record?->getKey()),
                         ])
                         ->validationMessages([
                             'required' => 'Nama sub kategori wajib diisi.',
-                            'unique' => 'Nama sub kategori ini sudah ada untuk jenis transaksi tersebut.',
+                            'unique' => 'Nama sub kategori ini sudah ada pada kategori utama yang dipilih.',
                         ]),
 
                     Forms\Components\Toggle::make('is_active')
