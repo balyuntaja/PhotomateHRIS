@@ -212,3 +212,6 @@ Route::get('/invoice/{invoice}/pdf', [InvoiceController::class, 'generatePdf'])
 
 Route::get('/keuangan/laporan/cetak', [KeuanganLaporanController::class, 'cetak'])
     ->name('keuangan.laporan.cetak');
+
+Route::get('/keuangan/rekap-perbulan/cetak', [KeuanganLaporanController::class, 'cetakRekapPerbulan'])
+    ->name('keuangan.rekap-perbulan.cetak');

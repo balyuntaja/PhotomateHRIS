@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\FinancialAccount;
 use App\Models\FinancialTransaction;
+use App\Models\Perusahaan;
 use App\Services\KeuanganService;
+use App\Services\RekapPerbulanService;
 use App\Utils\MonthHelper;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -159,5 +161,61 @@ class KeuanganLaporanController extends Controller
         );
 
         return $pdf->download($filename);
+    }
+
+    /**
+     * Format 3: Rekap Perbulan Photomate (Landscape Dashboard Overview).
+     */
+    public function cetakRekapPerbulan(Request $request)
+    {
+        $user = Auth::user();
+
+        abort_unless(
+            $user?->isSuperAdmin() || ($user?->can('print_keuangan_report') ?? false) || ($user?->can('view_keuangan_report') ?? false),
+            403,
+            'Anda tidak memiliki akses untuk mencetak rekap perbulan.'
+        );
+
+        try {
+            $service = app(RekapPerbulanService::class);
+
+            $month = (int) $request->query('bulan', now()->month);
+            $year = (int) $request->query('tahun', now()->year);
+
+            $report = $service->getReportData($year, $month);
+            $perusahaan = Perusahaan::first();
+
+            $pdf = Pdf::loadView('pdf.rekap-perbulan', [
+                'report' => $report,
+                'perusahaan' => $perusahaan,
+                'judulDokumen' => 'Rekap Perbulan Photomate',
+                'periode' => $report['period']['label'],
+                'tanggalCetak' => now()->day . ' ' . MonthHelper::formatPeriod((int) now()->month, (int) now()->year),
+            ]);
+
+            $pdf->setPaper('A4', 'landscape');
+            $pdf->setOptions([
+                'dpi' => 150,
+                'defaultFont' => 'sans-serif',
+                'isRemoteEnabled' => true,
+                'isPhpEnabled' => true,
+            ]);
+
+            $filename = sprintf(
+                'rekap-perbulan-photomate-%s-%s.pdf',
+                $year,
+                str_pad((string) $month, 2, '0', STR_PAD_LEFT)
+            );
+
+            return $pdf->download($filename);
+        } catch (\Throwable $th) {
+            Log::error('Gagal mencetak rekap perbulan Photomate: ' . $th->getMessage(), [
+                'bulan' => $request->query('bulan'),
+                'tahun' => $request->query('tahun'),
+                'trace' => $th->getTraceAsString(),
+            ]);
+
+            abort(500, 'Terjadi kesalahan saat membuat PDF rekap perbulan.');
+        }
     }
 }

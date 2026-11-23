@@ -26,7 +26,7 @@ class KeuanganReport extends Page implements HasForms, HasTable
 
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
 
-    protected static ?string $navigationLabel = 'Laporan Detail Transaksi';
+    protected static ?string $navigationLabel = 'Jurnal Umum';
 
     protected static ?string $navigationGroup = 'Keuangan';
 
