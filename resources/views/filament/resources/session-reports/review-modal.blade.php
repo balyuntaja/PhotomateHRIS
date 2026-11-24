@@ -45,6 +45,23 @@
                 <span class="text-gray-500 block">Waktu Pengajuan:</span>
                 <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $report->submitted_at ? $report->submitted_at->translatedFormat('d F Y, H:i') : '-' }}</span>
             </div>
+            @if($report->invoice)
+            <div>
+                <span class="text-gray-500 block">Event / Invoice:</span>
+                <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $report->invoice->event_name }} ({{ $report->invoice->invoice_number }})</span>
+            </div>
+            @elseif($report->event_note)
+            <div>
+                <span class="text-gray-500 block">Nama Event:</span>
+                <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $report->event_note }}</span>
+            </div>
+            @endif
+            @if($report->event_date)
+            <div>
+                <span class="text-gray-500 block">Tanggal Event:</span>
+                <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $report->event_date->translatedFormat('d F Y') }}</span>
+            </div>
+            @endif
         </div>
     </div>
 

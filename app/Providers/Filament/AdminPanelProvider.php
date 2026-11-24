@@ -5,6 +5,7 @@ namespace App\Providers\Filament;
 use App\Filament\Pages\Auth\Login as CustomLogin;
 use App\Filament\Pages\InventoryStockPage;
 use App\Filament\Pages\KeuanganInputTransaksi;
+use App\Filament\Pages\RekapPerbulan;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -37,6 +38,23 @@ class AdminPanelProvider extends PanelProvider
             ->databaseNotifications(true, false)
             ->colors([
                 'primary' => self::primaryPalette(),
+                'gray' => \Filament\Support\Colors\Color::Slate,
+                'danger' => \Filament\Support\Colors\Color::Red,
+                'success' => \Filament\Support\Colors\Color::Emerald,
+                'warning' => [
+                    50 => '255, 251, 235',
+                    100 => '254, 243, 199',
+                    200 => '253, 230, 138',
+                    300 => '252, 211, 77',
+                    400 => '245, 158, 11',
+                    500 => '217, 119, 6',   // Amber 600
+                    600 => '180, 83, 9',    // Amber 700 (Dark Amber, WCAG AA compliant 4.62:1 contrast with #FFF)
+                    700 => '146, 64, 14',   // Amber 800
+                    800 => '120, 53, 15',
+                    900 => '69, 26, 3',
+                    950 => '45, 16, 2',
+                ],
+                'info' => \Filament\Support\Colors\Color::Sky,
             ])
             ->theme(asset('css/filament/admin/theme.css'))
             ->maxContentWidth(MaxWidth::ScreenTwoExtraLarge)
@@ -81,6 +99,15 @@ class AdminPanelProvider extends PanelProvider
                 NavigationGroup::make('Keamanan')->icon('heroicon-o-shield-check'),
             ])
             ->authenticatedRoutes(function (Panel $panel): void {
+                // Modul Keuangan: Alamat /admin/keuangan diarahkan ke Rekap Perbulan sebagai halaman utama.
+                Route::get('keuangan', function () use ($panel) {
+                    abort_unless(RekapPerbulan::canAccess(), 403);
+
+                    return redirect()->to(
+                        RekapPerbulan::getUrl(panel: $panel->getId())
+                    );
+                })->name('keuangan.redirect');
+
                 // Alamat lama Input Transaksi V2 diarahkan ke halaman Input Transaksi utama.
                 Route::get('keuangan-input-transaksi-v2', fn () => redirect()->to(
                     KeuanganInputTransaksi::getUrl(panel: $panel->getId())

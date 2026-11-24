@@ -7,8 +7,10 @@ use App\Filament\Resources\FinancialTransactionResource\Pages;
 use App\Models\FinancialAccount;
 use App\Models\FinancialCategory;
 use App\Models\FinancialParentCategory;
+use App\Models\FinancialParty;
 use App\Models\FinancialPaymentMethod;
 use App\Models\FinancialTransaction;
+use App\Models\Karyawan;
 use App\Services\ExpressRekapService;
 use App\Services\InvoiceFinancialService;
 use App\Services\KeuanganService;
@@ -165,6 +167,16 @@ class FinancialTransactionResource extends Resource
                         ->searchable()
                         ->required()
                         ->validationMessages(['required' => 'Metode pembayaran wajib dipilih.']),
+
+                    Forms\Components\TextInput::make('recording_info_name')
+                        ->label('Dibayarkan / Disubmit Oleh')
+                        ->placeholder('Nama pihak pembayar / penerima / submitter')
+                        ->maxLength(100)
+                        ->datalist(fn (): array => array_values(array_unique(array_filter(array_merge(
+                            FinancialParty::query()->active()->orderBy('name')->pluck('name')->all(),
+                            Karyawan::query()->orderBy('nama_lengkap')->pluck('nama_lengkap')->all()
+                        )))))
+                        ->columnSpanFull(),
 
                     Forms\Components\Textarea::make('description')
                         ->label('Deskripsi')
@@ -589,15 +601,46 @@ class FinancialTransactionResource extends Resource
                         $data['parent_category_id'] = $record->parent_category_id
                             ?? $record->category?->parent_category_id;
 
+                        $infoName = $record->recording_info_name;
+                        $data['recording_info_name'] = ($infoName !== '-') ? $infoName : null;
+
                         return $data;
                     })
-                    ->mutateFormDataUsing(function (array $data): array {
+                    ->mutateFormDataUsing(function (array $data, FinancialTransaction $record): array {
                         $upload = $data['evidence_upload'] ?? null;
 
                         unset($data['evidence_upload']);
 
                         if (filled($upload)) {
                             $data['evidence_path'] = is_array($upload) ? reset($upload) : $upload;
+                        }
+
+                        if (array_key_exists('recording_info_name', $data)) {
+                            $rawName = $data['recording_info_name'];
+                            unset($data['recording_info_name']);
+
+                            $name = filled($rawName) ? trim((string) $rawName) : null;
+
+                            if ($record->is_manual) {
+                                if ($name !== null) {
+                                    $party = FinancialParty::firstOrCreate(
+                                        ['name' => $name],
+                                        ['type' => FinancialParty::TYPE_OTHER, 'is_active' => true]
+                                    );
+                                    $data['party_id'] = $party->id;
+                                } else {
+                                    $data['party_id'] = null;
+                                }
+                            } else {
+                                if ($name !== null) {
+                                    $karyawan = Karyawan::where('nama_lengkap', $name)->first();
+                                    $data['submitted_by'] = $karyawan?->karyawan_id;
+                                    $data['submitted_by_name'] = $name;
+                                } else {
+                                    $data['submitted_by'] = null;
+                                    $data['submitted_by_name'] = '';
+                                }
+                            }
                         }
 
                         return $data;

@@ -19,6 +19,7 @@ use App\Models\Karyawan;
 use App\Models\Permission;
 use App\Models\Perusahaan;
 use App\Models\Role;
+use App\Services\KeuanganService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -583,6 +584,193 @@ class KeuanganTransactionTest extends TestCase
             ->assertSee('Informasi Pencatatan')
             ->assertSee('Dibayarkan Oleh')
             ->assertSee('Aldo');
+    }
+
+    public function test_edit_transaksi_dapat_mengisi_dibayarkan_oleh_pada_transaksi_lama_yang_kosong(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        // Transaksi lama manual tanpa pihak pembayar (party_id = null)
+        $transaction = $this->makeTransaction(250000, $this->expenseCategory->id);
+        $this->assertNull($transaction->party_id);
+        $this->assertSame('-', $transaction->recording_info_name);
+
+        // Modal edit menampilkan field recording_info_name dalam keadaan kosong/null
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountTableAction('edit', $transaction)
+            ->assertTableActionDataSet([
+                'recording_info_name' => null,
+            ]);
+
+        // Simpan nama pembayar baru
+        Livewire::test(ListFinancialTransactions::class)
+            ->callTableAction('edit', $transaction, [
+                'recording_info_name' => 'Budi Supplier',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $transaction->refresh();
+
+        // Database menyimpan party_id dan relasi ke FinancialParty
+        $this->assertNotNull($transaction->party_id);
+        $this->assertSame('Budi Supplier', $transaction->party->name);
+        $this->assertSame('Budi Supplier', $transaction->recording_info_name);
+
+        // Field lain tidak berubah
+        $this->assertSame(250000, $transaction->amount);
+        $this->assertSame($this->expenseCategory->id, $transaction->category_id);
+        $this->assertSame($this->expressAccount->id, $transaction->account_id);
+
+        // Tercermin pada tabel
+        Livewire::test(ListFinancialTransactions::class)
+            ->assertCanSeeTableRecords([$transaction])
+            ->assertSee('Budi Supplier');
+
+        // Tercermin pada modal detail
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountTableAction('view', $transaction)
+            ->assertSee('Budi Supplier');
+
+        // Tercermin pada export Excel/CSV
+        $headers = KeuanganService::EXPORT_HEADERS;
+        $row = app(KeuanganService::class)->exportRow($transaction);
+        $this->assertSame('Budi Supplier', $row[array_search('Dibayarkan / Disubmit Oleh', $headers, true)]);
+    }
+
+    public function test_edit_transaksi_dapat_mengubah_nama_dibayarkan_oleh(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $party = FinancialParty::create([
+            'name' => 'Aldo',
+            'type' => FinancialParty::TYPE_EMPLOYEE,
+            'is_active' => true,
+        ]);
+
+        $transaction = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+            'amount' => 150000,
+            'category_id' => $this->expenseCategory->id,
+            'account_id' => $this->expressAccount->id,
+            'payment_method_id' => $this->cash->id,
+            'party_id' => $party->id,
+            'transaction_date' => Carbon::today()->toDateString(),
+            'description' => 'Pembelian perlengkapan',
+        ]);
+
+        // Modal edit memuat nama yang sudah ada
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountTableAction('edit', $transaction)
+            ->assertTableActionDataSet([
+                'recording_info_name' => 'Aldo',
+            ]);
+
+        // Ubah nama menjadi Toko Surya
+        Livewire::test(ListFinancialTransactions::class)
+            ->callTableAction('edit', $transaction, [
+                'recording_info_name' => 'Toko Surya',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $transaction->refresh();
+
+        $this->assertSame('Toko Surya', $transaction->party->name);
+        $this->assertSame('Toko Surya', $transaction->recording_info_name);
+
+        // Tercermin pada modal detail dan export
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountTableAction('view', $transaction)
+            ->assertSee('Toko Surya');
+
+        $headers = KeuanganService::EXPORT_HEADERS;
+        $row = app(KeuanganService::class)->exportRow($transaction);
+        $this->assertSame('Toko Surya', $row[array_search('Dibayarkan / Disubmit Oleh', $headers, true)]);
+    }
+
+    public function test_edit_transaksi_dapat_mengosongkan_kembali_dibayarkan_oleh(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $party = FinancialParty::create([
+            'name' => 'Aldo',
+            'type' => FinancialParty::TYPE_EMPLOYEE,
+            'is_active' => true,
+        ]);
+
+        $transaction = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_EXPENSE,
+            'amount' => 175000,
+            'category_id' => $this->expenseCategory->id,
+            'account_id' => $this->expressAccount->id,
+            'payment_method_id' => $this->cash->id,
+            'party_id' => $party->id,
+            'transaction_date' => Carbon::today()->toDateString(),
+            'description' => 'Uji hapus party',
+        ]);
+
+        // Kosongkan nama
+        Livewire::test(ListFinancialTransactions::class)
+            ->callTableAction('edit', $transaction, [
+                'recording_info_name' => '',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $transaction->refresh();
+
+        $this->assertNull($transaction->party_id);
+        $this->assertSame('-', $transaction->recording_info_name);
+
+        $headers = KeuanganService::EXPORT_HEADERS;
+        $row = app(KeuanganService::class)->exportRow($transaction);
+        $this->assertSame('-', $row[array_search('Dibayarkan / Disubmit Oleh', $headers, true)]);
+    }
+
+    public function test_edit_transaksi_otomatis_dapat_mengedit_dan_mengosongkan_submitter(): void
+    {
+        $this->actingAs($this->managerFinance);
+
+        $transaction = FinancialTransaction::create([
+            'transaction_type' => FinancialTransaction::TYPE_INCOME,
+            'source_type' => 'luminash_csv',
+            'source_id' => 'ORDER-99',
+            'amount' => 300000,
+            'category_id' => $this->incomeCategory->id,
+            'account_id' => $this->expressAccount->id,
+            'payment_method_id' => $this->cash->id,
+            'submitted_by_name' => 'Kasir Lama',
+            'transaction_date' => Carbon::today()->toDateString(),
+            'description' => 'Transaksi otomatis import',
+        ]);
+
+        $this->assertSame('Kasir Lama', $transaction->recording_info_name);
+
+        // Modal edit memuat Kasir Lama
+        Livewire::test(ListFinancialTransactions::class)
+            ->mountTableAction('edit', $transaction)
+            ->assertTableActionDataSet([
+                'recording_info_name' => 'Kasir Lama',
+            ]);
+
+        // Ubah submitter menjadi Kasir Baru
+        Livewire::test(ListFinancialTransactions::class)
+            ->callTableAction('edit', $transaction, [
+                'recording_info_name' => 'Kasir Baru',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $transaction->refresh();
+        $this->assertSame('Kasir Baru', $transaction->submitted_by_name);
+        $this->assertSame('Kasir Baru', $transaction->recording_info_name);
+
+        // Kosongkan submitter
+        Livewire::test(ListFinancialTransactions::class)
+            ->callTableAction('edit', $transaction, [
+                'recording_info_name' => null,
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $transaction->refresh();
+        $this->assertSame('-', $transaction->recording_info_name);
     }
 
     protected function makeTransaction(

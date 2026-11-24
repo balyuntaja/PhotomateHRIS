@@ -392,6 +392,10 @@ class FinancialTransaction extends Model
             return $this->submitted_by_name;
         }
 
+        if ($this->submitted_by_name === '') {
+            return '-';
+        }
+
         $creatorName = $this->creator?->nama_lengkap;
 
         return filled($creatorName) ? $creatorName : '-';

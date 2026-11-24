@@ -5,7 +5,7 @@
             <button
                 type="button"
                 wire:click="prevWeek"
-                class="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                class="pm-btn pm-btn-secondary pm-btn-sm"
             >
                 <x-heroicon-m-chevron-left class="w-5 h-5" />
                 Minggu Sebelumnya
@@ -18,7 +18,7 @@
             <button
                 type="button"
                 wire:click="nextWeek"
-                class="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                class="pm-btn pm-btn-secondary pm-btn-sm"
             >
                 Minggu Berikutnya
                 <x-heroicon-m-chevron-right class="w-5 h-5" />

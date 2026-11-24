@@ -41,7 +41,7 @@
         <input type="text" readonly value="{{ $url }}" class="text-xs font-semibold text-gray-800 dark:text-gray-200 bg-transparent flex-1 focus:outline-none truncate" />
         <button type="button" 
                 onclick="navigator.clipboard.writeText('{{ $url }}'); const self = this; self.innerText = 'Tersalin! ✓'; setTimeout(() => self.innerText = 'Salin Link', 2500);"
-                class="px-3 py-1.5 text-xs font-bold rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition cursor-pointer shadow-xs">
+                class="pm-btn pm-btn-secondary pm-btn-xs">
             Salin Link
         </button>
     </div>
@@ -58,7 +58,7 @@
                     code: {{ json_encode($record->event_code) }},
                     btnId: 'btn-dl-poster-{{ $record->id }}'
                 })"
-                class="w-full py-3.5 px-5 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-bold text-sm shadow-md hover:shadow-lg transition cursor-pointer flex items-center justify-center gap-2">
+                class="pm-btn pm-btn-primary pm-btn-lg w-full flex items-center justify-center gap-2">
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>

@@ -76,6 +76,11 @@ class SessionReportResource extends Resource
         $isGolioBranch = fn (Get $get): bool => filled($get('cabang_id'))
             && $get('cabang_id') === LuminashImportService::golioCabangId();
 
+        $isExpressSelfRun = fn (Get $get): bool => static::isExpressSelfRun($get);
+        $isExpressSewa = fn (Get $get): bool => static::isExpressSewa($get);
+        $isExpressSharingProfit = fn (Get $get): bool => static::isExpressSharingProfit($get);
+        $isExpress = fn (Get $get): bool => $isExpressSelfRun($get) || $isExpressSewa($get) || $isExpressSharingProfit($get);
+
         /** @var Karyawan|null $user */
         $user = Auth::user();
         $isCrew = $user instanceof Karyawan && !app(SessionWorkflowService::class)->isSupervisorOrAdmin($user);
@@ -145,7 +150,161 @@ class SessionReportResource extends Resource
                             ->required()
                             ->validationMessages(['required' => 'Cabang Photomate wajib dipilih.'])
                             ->helperText('⚠️ Wajib pilih cabang agar bonus Newspaper Janus terhitung otomatis!')
-                            ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire)),
+                            ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
+                            ->afterStateUpdated(function (Get $get, Forms\Set $set, ?string $state) {
+                                if (! $state) {
+                                    $set('invoice_id', null);
+                                    return;
+                                }
+                                $cabang = \App\Models\Cabang::find($state);
+                                $name = strtolower($cabang?->nama_cabang ?? '');
+                                if (str_contains($name, 'express sharing profit') || str_contains($name, 'sharing profit')) {
+                                    $set('invoice_id', null);
+                                } else {
+                                    $currentInvoiceId = $get('invoice_id');
+                                    if ($currentInvoiceId) {
+                                        $inv = Invoice::find($currentInvoiceId);
+                                        if ($inv) {
+                                            $isSelfRun = str_contains($name, 'express self run') || str_contains($name, 'self run');
+                                            $isSewa = str_contains($name, 'express sewa');
+                                            if ($isSelfRun && ! $inv->isExpressSelfRun()) {
+                                                $set('invoice_id', null);
+                                            } elseif ($isSewa && ! $inv->isExpressSewa()) {
+                                                $set('invoice_id', null);
+                                            }
+                                        }
+                                    }
+                                }
+                                $isExpressBranch = str_contains($name, 'express') || str_contains($name, 'wedding');
+                                if (! $isExpressBranch) {
+                                    $set('event_date', null);
+                                }
+                            }),
+
+                        Forms\Components\Select::make('invoice_id')
+                            ->label('Pilih Event')
+                            ->placeholder('Pilih Event dari Invoice...')
+                            ->searchable()
+                            ->preload()
+                            ->live()
+                            ->visible(fn (Get $get): bool => $isExpressSelfRun($get) || $isExpressSewa($get))
+                            ->required(fn (Get $get): bool => $isExpressSelfRun($get) || $isExpressSewa($get))
+                            ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
+                            ->options(function (Get $get, $record = null): array {
+                                $cabangId = $get('cabang_id');
+                                if (! $cabangId) {
+                                    return [];
+                                }
+                                $cabang = \App\Models\Cabang::find($cabangId);
+                                if (! $cabang) {
+                                    return [];
+                                }
+                                $query = Invoice::query()->forCabang($cabang)->orderByDesc('event_date')->orderByDesc('id');
+                                if ($record instanceof SessionReport && $record->invoice_id) {
+                                    $currentId = $record->invoice_id;
+                                    $query->orWhere('id', $currentId);
+                                }
+                                $invoices = $query->get();
+                                $options = [];
+                                foreach ($invoices as $inv) {
+                                    $dateStr = $inv->event_date ? $inv->event_date->format('d/m/Y') : '-';
+                                    $options[$inv->id] = "{$inv->event_name} ({$dateStr})";
+                                }
+                                return $options;
+                            })
+                            ->afterStateUpdated(function (Forms\Set $set, ?int $state) {
+                                if ($state) {
+                                    $inv = Invoice::find($state);
+                                    if ($inv) {
+                                        $set('event_note', $inv->event_name);
+                                        if ($inv->event_date) {
+                                            $set('event_date', $inv->event_date->format('Y-m-d'));
+                                        }
+                                        $matchingEvent = \App\Models\Event::where('name', $inv->event_name)->first();
+                                        if ($matchingEvent) {
+                                            $set('event_id', $matchingEvent->id);
+                                        }
+                                    }
+                                }
+                            })
+                            ->rules([
+                                fn (Get $get) => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                    $cabangId = $get('cabang_id');
+                                    if (! $cabangId) return;
+                                    $cabang = \App\Models\Cabang::find($cabangId);
+                                    if (! $cabang) return;
+                                    $namaCabang = strtolower($cabang->nama_cabang);
+                                    $isSelfRun = str_contains($namaCabang, 'express self run') || str_contains($namaCabang, 'self run');
+                                    $isSewa = str_contains($namaCabang, 'express sewa');
+
+                                    if ($isSelfRun) {
+                                        if (! $value) {
+                                            $fail('Pilih Event dari Invoice Express Self Run wajib dipilih.');
+                                            return;
+                                        }
+                                        $inv = Invoice::find($value);
+                                        if (! $inv || ! $inv->isExpressSelfRun()) {
+                                            $fail('Invoice yang dipilih bukan merupakan invoice Express Self Run yang valid.');
+                                        }
+                                    } elseif ($isSewa) {
+                                        if (! $value) {
+                                            $fail('Pilih Event dari Invoice Express Sewa wajib dipilih.');
+                                            return;
+                                        }
+                                        $inv = Invoice::find($value);
+                                        if (! $inv || ! $inv->isExpressSewa()) {
+                                            $fail('Invoice yang dipilih bukan merupakan invoice Express Sewa yang valid.');
+                                        }
+                                    }
+                                }
+                            ])
+                            ->helperText(function (Get $get): ?string {
+                                $cabangId = $get('cabang_id');
+                                if (! $cabangId) return null;
+                                $cabang = \App\Models\Cabang::find($cabangId);
+                                if (! $cabang) return null;
+                                $invoicesCount = Invoice::query()->forCabang($cabang)->count();
+                                if ($invoicesCount === 0) {
+                                    return '⚠️ Belum ada invoice untuk cabang ini. Pastikan invoice telah dibuat pada menu Invoice terlebih dahulu.';
+                                }
+                                return 'Pilih invoice event yang sesuai.';
+                            })
+                            ->columnSpan(['default' => 2, 'md' => 1]),
+
+                        Forms\Components\TextInput::make('event_note')
+                            ->label('Nama Event')
+                            ->placeholder('Contoh: Event Gathering Telkomsel, Chinese Paradise 14')
+                            ->visible(fn (Get $get): bool => $isExpressSharingProfit($get))
+                            ->required(fn (Get $get): bool => $isExpressSharingProfit($get))
+                            ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
+                            ->helperText('Input nama event secara manual untuk Express Sharing Profit.')
+                            ->rules([
+                                fn (Get $get) => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                    $cabangId = $get('cabang_id');
+                                    if (! $cabangId) return;
+                                    $cabang = \App\Models\Cabang::find($cabangId);
+                                    if (! $cabang) return;
+                                    $namaCabang = strtolower($cabang->nama_cabang);
+                                    if (str_contains($namaCabang, 'express sharing profit') || str_contains($namaCabang, 'sharing profit')) {
+                                        if (blank($value)) {
+                                            $fail('Nama Event wajib diisi untuk cabang Express Sharing Profit.');
+                                        }
+                                    }
+                                }
+                            ])
+                            ->columnSpan(['default' => 2, 'md' => 1]),
+
+                        Forms\Components\DatePicker::make('event_date')
+                            ->label('Tanggal Event')
+                            ->placeholder('Pilih Tanggal Event...')
+                            ->native(false)
+                            ->visible(fn (Get $get): bool => $isExpress($get))
+                            ->disabled(fn ($record, $livewire = null) => $isLocked($record, $livewire))
+                            ->helperText('Tanggal pelaksanaan event (otomatis terisi dari invoice jika dipilih).')
+                            ->columnSpan(['default' => 2, 'md' => 1]),
+
+                        Forms\Components\Hidden::make('event_id')
+                            ->dehydrated(),
 
                         Forms\Components\Select::make('crews')
                             ->label('Crew yang Bertugas')
@@ -546,6 +705,33 @@ class SessionReportResource extends Resource
                         ->visible(fn () => (bool) Auth::user()?->isSuperAdmin()),
                 ]),
             ]);
+    }
+
+    public static function isExpressSelfRun(Get|string|null $cabang): bool
+    {
+        $cabangId = $cabang instanceof Get ? $cabang('cabang_id') : $cabang;
+        if (! $cabangId) return false;
+        $c = \App\Models\Cabang::find($cabangId);
+        $name = strtolower($c?->nama_cabang ?? '');
+        return str_contains($name, 'express self run') || str_contains($name, 'self run');
+    }
+
+    public static function isExpressSewa(Get|string|null $cabang): bool
+    {
+        $cabangId = $cabang instanceof Get ? $cabang('cabang_id') : $cabang;
+        if (! $cabangId) return false;
+        $c = \App\Models\Cabang::find($cabangId);
+        $name = strtolower($c?->nama_cabang ?? '');
+        return str_contains($name, 'express sewa');
+    }
+
+    public static function isExpressSharingProfit(Get|string|null $cabang): bool
+    {
+        $cabangId = $cabang instanceof Get ? $cabang('cabang_id') : $cabang;
+        if (! $cabangId) return false;
+        $c = \App\Models\Cabang::find($cabangId);
+        $name = strtolower($c?->nama_cabang ?? '');
+        return str_contains($name, 'express sharing profit') || str_contains($name, 'sharing profit');
     }
 
     public static function getRelations(): array

@@ -120,8 +120,8 @@
     position: absolute;
     top: 1rem;
     right: 1rem;
-    background-color: rgb(59 130 246);
-    color: white;
+    background-color: #354B6D;
+    color: #FFFFFF;
     border: none;
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
@@ -136,17 +136,17 @@
 }
 
 .cetak-button-compact:hover {
-    background-color: rgb(37 99 235);
+    background-color: #2B3D59;
     transform: translateY(-1px);
-    box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 6px -1px rgba(53, 75, 109, 0.3);
 }
 
 .dark .cetak-button-compact {
-    background-color: rgb(37 99 235);
+    background-color: #3B547A;
 }
 
 .dark .cetak-button-compact:hover {
-    background-color: rgb(29 78 216);
+    background-color: #476594;
 }
 
 .cetak-icon-compact {

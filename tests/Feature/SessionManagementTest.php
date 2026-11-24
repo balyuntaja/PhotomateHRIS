@@ -1375,11 +1375,29 @@ class SessionManagementTest extends TestCase
 
         $cabangId = $this->expressSewaCabang()->cabang_id;
 
+        $invoice = \App\Models\Invoice::create([
+            'invoice_number' => 'INV-SEWA-TEST-001',
+            'client_name' => 'Klien Sewa Test',
+            'event_name' => 'Event Sewa Test',
+            'event_location' => 'Jakarta',
+            'person_in_charge' => 'PIC Sewa',
+            'event_date' => Carbon::today()->format('Y-m-d'),
+            'invoice_date' => Carbon::today()->format('Y-m-d'),
+            'due_date' => Carbon::today()->addDays(7)->format('Y-m-d'),
+            'subtotal' => 3000000,
+            'discount' => 0,
+            'cabang_id' => $cabangId,
+            'total' => 3000000,
+            'status' => 'Belum Dibayar',
+            'created_by' => $this->superAdmin->karyawan_id,
+        ]);
+
         \Livewire\Livewire::test(\App\Filament\Resources\SessionReportResource\Pages\CreateSessionReport::class)
             ->fillForm([
                 'report_date' => Carbon::today()->format('Y-m-d'),
                 'cabang_id' => $cabangId,
                 'crews' => [$this->crewKia->karyawan_id],
+                'invoice_id' => $invoice->id,
             ])
             ->fillForm([
                 'wedding_total_sessions' => 90,

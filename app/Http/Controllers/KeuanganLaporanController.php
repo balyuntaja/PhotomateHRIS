@@ -171,7 +171,7 @@ class KeuanganLaporanController extends Controller
         $user = Auth::user();
 
         abort_unless(
-            $user?->isSuperAdmin() || ($user?->can('print_keuangan_report') ?? false) || ($user?->can('view_keuangan_report') ?? false),
+            $user?->isSuperAdmin() || ($user?->can('print_keuangan_report') ?? false) || ($user?->can('view_keuangan_report') ?? false) || ($user?->can('view_keuangan_dashboard') ?? false),
             403,
             'Anda tidak memiliki akses untuk mencetak rekap perbulan.'
         );

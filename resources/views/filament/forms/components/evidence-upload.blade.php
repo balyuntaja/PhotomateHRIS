@@ -161,8 +161,8 @@
                     window.dispatchEvent(new CustomEvent(@js($previewClearEvent)));
                     clearEvidencePreview();
                 "
-                class="rounded-lg px-2.5 py-1 text-xs font-semibold text-white"
-                style="position: absolute; top: 0.75rem; left: 0.75rem; z-index: 1; background-color: rgba(3, 7, 18, 0.8);"
+                class="pm-btn pm-btn-danger pm-btn-xs"
+                style="position: absolute; top: 0.75rem; left: 0.75rem; z-index: 10;"
             >
                 Hapus
             </button>
@@ -202,7 +202,7 @@
                         <button
                             type="button"
                             x-on:click="retryEvidencePreview()"
-                            class="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-inset ring-white/25 transition hover:bg-white/25"
+                            class="pm-btn pm-btn-secondary pm-btn-xs"
                         >
                             Coba lagi
                         </button>

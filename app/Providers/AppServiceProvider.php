@@ -38,6 +38,8 @@ class AppServiceProvider extends ServiceProvider
         \Illuminate\Support\Facades\Gate::policy(\App\Models\InventoryItem::class, \App\Policies\InventoryItemPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\InventoryStock::class, \App\Policies\InventoryStockPolicy::class);
         \Illuminate\Support\Facades\Gate::policy(\App\Models\InventoryTransaction::class, \App\Policies\InventoryTransactionPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\ExpressEvent::class, \App\Policies\ExpressEventPolicy::class);
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\BoothSessionHpp::class, \App\Policies\BoothSessionHppPolicy::class);
 
         \App\Models\Invoice::observe(\App\Observers\InvoiceObserver::class);
 

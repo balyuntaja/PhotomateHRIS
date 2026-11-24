@@ -2,13 +2,17 @@
 
 namespace App\Services;
 
+use App\Models\BoothSessionHpp;
 use App\Models\Cabang;
+use App\Models\ExpressEvent;
 use App\Models\FinancialParentCategory;
 use App\Models\FinancialTransaction;
 use App\Models\SessionReport;
 use App\Utils\MonthHelper;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class RekapPerbulanService
 {
@@ -59,8 +63,15 @@ class RekapPerbulanService
         // 3. Data Pengeluaran per Kategori Utama dan Cabang (Matrix Expenses)
         $expenseMatrix = $this->getExpenseMatrix($start, $end);
 
+        // 3b. Data Event Express & Alokasi HPP Periode Ini
+        $expressEventsData = $this->getExpressEventsData($start, $end);
+
+        // 3c. Data HPP Booth Janus & Golio Periode Ini
+        $janusHppData = $this->getBoothHppData(self::BOOTH_JANUS, $start, $end);
+        $golioHppData = $this->getBoothHppData(self::BOOTH_GOLIO, $start, $end);
+
         // 4. Hitung HPP, Nett Profit, Laba Ditahan per Booth
-        $boothTable = $this->buildBoothTable($incomeData, $sessionStats, $expenseMatrix);
+        $boothTable = $this->buildBoothTable($incomeData, $sessionStats, $expenseMatrix, $expressEventsData, $janusHppData, $golioHppData);
 
         // 5. Data Tabel Utang
         $utangTable = $this->getUtangTable($start, $end);
@@ -92,6 +103,7 @@ class RekapPerbulanService
             'booth_table' => $boothTable,
             'utang_table' => $utangTable,
             'expense_matrix' => $expenseMatrix,
+            'express_events_data' => $expressEventsData,
             'donut_chart' => $donutChart,
             'trend_chart' => $trendChart,
         ];
@@ -357,10 +369,19 @@ class RekapPerbulanService
      * @param array<string, int> $incomeData
      * @param array<string, array{lembar: int, sesi: int}> $sessionStats
      * @param array<string, mixed> $expenseMatrix
-     * @return array{rows: array<string, array<string, mixed>>, total: array<string, mixed>}
+     * @param array<string, mixed>|null $expressEventsData
+     * @param array<string, mixed>|null $janusHppData
+     * @param array<string, mixed>|null $golioHppData
+     * @return array{rows: array<string, array<string, mixed>>, total: array<string, mixed>, express_events?: array<int, array<string, mixed>>}
      */
-    public function buildBoothTable(array $incomeData, array $sessionStats, array $expenseMatrix): array
-    {
+    public function buildBoothTable(
+        array $incomeData,
+        array $sessionStats,
+        array $expenseMatrix,
+        ?array $expressEventsData = null,
+        ?array $janusHppData = null,
+        ?array $golioHppData = null
+    ): array {
         $booths = self::DEFAULT_BOOTHS;
         $rows = [];
 
@@ -374,14 +395,29 @@ class RekapPerbulanService
         foreach ($booths as $booth) {
             $income = (int) ($incomeData[$booth] ?? 0);
             $hpp = (int) ($expenseMatrix['hpp_by_booth'][$booth] ?? 0);
+            $lembar = (int) ($sessionStats[$booth]['lembar'] ?? 0);
+            $sesi = (int) ($sessionStats[$booth]['sesi'] ?? 0);
+            $isPending = false;
+
+            // Jika booth Express memiliki data alokasi event pada periode ini, gunakan data event Express
+            if ($booth === self::BOOTH_EXPRESS && $expressEventsData && ($expressEventsData['has_events'] ?? false)) {
+                $income = (int) $expressEventsData['income'];
+                $lembar = (int) $expressEventsData['sheets'];
+                $sesi = (int) $expressEventsData['sessions'];
+                $hpp = (int) $expressEventsData['hpp'];
+                $isPending = (bool) ($expressEventsData['has_pending'] ?? false);
+            } elseif ($booth === self::BOOTH_JANUS && $janusHppData && ($janusHppData['has_data'] ?? false)) {
+                $hpp = (int) $janusHppData['hpp'];
+                $isPending = (bool) ($janusHppData['has_pending'] ?? false);
+            } elseif ($booth === self::BOOTH_GOLIO && $golioHppData && ($golioHppData['has_data'] ?? false)) {
+                $hpp = (int) $golioHppData['hpp'];
+                $isPending = (bool) ($golioHppData['has_pending'] ?? false);
+            }
 
             $nettProfit = $income - $hpp;
 
             $hppPct = $income > 0 ? round(($hpp / $income) * 100, 2) : 0.0;
             $nettProfitPct = $income > 0 ? round(($nettProfit / $income) * 100, 2) : 0.0;
-
-            $lembar = (int) ($sessionStats[$booth]['lembar'] ?? 0);
-            $sesi = (int) ($sessionStats[$booth]['sesi'] ?? 0);
 
             // Rate Laba Ditahan: 25% untuk Janus & Golio, 30% untuk Express (Sharing Profit)
             $labaDitahanRate = ($booth === self::BOOTH_EXPRESS) ? 0.30 : 0.25;
@@ -397,6 +433,8 @@ class RekapPerbulanService
                 'total_lembar' => $lembar,
                 'total_sesi' => $sesi,
                 'laba_ditahan' => $labaDitahan,
+                'is_pending' => $isPending,
+                'hpp_pending' => $isPending,
             ];
 
             $totalIncome += $income;
@@ -425,6 +463,193 @@ class RekapPerbulanService
         return [
             'rows' => $rows,
             'total' => $total,
+            'express_events' => $expressEventsData['events'] ?? [],
+        ];
+    }
+
+    /**
+     * Ambil data alokasi dan HPP event Express untuk rentang tanggal rekap sesi operasional.
+     *
+     * @return array{
+     *     has_events: bool,
+     *     income: int,
+     *     sessions: int,
+     *     sheets: int,
+     *     hpp: int,
+     *     has_pending: bool,
+     *     events: array<int, array<string, mixed>>
+     * }
+     */
+    public function getExpressEventsData(Carbon $start, Carbon $end): array
+    {
+        if (! Schema::hasTable('express_event_recap_allocations')) {
+            return [
+                'has_events' => false,
+                'income' => 0,
+                'sessions' => 0,
+                'sheets' => 0,
+                'hpp' => 0,
+                'has_pending' => false,
+                'events' => [],
+            ];
+        }
+
+        $allocations = DB::table('express_event_recap_allocations')
+            ->join('express_event_recaps', 'express_event_recaps.id', '=', 'express_event_recap_allocations.express_event_recap_id')
+            ->join('express_events', 'express_events.id', '=', 'express_event_recaps.express_event_id')
+            ->join('session_reports', 'session_reports.id', '=', 'express_event_recaps.session_report_id')
+            ->whereNull('express_events.deleted_at')
+            ->whereBetween('session_reports.report_date', [$start->toDateString(), $end->toDateString()])
+            ->select(
+                'express_events.id as event_id',
+                'express_events.event_name',
+                'express_events.start_date',
+                'express_events.end_date',
+                'express_events.hpp_rate_per_sheet',
+                'express_events.hpp_status',
+                'express_events.reconciliation_status',
+                'express_event_recap_allocations.allocated_sessions',
+                'express_event_recap_allocations.allocated_sheets',
+                'express_event_recap_allocations.allocated_revenue',
+                'session_reports.report_date'
+            )
+            ->get();
+
+        if ($allocations->isEmpty()) {
+            return [
+                'has_events' => false,
+                'income' => 0,
+                'sessions' => 0,
+                'sheets' => 0,
+                'hpp' => 0,
+                'has_pending' => false,
+                'events' => [],
+            ];
+        }
+
+        $eventsMap = [];
+        $totalIncome = 0;
+        $totalSessions = 0;
+        $totalSheets = 0;
+        $totalHpp = 0;
+        $hasPending = false;
+
+        foreach ($allocations as $row) {
+            $eventId = (int) $row->event_id;
+            $s = (int) $row->allocated_sessions;
+            $l = (int) $row->allocated_sheets;
+            $r = (int) $row->allocated_revenue;
+
+            $totalIncome += $r;
+            $totalSessions += $s;
+            $totalSheets += $l;
+
+            if (! isset($eventsMap[$eventId])) {
+                $isConfirmed = in_array($row->hpp_status, [ExpressEvent::HPP_CONFIRMED, ExpressEvent::HPP_POSTED], true);
+                $isPending = ! $isConfirmed || $row->hpp_rate_per_sheet === null;
+                if ($isPending) {
+                    $hasPending = true;
+                }
+
+                $eventsMap[$eventId] = [
+                    'id' => $eventId,
+                    'event_name' => $row->event_name,
+                    'start_date' => $row->start_date,
+                    'end_date' => $row->end_date,
+                    'hpp_rate_per_sheet' => $row->hpp_rate_per_sheet !== null ? (int) $row->hpp_rate_per_sheet : null,
+                    'hpp_status' => $row->hpp_status,
+                    'reconciliation_status' => $row->reconciliation_status,
+                    'is_confirmed' => $isConfirmed,
+                    'is_pending' => $isPending,
+                    'sessions' => 0,
+                    'sheets' => 0,
+                    'revenue' => 0,
+                    'hpp' => null,
+                    'gross_profit' => null,
+                ];
+            }
+
+            $eventsMap[$eventId]['sessions'] += $s;
+            $eventsMap[$eventId]['sheets'] += $l;
+            $eventsMap[$eventId]['revenue'] += $r;
+        }
+
+        foreach ($eventsMap as $eId => $eData) {
+            if ($eData['is_confirmed'] && $eData['hpp_rate_per_sheet'] !== null) {
+                $eHpp = (int) ($eData['sheets'] * $eData['hpp_rate_per_sheet']);
+                $eventsMap[$eId]['hpp'] = $eHpp;
+                $eventsMap[$eId]['gross_profit'] = $eData['revenue'] - $eHpp;
+                $totalHpp += $eHpp;
+            }
+        }
+
+        return [
+            'has_events' => true,
+            'income' => $totalIncome,
+            'sessions' => $totalSessions,
+            'sheets' => $totalSheets,
+            'hpp' => $totalHpp,
+            'has_pending' => $hasPending,
+            'events' => array_values($eventsMap),
+        ];
+    }
+
+    /**
+     * Ambil data HPP booth per lembar (Janus / Golio) dari tabel booth_session_hpp untuk rentang tanggal operasional.
+     *
+     * @return array{has_data: bool, hpp: int, has_pending: bool, sheets: int, sessions: int}
+     */
+    public function getBoothHppData(string $boothType, Carbon $start, Carbon $end): array
+    {
+        if (! Schema::hasTable('booth_session_hpp')) {
+            return [
+                'has_data' => false,
+                'hpp' => 0,
+                'has_pending' => false,
+                'sheets' => 0,
+                'sessions' => 0,
+            ];
+        }
+
+        $records = DB::table('booth_session_hpp')
+            ->whereNull('deleted_at')
+            ->where('booth_type', $boothType)
+            ->whereBetween('report_date', [$start->toDateString(), $end->toDateString()])
+            ->get();
+
+        if ($records->isEmpty()) {
+            return [
+                'has_data' => false,
+                'hpp' => 0,
+                'has_pending' => false,
+                'sheets' => 0,
+                'sessions' => 0,
+            ];
+        }
+
+        $totalHpp = 0;
+        $hasPending = false;
+        $totalSheets = 0;
+        $totalSessions = 0;
+
+        foreach ($records as $record) {
+            $totalSheets += (int) $record->total_sheets;
+            $totalSessions += (int) $record->total_sessions;
+
+            $isConfirmed = in_array($record->status, [BoothSessionHpp::STATUS_CONFIRMED, BoothSessionHpp::STATUS_POSTED], true);
+            if ($isConfirmed) {
+                $totalHpp += (int) $record->total_hpp;
+            } else {
+                $hasPending = true;
+            }
+        }
+
+        return [
+            'has_data' => true,
+            'hpp' => $totalHpp,
+            'has_pending' => $hasPending,
+            'sheets' => $totalSheets,
+            'sessions' => $totalSessions,
         ];
     }
 

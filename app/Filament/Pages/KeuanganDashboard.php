@@ -2,28 +2,18 @@
 
 namespace App\Filament\Pages;
 
-use App\Filament\Widgets\Keuangan\IncomeExpenseChart;
-use App\Filament\Widgets\Keuangan\KeuanganStatsOverview;
-use App\Filament\Widgets\Keuangan\LatestTransactionsWidget;
-use App\Services\KeuanganService;
-use Filament\Forms;
-use Filament\Forms\Form;
-use Filament\Forms\Get;
 use Filament\Pages\Dashboard as BaseDashboard;
-use Filament\Pages\Dashboard\Concerns\HasFiltersForm;
 use Illuminate\Support\Facades\Auth;
 
 class KeuanganDashboard extends BaseDashboard
 {
-    use HasFiltersForm;
-
     protected static ?string $navigationIcon = 'heroicon-o-chart-pie';
 
     protected static ?string $navigationLabel = 'Dashboard';
 
     protected static ?string $navigationGroup = 'Keuangan';
 
-    protected static ?int $navigationSort = 1;
+    protected static ?int $navigationSort = 99;
 
     protected static ?string $title = 'Keuangan';
 
@@ -36,56 +26,33 @@ class KeuanganDashboard extends BaseDashboard
     {
         $user = Auth::user();
 
-        return $user?->isSuperAdmin() || ($user?->can('view_keuangan_dashboard') ?? false);
+        return $user?->isSuperAdmin()
+            || ($user?->can('view_keuangan_dashboard') ?? false)
+            || ($user?->can('view_keuangan_report') ?? false);
     }
 
     public static function shouldRegisterNavigation(): bool
     {
-        return static::canAccess();
+        return false;
+    }
+
+    public function mount(): void
+    {
+        $this->redirect(RekapPerbulan::getUrl());
     }
 
     /**
-     * Hanya widget modul keuangan yang tampil di halaman ini.
+     * Dashboard keuangan dinonaktifkan: halaman utama dialihkan ke Rekap Perbulan.
      *
      * @return array<int, class-string>
      */
     public function getWidgets(): array
     {
-        return [
-            KeuanganStatsOverview::class,
-            IncomeExpenseChart::class,
-            LatestTransactionsWidget::class,
-        ];
+        return [];
     }
 
     public function getTitle(): string
     {
         return 'Keuangan';
-    }
-
-    public function filtersForm(Form $form): Form
-    {
-        return $form->schema([
-            Forms\Components\Select::make('periode')
-                ->label('Periode')
-                ->options(fn (): array => app(KeuanganService::class)->periodOptions())
-                ->default(KeuanganService::DEFAULT_PRESET)
-                ->selectablePlaceholder(false)
-                ->live(),
-
-            Forms\Components\DatePicker::make('dari')
-                ->label('Dari Tanggal')
-                ->visible(fn (Get $get): bool => $get('periode') === KeuanganService::PRESET_CUSTOM),
-
-            Forms\Components\DatePicker::make('sampai')
-                ->label('Sampai Tanggal')
-                ->visible(fn (Get $get): bool => $get('periode') === KeuanganService::PRESET_CUSTOM),
-
-            Forms\Components\Select::make('cabang_id')
-                ->label('Cabang')
-                ->options(fn (): array => app(KeuanganService::class)->cabangFilterOptions())
-                ->placeholder('Semua Cabang')
-                ->live(),
-        ]);
     }
 }

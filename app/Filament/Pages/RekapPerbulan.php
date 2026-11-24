@@ -18,13 +18,13 @@ class RekapPerbulan extends Page implements HasForms
 
     protected static ?string $navigationIcon = 'heroicon-o-table-cells';
 
-    protected static ?string $navigationLabel = 'Rekap Perbulan';
+    protected static ?string $navigationLabel = 'Dashboard';
 
     protected static ?string $navigationGroup = 'Keuangan';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 1;
 
-    protected static ?string $title = 'REKAP PERBULAN';
+    protected static ?string $title = 'Dashboard';
 
     protected static ?string $slug = 'rekap-perbulan';
 
@@ -39,7 +39,9 @@ class RekapPerbulan extends Page implements HasForms
     {
         $user = Auth::user();
 
-        return $user?->isSuperAdmin() || ($user?->can('view_keuangan_report') ?? false);
+        return $user?->isSuperAdmin()
+            || ($user?->can('view_keuangan_report') ?? false)
+            || ($user?->can('view_keuangan_dashboard') ?? false);
     }
 
     public static function shouldRegisterNavigation(): bool

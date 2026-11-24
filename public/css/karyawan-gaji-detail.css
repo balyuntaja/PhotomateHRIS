@@ -24,9 +24,9 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background-color: rgb(251 191 36);
-    color: rgb(92 60 2);
-    border: none;
+    background-color: #F1F3F6;
+    color: #354B6D;
+    border: 1px solid #DCE2EA;
     border-radius: 0.5rem;
     font-size: 0.875rem;
     font-weight: 600;
@@ -36,20 +36,23 @@
 }
 
 .edit-button:hover {
-    background-color: rgb(245 158 11);
-    color: rgb(78 53 0);
+    background-color: #E2E7EE;
+    color: #233148;
+    border-color: #CBD5E1;
     transform: translateY(-1px);
-    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+    box-shadow: 0 4px 6px -1px rgba(53, 75, 109, 0.1);
 }
 
 .dark .edit-button {
-    background-color: rgb(217 119 6);
-    color: rgb(254 243 199);
+    background-color: #1E293B;
+    color: #E2E8F0;
+    border-color: #334155;
 }
 
 .dark .edit-button:hover {
-    background-color: rgb(180 83 9);
-    color: white;
+    background-color: #28374F;
+    color: #FFFFFF;
+    border-color: #475569;
 }
 
 /* Penyesuaian Section Styling */

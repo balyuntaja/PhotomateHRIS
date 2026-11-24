@@ -132,10 +132,10 @@ class KeuanganLabaRugiReportTest extends TestCase
         $this->assertTrue(KeuanganLabaRugiReport::shouldRegisterNavigation());
         $this->assertSame('Keuangan', KeuanganLabaRugiReport::getNavigationGroup());
         $this->assertSame('Laporan Laba Rugi', KeuanganLabaRugiReport::getNavigationLabel());
-        $this->assertSame(6, KeuanganLabaRugiReport::getNavigationSort());
+        $this->assertSame(5, KeuanganLabaRugiReport::getNavigationSort());
 
-        // Laporan Detail Transaksi berada tepat di atasnya (sort = 5)
-        $this->assertSame(5, KeuanganReport::getNavigationSort());
+        // Jurnal Umum berada tepat di atasnya (sort = 4)
+        $this->assertSame(4, KeuanganReport::getNavigationSort());
     }
 
     public function test_halaman_laba_rugi_menampilkan_pendapatan_beban_utama_dan_status_laba(): void

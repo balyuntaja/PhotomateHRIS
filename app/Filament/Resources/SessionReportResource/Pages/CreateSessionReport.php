@@ -4,6 +4,7 @@ namespace App\Filament\Resources\SessionReportResource\Pages;
 
 use App\Filament\Resources\SessionReportResource;
 use App\Models\FinancialTransaction;
+use App\Models\Invoice;
 use App\Models\LuminashImportBatch;
 use App\Models\SessionReport;
 use App\Services\LuminashImportService;
@@ -411,6 +412,60 @@ class CreateSessionReport extends CreateRecord implements HasTable
             throw ValidationException::withMessages([
                 'data.report_date' => SessionReport::inputClosedMessageFor($reportDate),
             ]);
+        }
+
+        $cabangId = $data['cabang_id'] ?? null;
+        if ($cabangId) {
+            $cabang = \App\Models\Cabang::find($cabangId);
+            $namaCabang = strtolower($cabang?->nama_cabang ?? '');
+            if (str_contains($namaCabang, 'express sharing profit') || str_contains($namaCabang, 'sharing profit')) {
+                $data['invoice_id'] = null;
+                if (blank($data['event_note'] ?? null)) {
+                    throw ValidationException::withMessages([
+                        'data.event_note' => 'Nama Event wajib diisi untuk cabang Express Sharing Profit.',
+                    ]);
+                }
+            } elseif (str_contains($namaCabang, 'express self run') || str_contains($namaCabang, 'self run')) {
+                if (empty($data['invoice_id'])) {
+                    throw ValidationException::withMessages([
+                        'data.invoice_id' => 'Pilih Event dari Invoice Express Self Run wajib dipilih.',
+                    ]);
+                }
+                $inv = Invoice::find($data['invoice_id']);
+                if (! $inv || ! $inv->isExpressSelfRun()) {
+                    throw ValidationException::withMessages([
+                        'data.invoice_id' => 'Invoice yang dipilih bukan merupakan invoice Express Self Run yang valid.',
+                    ]);
+                }
+                $data['event_note'] = $inv->event_name;
+                if (empty($data['event_date']) && $inv->event_date) {
+                    $data['event_date'] = $inv->event_date->toDateString();
+                }
+                $matchingEvent = \App\Models\Event::where('name', $inv->event_name)->first();
+                if ($matchingEvent) {
+                    $data['event_id'] = $matchingEvent->id;
+                }
+            } elseif (str_contains($namaCabang, 'express sewa')) {
+                if (empty($data['invoice_id'])) {
+                    throw ValidationException::withMessages([
+                        'data.invoice_id' => 'Pilih Event dari Invoice Express Sewa wajib dipilih.',
+                    ]);
+                }
+                $inv = Invoice::find($data['invoice_id']);
+                if (! $inv || ! $inv->isExpressSewa()) {
+                    throw ValidationException::withMessages([
+                        'data.invoice_id' => 'Invoice yang dipilih bukan merupakan invoice Express Sewa yang valid.',
+                    ]);
+                }
+                $data['event_note'] = $inv->event_name;
+                if (empty($data['event_date']) && $inv->event_date) {
+                    $data['event_date'] = $inv->event_date->toDateString();
+                }
+                $matchingEvent = \App\Models\Event::where('name', $inv->event_name)->first();
+                if ($matchingEvent) {
+                    $data['event_id'] = $matchingEvent->id;
+                }
+            }
         }
 
         $data['status'] = SessionReport::STATUS_DRAFT;

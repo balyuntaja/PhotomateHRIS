@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $report_date
  * @property string $status
  * @property string|null $event_note
+ * @property Carbon|null $event_date
  * @property string|null $cabang_id
  * @property int|null $invoice_id
  * @property int|null $event_id
@@ -58,6 +59,7 @@ class SessionReport extends Model
     protected $fillable = [
         'report_number',
         'report_date',
+        'event_date',
         'status',
         'event_note',
         'cabang_id',
@@ -87,6 +89,7 @@ class SessionReport extends Model
 
     protected $casts = [
         'report_date' => 'date',
+        'event_date' => 'date',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
         'wedding_total_sessions' => 'integer',

@@ -98,24 +98,13 @@ class KeuanganDashboardReportTest extends TestCase
         ]);
     }
 
-    public function test_dashboard_menampilkan_ringkasan_sesuai_contoh_spesifikasi(): void
+    public function test_akses_keuangan_mengalihkan_ke_rekap_perbulan(): void
     {
-        $this->seedContohTransaksi();
-
         $this->actingAs($this->financeUser)
             ->get('/admin/keuangan')
-            ->assertOk()
-            ->assertSee('Total Pemasukan')
-            ->assertSee('Total Pengeluaran')
-            ->assertSee('Saldo')
-            ->assertSee('Rp 2.000.000')
-            ->assertSee('Rp 481.550')
-            ->assertSee('Rp 1.518.450')
-            ->assertSee('Transaksi Terbaru')
-            ->assertSee('Menampilkan 1–3 dari 3 transaksi')
-            ->assertSee('Pemasukan vs Pengeluaran')
-            ->assertSee('Pelunasan Event A')
-            ->assertSee('Newspaper Janus');
+            ->assertRedirect('/admin/rekap-perbulan');
+
+        $this->assertFalse(KeuanganDashboard::shouldRegisterNavigation());
     }
 
     public function test_transaksi_terbaru_dashboard_memakai_pagination_sepuluh_per_halaman(): void
@@ -240,11 +229,11 @@ class KeuanganDashboardReportTest extends TestCase
         $this->actingAs($admin);
 
         $this->assertTrue(KeuanganDashboard::canAccess());
-        $this->assertTrue(KeuanganDashboard::shouldRegisterNavigation());
+        $this->assertFalse(KeuanganDashboard::shouldRegisterNavigation());
         $this->assertTrue(KeuanganReport::canAccess());
         $this->assertTrue(KeuanganReport::shouldRegisterNavigation());
 
-        $this->get('/admin/keuangan')->assertOk();
+        $this->get('/admin/keuangan')->assertRedirect('/admin/rekap-perbulan');
         $this->get('/admin/keuangan-laporan')->assertOk();
 
         \Livewire\Livewire::test(KeuanganReport::class)
@@ -693,18 +682,14 @@ class KeuanganDashboardReportTest extends TestCase
         $this->assertCount(0, $service->transactionsForReport($bulanLalu['start'], $bulanLalu['end'])->get());
     }
 
-    public function test_widget_keuangan_hanya_tampil_di_halaman_keuangan(): void
+    public function test_widget_keuangan_tidak_tampil_di_dashboard_utama(): void
     {
         $this->assertFalse(KeuanganStatsOverview::isDiscovered());
         $this->assertFalse(IncomeExpenseChart::isDiscovered());
         $this->assertFalse(LatestTransactionsWidget::isDiscovered());
 
         $this->assertSame(
-            [
-                KeuanganStatsOverview::class,
-                IncomeExpenseChart::class,
-                LatestTransactionsWidget::class,
-            ],
+            [],
             (new KeuanganDashboard)->getWidgets()
         );
     }

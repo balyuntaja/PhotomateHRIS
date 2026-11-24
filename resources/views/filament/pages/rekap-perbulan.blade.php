@@ -137,7 +137,7 @@
 
         {{-- Center Banner: Bulan Terpilih (Spreadsheet Style Header) --}}
         <div class="w-full bg-sky-200 dark:bg-sky-950/80 text-sky-950 dark:text-sky-100 border border-sky-300 dark:border-sky-800 rounded-lg py-2.5 px-4 text-center font-extrabold tracking-wider text-base uppercase shadow-sm">
-            {{ strtoupper($period['month_name']) }} {{ $period['year'] }}
+            REKAP PERBULAN - {{ strtoupper($period['month_name']) }} {{ $period['year'] }}
         </div>
 
         {{-- Section 2: Middle Tables (Summary Keuangan & Income Per Booth) --}}
@@ -218,6 +218,11 @@
                                     </td>
                                     <td class="py-2.5 px-2 text-right text-gray-700 dark:text-gray-300 font-mono">
                                         {{ RupiahHelper::format($bData['hpp']) }}
+                                        @if($bData['hpp_pending'] ?? false)
+                                            <span class="inline-block ml-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 border border-amber-300" title="Ada event Express yang belum konfirmasi HPP final">
+                                                Pending
+                                            </span>
+                                        @endif
                                     </td>
                                     <td class="py-2.5 px-1.5 text-center">
                                         <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800">
@@ -397,5 +402,73 @@
                 </div>
             </div>
         </div>
+
+        {{-- Section 4: Detail Event Express Bulan Ini --}}
+        @if(!empty($boothTable['express_events']))
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div class="bg-purple-200 dark:bg-purple-900/60 text-purple-950 dark:text-purple-100 font-bold px-4 py-2.5 flex items-center justify-between text-xs uppercase tracking-wider border-b border-purple-300 dark:border-purple-800">
+                    <span>DETAIL EVENT EXPRESS — {{ strtoupper($period['month_name']) }}</span>
+                    <span class="text-[11px] font-normal lowercase">({{ count($boothTable['express_events']) }} event teralokasi)</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-gray-50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 font-semibold">
+                                <th class="py-2.5 px-3 text-left">Nama Event</th>
+                                <th class="py-2.5 px-3 text-left">Periode Event</th>
+                                <th class="py-2.5 px-3 text-right">Total Sesi</th>
+                                <th class="py-2.5 px-3 text-right">Total Lembar</th>
+                                <th class="py-2.5 px-3 text-right">Omzet</th>
+                                <th class="py-2.5 px-3 text-right">Tarif HPP</th>
+                                <th class="py-2.5 px-3 text-right">Total HPP</th>
+                                <th class="py-2.5 px-3 text-right">Laba Kotor</th>
+                                <th class="py-2.5 px-3 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700/60">
+                            @foreach($boothTable['express_events'] as $evt)
+                                <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
+                                    <td class="py-2.5 px-3 font-semibold text-gray-900 dark:text-gray-100">
+                                        {{ $evt['event_name'] }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-gray-600 dark:text-gray-400">
+                                        {{ \Carbon\Carbon::parse($evt['start_date'])->format('d/m/Y') }} s/d {{ \Carbon\Carbon::parse($evt['end_date'])->format('d/m/Y') }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
+                                        {{ number_format($evt['sessions'], 0, ',', '.') }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
+                                        {{ number_format($evt['sheets'], 0, ',', '.') }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-right font-mono font-medium text-blue-600 dark:text-blue-400">
+                                        {{ RupiahHelper::format($evt['revenue']) }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
+                                        {{ $evt['hpp_rate_per_sheet'] !== null ? RupiahHelper::format($evt['hpp_rate_per_sheet']) : '-' }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-right font-mono font-semibold {{ $evt['hpp'] !== null ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400' }}">
+                                        {{ $evt['hpp'] !== null ? RupiahHelper::format($evt['hpp']) : 'Pending' }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-right font-mono font-semibold {{ ($evt['gross_profit'] ?? 0) >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
+                                        {{ $evt['gross_profit'] !== null ? RupiahHelper::format($evt['gross_profit']) : '-' }}
+                                    </td>
+                                    <td class="py-2.5 px-3 text-center">
+                                        @if($evt['is_confirmed'])
+                                            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border border-emerald-200">
+                                                Confirmed
+                                            </span>
+                                        @else
+                                            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200">
+                                                Pending HPP
+                                            </span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        @endif
     </div>
 </x-filament-panels::page>

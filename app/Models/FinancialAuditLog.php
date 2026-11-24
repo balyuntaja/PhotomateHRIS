@@ -38,6 +38,7 @@ class FinancialAuditLog extends Model
         'parent_category_id' => 'Kategori Utama',
         'account_id' => 'Akun',
         'party_id' => 'Dibayarkan / Diterima Oleh',
+        'submitted_by_name' => 'Dibayarkan / Disubmit Oleh',
         'cabang_id' => 'Cabang',
         'payment_method_id' => 'Metode Pembayaran',
         'payment_status' => 'Status Pembayaran',
