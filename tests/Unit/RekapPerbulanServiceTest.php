@@ -133,4 +133,89 @@ class RekapPerbulanServiceTest extends TestCase
         $this->assertSame(round((2659250 / 37763000) * 100, 2), $keyed['utang']['persentase']);
         $this->assertSame('warning', $keyed['utang']['tone']);
     }
+
+    public function test_build_booth_table_shows_hpp_zero_and_pending_when_manajemen_hpp_has_no_data(): void
+    {
+        $incomeData = [
+            'Janus' => 14875000,
+            'Golio' => 8110000,
+            'Express' => 25746000,
+        ];
+
+        $sessionStats = [
+            'Janus' => ['lembar' => 561, 'sesi' => 424],
+            'Golio' => ['lembar' => 310, 'sesi' => 250],
+            'Express' => ['lembar' => 4120, 'sesi' => 1800],
+        ];
+
+        $expenseMatrix = [
+            'hpp_by_booth' => [
+                'Janus' => 1059250,
+                'Golio' => 91100,
+                'Express' => 2985099,
+            ],
+        ];
+
+        // Express belum ada event dibuat
+        $expressEventsData = [
+            'has_events' => false,
+            'income' => 0,
+            'sessions' => 0,
+            'sheets' => 0,
+            'hpp' => 0,
+            'has_pending' => false,
+            'events' => [],
+        ];
+
+        // Janus ada data tapi belum dikonfirmasi (pending)
+        $janusHppData = [
+            'has_data' => true,
+            'hpp' => 0,
+            'has_pending' => true,
+            'sheets' => 561,
+            'sessions' => 424,
+        ];
+
+        // Golio belum ada data di booth_session_hpp sama sekali
+        $golioHppData = [
+            'has_data' => false,
+            'hpp' => 0,
+            'has_pending' => false,
+            'sheets' => 0,
+            'sessions' => 0,
+        ];
+
+        $result = $this->service->buildBoothTable(
+            $incomeData,
+            $sessionStats,
+            $expenseMatrix,
+            $expressEventsData,
+            $janusHppData,
+            $golioHppData
+        );
+
+        $rows = $result['rows'];
+
+        // Express: HPP harus 0, is_pending true, nett profit = income, laba ditahan 30%
+        $this->assertSame(25746000, $rows['Express']['income']);
+        $this->assertSame(0, $rows['Express']['hpp']);
+        $this->assertTrue($rows['Express']['is_pending']);
+        $this->assertTrue($rows['Express']['hpp_pending']);
+        $this->assertSame(25746000, $rows['Express']['nett_profit']);
+        $this->assertSame((int) round(25746000 * 0.30), $rows['Express']['laba_ditahan']);
+
+        // Janus: HPP 0, is_pending true, nett profit = income
+        $this->assertSame(14875000, $rows['Janus']['income']);
+        $this->assertSame(0, $rows['Janus']['hpp']);
+        $this->assertTrue($rows['Janus']['is_pending']);
+        $this->assertTrue($rows['Janus']['hpp_pending']);
+        $this->assertSame(14875000, $rows['Janus']['nett_profit']);
+
+        // Golio: HPP 0, is_pending true, nett profit = income
+        $this->assertSame(8110000, $rows['Golio']['income']);
+        $this->assertSame(0, $rows['Golio']['hpp']);
+        $this->assertTrue($rows['Golio']['is_pending']);
+        $this->assertTrue($rows['Golio']['hpp_pending']);
+        $this->assertSame(8110000, $rows['Golio']['nett_profit']);
+    }
 }

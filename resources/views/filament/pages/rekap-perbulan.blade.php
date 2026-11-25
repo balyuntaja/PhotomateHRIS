@@ -219,7 +219,7 @@
                                     <td class="py-2.5 px-2 text-right text-gray-700 dark:text-gray-300 font-mono">
                                         {{ RupiahHelper::format($bData['hpp']) }}
                                         @if($bData['hpp_pending'] ?? false)
-                                            <span class="inline-block ml-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 border border-amber-300" title="Ada event Express yang belum konfirmasi HPP final">
+                                            <span class="inline-block ml-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 border border-amber-300" title="HPP belum dikonfirmasi atau masih pending di Manajemen HPP">
                                                 Pending
                                             </span>
                                         @endif

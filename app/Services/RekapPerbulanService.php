@@ -400,18 +400,51 @@ class RekapPerbulanService
             $isPending = false;
 
             // Jika booth Express memiliki data alokasi event pada periode ini, gunakan data event Express
-            if ($booth === self::BOOTH_EXPRESS && $expressEventsData && ($expressEventsData['has_events'] ?? false)) {
-                $income = (int) $expressEventsData['income'];
-                $lembar = (int) $expressEventsData['sheets'];
-                $sesi = (int) $expressEventsData['sessions'];
-                $hpp = (int) $expressEventsData['hpp'];
-                $isPending = (bool) ($expressEventsData['has_pending'] ?? false);
-            } elseif ($booth === self::BOOTH_JANUS && $janusHppData && ($janusHppData['has_data'] ?? false)) {
-                $hpp = (int) $janusHppData['hpp'];
-                $isPending = (bool) ($janusHppData['has_pending'] ?? false);
-            } elseif ($booth === self::BOOTH_GOLIO && $golioHppData && ($golioHppData['has_data'] ?? false)) {
-                $hpp = (int) $golioHppData['hpp'];
-                $isPending = (bool) ($golioHppData['has_pending'] ?? false);
+            if ($booth === self::BOOTH_EXPRESS) {
+                if ($expressEventsData && ($expressEventsData['has_events'] ?? false)) {
+                    $income = (int) $expressEventsData['income'];
+                    $lembar = (int) $expressEventsData['sheets'];
+                    $sesi = (int) $expressEventsData['sessions'];
+                    $hpp = (int) $expressEventsData['hpp'];
+                    $isPending = (bool) ($expressEventsData['has_pending'] ?? false);
+
+                    $totalExpressLembar = (int) ($sessionStats[$booth]['lembar'] ?? 0);
+                    if ($totalExpressLembar > $lembar) {
+                        $isPending = true;
+                    }
+                } elseif ($expressEventsData !== null) {
+                    // Ketika modul Event Express aktif namun belum ada event yang dibuat/dialokasikan pada periode ini
+                    $hpp = 0;
+                    $isPending = ($income > 0 || $lembar > 0);
+                } else {
+                    $hpp = (int) ($expenseMatrix['hpp_by_booth'][$booth] ?? 0);
+                }
+            } elseif ($booth === self::BOOTH_JANUS) {
+                if ($janusHppData && ($janusHppData['has_data'] ?? false)) {
+                    $hpp = (int) $janusHppData['hpp'];
+                    $isPending = (bool) ($janusHppData['has_pending'] ?? false);
+                    if ($lembar > (int) ($janusHppData['sheets'] ?? 0)) {
+                        $isPending = true;
+                    }
+                } elseif ($janusHppData !== null) {
+                    $hpp = 0;
+                    $isPending = ($income > 0 || $lembar > 0);
+                } else {
+                    $hpp = (int) ($expenseMatrix['hpp_by_booth'][$booth] ?? 0);
+                }
+            } elseif ($booth === self::BOOTH_GOLIO) {
+                if ($golioHppData && ($golioHppData['has_data'] ?? false)) {
+                    $hpp = (int) $golioHppData['hpp'];
+                    $isPending = (bool) ($golioHppData['has_pending'] ?? false);
+                    if ($lembar > (int) ($golioHppData['sheets'] ?? 0)) {
+                        $isPending = true;
+                    }
+                } elseif ($golioHppData !== null) {
+                    $hpp = 0;
+                    $isPending = ($income > 0 || $lembar > 0);
+                } else {
+                    $hpp = (int) ($expenseMatrix['hpp_by_booth'][$booth] ?? 0);
+                }
             }
 
             $nettProfit = $income - $hpp;

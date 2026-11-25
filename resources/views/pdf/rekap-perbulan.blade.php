@@ -385,7 +385,12 @@
                             <tr>
                                 <td class="text-left font-bold">{{ $bName }}</td>
                                 <td class="text-right font-mono">{{ RupiahHelper::format($bData['income']) }}</td>
-                                <td class="text-right font-mono">{{ RupiahHelper::format($bData['hpp']) }}</td>
+                                <td class="text-right font-mono">
+                                    {{ RupiahHelper::format($bData['hpp']) }}
+                                    @if($bData['hpp_pending'] ?? false)
+                                        <span class="badge badge-warning" style="font-size: 7px; padding: 1px 3px; margin-left: 2px;">Pending</span>
+                                    @endif
+                                </td>
                                 <td class="text-center">{{ number_format($bData['hpp_percentage'], 2, ',', '.') }}%</td>
                                 <td class="text-right font-mono font-bold">{{ RupiahHelper::format($bData['nett_profit']) }}</td>
                                 <td class="text-center">{{ number_format($bData['nett_profit_percentage'], 2, ',', '.') }}%</td>
