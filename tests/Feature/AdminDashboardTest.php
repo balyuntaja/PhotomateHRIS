@@ -116,7 +116,7 @@ class AdminDashboardTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin')
             ->assertOk()
-            ->assertSee('css/filament/admin/theme.css')
+            ->assertSee('css/filament/admin/theme.css?v=')
             ->assertSee('Ringkasan Bisnis')
             ->assertSee('Total Pendapatan')
             ->assertSee(RupiahHelper::format(150000))

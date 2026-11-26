@@ -3,7 +3,7 @@
     "type": "module",
     "scripts": {
         "build": "npm run build:filament && vite build",
-        "build:production": "vite build",
+        "build:production": "npm run build:filament && vite build",
         "build:filament": "tailwindcss -i ./resources/css/filament/admin/theme.css -o ./public/css/filament/admin/theme.css --config ./resources/css/filament/admin/tailwind.config.js",
         "dev": "concurrently -k \"vite\" \"npm:dev:filament\"",
         "dev:filament": "tailwindcss -i ./resources/css/filament/admin/theme.css -o ./public/css/filament/admin/theme.css --config ./resources/css/filament/admin/tailwind.config.js --watch"

@@ -59,7 +59,7 @@ class AdminPanelProvider extends PanelProvider
                 ],
                 'info' => \Filament\Support\Colors\Color::Sky,
             ])
-            ->theme(asset('css/filament/admin/theme.css'))
+            ->theme($this->versionedAsset('css/filament/admin/theme.css'))
             ->maxContentWidth(MaxWidth::ScreenTwoExtraLarge)
             ->sidebarCollapsibleOnDesktop()
             ->sidebarWidth('17rem')
@@ -148,6 +148,24 @@ class AdminPanelProvider extends PanelProvider
                     '<script src="'.asset('js/evidence-upload.js').'?v='.filemtime(public_path('js/evidence-upload.js')).'"></script>'
                 )
             );
+    }
+
+    /**
+     * Tambahkan query string versi berbasis hash isi file agar cache browser/CDN
+     * otomatis diperbarui ketika tema Filament dikompilasi ulang.
+     */
+    private function versionedAsset(string $path): string
+    {
+        $fullPath = public_path($path);
+        $url = asset($path);
+
+        if (! is_file($fullPath)) {
+            return $url;
+        }
+
+        $hash = hash_file('md5', $fullPath) ?: (string) filemtime($fullPath);
+
+        return $url.'?v='.substr($hash, 0, 12);
     }
 
     /**
