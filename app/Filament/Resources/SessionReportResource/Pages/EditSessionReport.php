@@ -4,8 +4,10 @@ namespace App\Filament\Resources\SessionReportResource\Pages;
 
 use App\Filament\Resources\SessionReportResource;
 use App\Models\Invoice;
+use App\Models\Karyawan;
 use App\Models\SessionReport;
 use App\Services\PricingService;
+use App\Services\RevisionNotificationService;
 use App\Services\SessionWorkflowService;
 use Filament\Actions;
 use Filament\Notifications\Notification;
@@ -32,6 +34,21 @@ class EditSessionReport extends EditRecord
                 ->send();
 
             $this->redirect($this->getResource()::getUrl('view', ['record' => $this->record]));
+
+            return;
+        }
+
+        $user = Auth::user();
+        if (
+            $user instanceof Karyawan
+            && $this->record instanceof SessionReport
+            && ! app(SessionWorkflowService::class)->isSupervisorOrAdmin($user)
+        ) {
+            $marked = app(RevisionNotificationService::class)->markReportNotificationsAsRead($user, $this->record);
+
+            if ($marked > 0) {
+                $this->dispatch('databaseNotificationsSent');
+            }
         }
     }
 
@@ -155,6 +172,11 @@ class EditSessionReport extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\ViewAction::make()
+                ->label('Lihat Detail')
+                ->color('gray')
+                ->icon('heroicon-o-eye'),
+
             Actions\Action::make('submit_now')
                 ->label(fn () => $this->record->status === SessionReport::STATUS_REVISION ? 'Submit Ulang ke Supervisor' : 'Submit Rekap ke Supervisor')
                 ->icon('heroicon-o-paper-airplane')
@@ -169,6 +191,8 @@ class EditSessionReport extends EditRecord
                         $this->save();
 
                         app(SessionWorkflowService::class)->submit($this->record, Auth::user());
+
+                        $this->dispatch('databaseNotificationsSent');
 
                         Notification::make()
                             ->title('Rekap sesi berhasil dikirim dan menunggu approval Supervisor.')

@@ -3,9 +3,12 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login as CustomLogin;
+use App\Filament\Pages\Dashboard;
 use App\Filament\Pages\InventoryStockPage;
 use App\Filament\Pages\KeuanganInputTransaksi;
 use App\Filament\Pages\RekapPerbulan;
+use App\Filament\Resources\SessionReportResource\Pages\ListSessionReports;
+use Illuminate\Support\Facades\Blade;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -122,6 +125,21 @@ class AdminPanelProvider extends PanelProvider
                     );
                 })->name('inventory-stok.redirect');
             })
+            ->renderHook(
+                \Filament\View\PanelsRenderHook::PAGE_END,
+                fn (): string => Blade::render('@livewire(\App\Livewire\EmployeeRevisionPopup::class)'),
+                scopes: [
+                    Dashboard::class,
+                    ListSessionReports::class,
+                ],
+            )
+            ->renderHook(
+                \Filament\View\PanelsRenderHook::RESOURCE_PAGES_LIST_RECORDS_TABLE_BEFORE,
+                fn (): string => view('filament.resources.session-reports.revision-alert-banner')->render(),
+                scopes: [
+                    ListSessionReports::class,
+                ],
+            )
             ->renderHook(
                 \Filament\View\PanelsRenderHook::BODY_END,
                 fn (): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString(

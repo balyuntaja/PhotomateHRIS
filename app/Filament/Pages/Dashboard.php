@@ -15,6 +15,7 @@ use App\Models\Karyawan;
 use App\Models\Perusahaan;
 use App\Models\SessionReport;
 use App\Services\BranchInputModeService;
+use App\Services\EmployeeDashboardService;
 use App\Services\SessionReportFinancialService;
 use App\Services\SessionWorkflowService;
 use App\Utils\MonthHelper;
@@ -35,7 +36,33 @@ class Dashboard extends BaseDashboard
 
     public function getSubheading(): ?string
     {
+        if ($this->isEmployeeDashboard()) {
+            return 'Ringkasan pekerjaan pribadi Anda · ' . $this->todayLabel();
+        }
+
         return 'Ringkasan operasional Photomate · '.$this->todayLabel();
+    }
+
+    public function isEmployeeDashboard(): bool
+    {
+        $user = Auth::user();
+
+        return $user instanceof Karyawan
+            && app(EmployeeDashboardService::class)->isEmployeeDashboard($user);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getEmployeeDashboardData(): array
+    {
+        $user = Auth::user();
+
+        if (! $user instanceof Karyawan) {
+            return [];
+        }
+
+        return app(EmployeeDashboardService::class)->buildDashboardData($user);
     }
 
     /**

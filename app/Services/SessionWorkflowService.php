@@ -167,6 +167,10 @@ class SessionWorkflowService
             $action = $isResubmission ? 'RESUBMITTED' : 'SUBMITTED';
             $this->logAction($report, $user, $action, $note);
 
+            if ($isResubmission) {
+                app(RevisionNotificationService::class)->markAllRevisionNotificationsAsReadForReport($report);
+            }
+
             // Notify supervisors
             $supervisors = Karyawan::whereIn('role_id', ['R01', 'R06', 'R08', 'R03'])
                 ->orWhereHas('roles', function ($q) {
@@ -217,28 +221,23 @@ class SessionWorkflowService
         }
 
         return DB::transaction(function () use ($report, $supervisor, $reason) {
+            $revisedAt = now();
+
             $report->status = SessionReport::STATUS_REVISION;
             $report->revision_note = $reason;
             $report->saveQuietly();
 
+            $report->load(['cabang', 'submitter', 'crews']);
+
             $this->logAction($report, $supervisor, 'REVISION_REQUESTED', $reason);
 
-            // Notify submitter and crew
-            $notifiables = collect([$report->submitter])
-                ->merge($report->crews)
-                ->filter()
-                ->unique('karyawan_id');
-
-            foreach ($notifiables as $crew) {
-                Notification::make()
-                    ->title('Revisi Diperlukan pada Rekap Sesi')
-                    ->body("Supervisor meminta revisi untuk rekap #{$report->report_number}: \"$reason\"")
-                    ->danger()
-                    ->sendToDatabase($crew);
-            }
+            $revisionNotificationService = app(RevisionNotificationService::class);
+            $revisionNotificationService->sendRevisionNotifications($report, $reason, $supervisor, $revisedAt);
 
             // Send email notification to submitter and crew asynchronously via queue
-            $validNotifiables = $notifiables->filter(fn ($c) => !empty($c->email));
+            $validNotifiables = $revisionNotificationService
+                ->resolveNotifiables($report)
+                ->filter(fn ($c) => !empty($c->email));
             if ($validNotifiables->isNotEmpty()) {
                 EmailNotification::send($validNotifiables, new SessionRevisionNotification($report, $reason, $supervisor->nama_lengkap));
             }

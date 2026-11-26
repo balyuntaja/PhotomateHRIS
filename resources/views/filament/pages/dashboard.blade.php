@@ -7,6 +7,18 @@
     use App\Utils\RupiahHelper;
 
     $user = auth()->user();
+    $isEmployeeDashboard = $this->isEmployeeDashboard();
+@endphp
+
+@if ($isEmployeeDashboard)
+    <x-filament-panels::page class="fi-dashboard-page">
+        @include('filament.pages.partials.employee-dashboard', [
+            'user' => $user,
+            'employeeData' => $this->getEmployeeDashboardData(),
+        ])
+    </x-filament-panels::page>
+@else
+@php
     $metrics = $this->getDashboardMetrics();
     $statuses = $this->getOperationalStatus();
     $attention = $this->getNeedsAttention();
@@ -490,3 +502,4 @@
         </section>
     </div>
 </x-filament-panels::page>
+@endif

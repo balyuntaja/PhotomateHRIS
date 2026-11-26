@@ -20,6 +20,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 class SessionReportResource extends Resource
 {
@@ -505,11 +506,20 @@ class SessionReportResource extends Resource
             ]);
     }
 
+    protected static function isCrewUser(): bool
+    {
+        /** @var Karyawan|null $user */
+        $user = Auth::user();
+
+        return $user instanceof Karyawan
+            && ! app(SessionWorkflowService::class)->isSupervisorOrAdmin($user);
+    }
+
     public static function table(Table $table): Table
     {
         /** @var Karyawan|null $user */
         $user = Auth::user();
-        $isCrew = $user instanceof Karyawan && !app(SessionWorkflowService::class)->isSupervisorOrAdmin($user);
+        $isCrew = static::isCrewUser();
 
         return $table
             ->modifyQueryUsing(function (Builder $query) use ($user, $isCrew) {
@@ -523,6 +533,9 @@ class SessionReportResource extends Resource
                     });
                 }
             })
+            ->recordClasses(fn (SessionReport $record): ?string => (static::isCrewUser() && $record->isRevision())
+                ? 'pm-revision-row'
+                : null)
             ->columns([
                 Tables\Columns\TextColumn::make('report_date')
                     ->label('Tanggal')
@@ -534,7 +547,12 @@ class SessionReportResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->weight('bold')
-                    ->color('primary')
+                    ->color(fn (SessionReport $record): string => (static::isCrewUser() && $record->isRevision()) ? 'danger' : 'primary')
+                    ->icon(fn (SessionReport $record): ?string => (static::isCrewUser() && $record->isRevision()) ? 'heroicon-m-exclamation-triangle' : null)
+                    ->iconColor('danger')
+                    ->description(fn (SessionReport $record): ?string => (static::isCrewUser() && $record->isRevision() && filled($record->revision_note))
+                        ? 'Revisi: ' . Str::limit($record->revision_note, 60)
+                        : null)
                     ->copyable(),
 
                 Tables\Columns\TextColumn::make('crews.nama_lengkap')
@@ -614,8 +632,17 @@ class SessionReportResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->badge()
+                    ->icon(fn (SessionReport $record): ?string => (static::isCrewUser() && $record->isRevision()) ? 'heroicon-m-exclamation-triangle' : null)
                     ->color(fn (SessionReport $record): string => $record->status_color)
-                    ->formatStateUsing(fn (SessionReport $record): string => $record->status_label)
+                    ->formatStateUsing(fn (SessionReport $record): string => (static::isCrewUser() && $record->isRevision())
+                        ? 'Perlu Revisi'
+                        : $record->status_label)
+                    ->extraAttributes(fn (SessionReport $record): array => (static::isCrewUser() && $record->isRevision())
+                        ? ['class' => 'pm-revision-status-badge']
+                        : [])
+                    ->tooltip(fn (SessionReport $record): ?string => $record->isRevision() && filled($record->revision_note)
+                        ? 'Catatan Supervisor: ' . $record->revision_note
+                        : null)
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('input_deadline')
@@ -655,23 +682,19 @@ class SessionReportResource extends Resource
                     ]),
             ])
             ->actions([
-                Tables\Actions\Action::make('review_detail')
-                    ->label('View')
-                    ->icon('heroicon-o-eye')
-                    ->color('secondary')
-                    ->modalHeading(fn (SessionReport $record) => 'Detail Rekap Sesi #' . $record->report_number)
-                    ->modalWidth('4xl')
-                    ->modalContent(fn (SessionReport $record) => view('filament.resources.session-reports.review-modal', ['record' => $record]))
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Tutup'),
-
                 Tables\Actions\EditAction::make()
+                    ->button()
+                    ->size('xs')
+                    ->icon('heroicon-m-pencil-square')
+                    ->color(fn (SessionReport $record): string => $record->isRevision() ? 'primary' : 'gray')
                     ->visible(fn (SessionReport $record) => in_array($record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION])
                         && ! app(SessionWorkflowService::class)->isInputClosedForReport(Auth::user(), $record)),
 
                 Tables\Actions\Action::make('submit_rekap')
                     ->label(fn (SessionReport $record) => $record->status === SessionReport::STATUS_REVISION ? 'Submit Ulang' : 'Submit')
-                    ->icon('heroicon-o-paper-airplane')
+                    ->button()
+                    ->size('xs')
+                    ->icon('heroicon-m-paper-airplane')
                     ->color('warning')
                     ->visible(fn (SessionReport $record) => in_array($record->status, [SessionReport::STATUS_DRAFT, SessionReport::STATUS_REVISION])
                         && ! app(SessionWorkflowService::class)->isInputClosedForReport(Auth::user(), $record))
@@ -679,9 +702,13 @@ class SessionReportResource extends Resource
                     ->modalHeading(fn (SessionReport $record) => $record->status === SessionReport::STATUS_REVISION ? 'Submit Ulang Rekap Sesi?' : 'Submit Rekap Sesi?')
                     ->modalDescription('Rekap sesi akan dikirimkan ke Supervisor untuk diperiksa. Pastikan semua data transaksi sudah benar.')
                     ->modalSubmitActionLabel('Ya, Submit')
-                    ->action(function (SessionReport $record): void {
+                    ->action(function (SessionReport $record, $livewire): void {
                         try {
                             app(SessionWorkflowService::class)->submit($record, Auth::user());
+
+                            $livewire->dispatch('databaseNotificationsSent');
+                            $livewire->dispatch('session-report-revision-updated');
+
                             Notification::make()
                                 ->title('Rekap sesi berhasil dikirim dan menunggu approval Supervisor.')
                                 ->success()
@@ -694,6 +721,16 @@ class SessionReportResource extends Resource
                                 ->send();
                         }
                     }),
+
+                Tables\Actions\Action::make('review_detail')
+                    ->label('View')
+                    ->icon('heroicon-o-eye')
+                    ->color('secondary')
+                    ->modalHeading(fn (SessionReport $record) => 'Detail Rekap Sesi #' . $record->report_number)
+                    ->modalWidth('4xl')
+                    ->modalContent(fn (SessionReport $record) => view('filament.resources.session-reports.review-modal', ['record' => $record]))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Tutup'),
 
                 Tables\Actions\DeleteAction::make()
                     ->visible(fn (SessionReport $record) => ($record->status === SessionReport::STATUS_DRAFT || (bool) Auth::user()?->isSuperAdmin())

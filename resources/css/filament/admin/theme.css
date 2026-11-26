@@ -2128,3 +2128,96 @@ body.fi-body {
         margin-bottom: 0.75rem;
     }
 }
+
+/* --------------------------------------------------------------------------
+   Session Report Revision Highlights, Popup & Notification Styles
+   -------------------------------------------------------------------------- */
+
+.pm-revision-modal-header {
+    background: linear-gradient(135deg, #fff7ed 0%, #fff1f2 55%, #fef3c7 100%);
+}
+
+.dark .pm-revision-modal-header {
+    background: linear-gradient(135deg, rgba(154, 52, 18, 0.28) 0%, rgba(136, 19, 55, 0.25) 60%, rgba(120, 53, 15, 0.22) 100%);
+}
+
+.pm-revision-cta-btn {
+    background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%) !important;
+    border-color: #dc2626 !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px -4px rgba(220, 38, 38, 0.45);
+}
+
+.pm-revision-cta-btn:hover {
+    background: linear-gradient(135deg, #c2410c 0%, #b91c1c 100%) !important;
+    border-color: #b91c1c !important;
+    color: #ffffff !important;
+}
+
+.pm-revision-cta-btn:focus-visible {
+    box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px #ea580c !important;
+}
+
+.fi-ta-table tbody tr.pm-revision-row {
+    background: linear-gradient(90deg, rgba(255, 247, 237, 0.92) 0%, rgba(255, 241, 242, 0.72) 100%) !important;
+    box-shadow: inset 4px 0 0 #ea580c;
+}
+
+.fi-ta-table tbody tr.pm-revision-row:hover {
+    background: linear-gradient(90deg, rgba(255, 237, 213, 0.95) 0%, rgba(255, 228, 230, 0.8) 100%) !important;
+}
+
+.dark .fi-ta-table tbody tr.pm-revision-row {
+    background: linear-gradient(90deg, rgba(234, 88, 12, 0.14) 0%, rgba(225, 29, 72, 0.1) 100%) !important;
+    box-shadow: inset 4px 0 0 #f97316;
+}
+
+.dark .fi-ta-table tbody tr.pm-revision-row:hover {
+    background: linear-gradient(90deg, rgba(234, 88, 12, 0.22) 0%, rgba(225, 29, 72, 0.16) 100%) !important;
+}
+
+.pm-revision-status-badge .fi-badge {
+    background-color: #dc2626 !important;
+    color: #ffffff !important;
+    border: 1px solid #b91c1c !important;
+    box-shadow: 0 2px 8px -2px rgba(220, 38, 38, 0.4);
+    font-weight: 700 !important;
+    padding: 0.25rem 0.65rem !important;
+}
+
+.pm-revision-status-badge .fi-badge .fi-badge-icon {
+    color: #fef3c7 !important;
+}
+
+.dark .pm-revision-status-badge .fi-badge {
+    background-color: #e11d48 !important;
+    border-color: #f43f5e !important;
+    color: #ffffff !important;
+}
+
+.pm-status-card--revision-alert {
+    border-color: rgba(225, 29, 72, 0.45) !important;
+    background: linear-gradient(180deg, rgba(255, 241, 242, 0.92), rgba(255, 247, 237, 0.72)) !important;
+    box-shadow: 0 8px 22px -16px rgba(220, 38, 38, 0.45) !important;
+}
+
+.dark .pm-status-card--revision-alert {
+    border-color: rgba(244, 63, 94, 0.45) !important;
+    background: linear-gradient(180deg, rgba(225, 29, 72, 0.16), rgba(234, 88, 12, 0.08)) !important;
+}
+
+.pm-attention-item--revision {
+    border-color: rgba(249, 115, 22, 0.35) !important;
+    border-inline-start: 4px solid #dc2626 !important;
+    background: linear-gradient(90deg, rgba(255, 247, 237, 0.85) 0%, rgba(255, 241, 242, 0.65) 100%) !important;
+}
+
+.pm-attention-item--revision:hover {
+    background: linear-gradient(90deg, rgba(255, 237, 213, 0.9) 0%, rgba(255, 228, 230, 0.75) 100%) !important;
+}
+
+.dark .pm-attention-item--revision {
+    border-color: rgba(249, 115, 22, 0.35) !important;
+    border-inline-start: 4px solid #f97316 !important;
+    background: linear-gradient(90deg, rgba(234, 88, 12, 0.14) 0%, rgba(225, 29, 72, 0.1) 100%) !important;
+}
