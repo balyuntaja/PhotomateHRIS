@@ -26,6 +26,8 @@ class LemburResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-clock';
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $navigationLabel = 'Kelola Lembur';
 
     protected static ?string $pluralModelLabel = 'Lembur';

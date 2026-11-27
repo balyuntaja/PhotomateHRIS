@@ -2,6 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Filament\Resources\AbsensiResource;
+use App\Filament\Resources\CutiResource;
+use App\Filament\Resources\IzinResource;
+use App\Filament\Resources\LemburResource;
 use App\Models\Absensi;
 use App\Models\Cabang;
 use App\Models\Cuti;
@@ -655,6 +659,34 @@ class AdminDashboardTest extends TestCase
         $this->assertSame(750000, $metrics['cash_revenue']);
         $this->assertSame(0, $metrics['other_revenue']);
         $this->assertSame(2, $metrics['transactions']);
+    }
+
+    public function test_menu_manajemen_absensi_disembunyikan_dari_navigasi(): void
+    {
+        Perusahaan::create([
+            'perusahaan_id' => 'P0001',
+            'nama_perusahaan' => 'Photomate Indonesia',
+            'email' => 'info@photomate.id',
+            'nomor_telepon' => '08123456789',
+            'jam_masuk' => '08:00',
+            'jam_pulang' => '17:00',
+        ]);
+
+        $admin = $this->makeUser('K0001', 'Admin Photomate', 'R01', 'admin.nav@photomate.id');
+
+        $this->assertFalse(AbsensiResource::shouldRegisterNavigation());
+        $this->assertFalse(CutiResource::shouldRegisterNavigation());
+        $this->assertFalse(IzinResource::shouldRegisterNavigation());
+        $this->assertFalse(LemburResource::shouldRegisterNavigation());
+
+        $this->actingAs($admin)
+            ->get('/admin')
+            ->assertOk()
+            ->assertDontSee('Manajemen Absensi')
+            ->assertDontSee('Kelola Absensi')
+            ->assertDontSee('Kelola Cuti')
+            ->assertDontSee('Kelola Izin')
+            ->assertDontSee('Kelola Lembur');
     }
 
     private function makeUser(string $id, string $name, string $roleId, string $email): Karyawan

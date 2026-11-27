@@ -23,6 +23,8 @@ class CutiResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';
 
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $navigationLabel = 'Kelola Cuti';
 
     protected static ?string $navigationGroup = 'Manajemen Absensi';
