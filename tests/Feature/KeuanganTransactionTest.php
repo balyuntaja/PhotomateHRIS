@@ -313,7 +313,7 @@ class KeuanganTransactionTest extends TestCase
         $this->assertTrue(\App\Filament\Resources\FinancialCategoryResource::canViewAny());
         $this->assertTrue(\App\Filament\Resources\FinancialCategoryResource::shouldRegisterNavigation());
         $this->assertTrue(\App\Filament\Resources\FinancialPaymentMethodResource::canViewAny());
-        $this->assertTrue(\App\Filament\Resources\FinancialPaymentMethodResource::shouldRegisterNavigation());
+        $this->assertFalse(\App\Filament\Resources\FinancialPaymentMethodResource::shouldRegisterNavigation());
 
         $this->get('/admin/keuangan-transaksi')->assertOk();
         $this->get('/admin/keuangan-kategori')->assertOk();

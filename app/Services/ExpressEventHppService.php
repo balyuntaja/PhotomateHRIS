@@ -33,7 +33,7 @@ class ExpressEventHppService
      */
     public function calculatePreview(ExpressEvent $event, ?int $rate = null): array
     {
-        $event->loadMissing(['recaps.allocations', 'recaps.sessionReport']);
+        $event->loadMissing(['recaps.allocations', 'recaps.sessionReport.cabang', 'invoices']);
 
         $rate = $rate !== null ? $rate : $event->hpp_rate_per_sheet;
 
@@ -74,6 +74,11 @@ class ExpressEventHppService
                 $periodBreakdown[$periodKey]['sheets'] += $l;
                 $periodBreakdown[$periodKey]['revenue'] += $r;
             }
+        }
+
+        // Untuk Express Self Run & Express Sewa dengan invoice terhubung, sumber omzet selalu nilai kontrak invoice
+        if (! $event->isSharingProfit() && $event->requiresInvoice() && $event->hasLinkedInvoices()) {
+            $totalRevenue = $event->total_invoice_amount;
         }
 
         $totalHpp = $rate !== null ? (int) ($totalSheets * $rate) : 0;

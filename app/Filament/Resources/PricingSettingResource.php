@@ -30,15 +30,39 @@ class PricingSettingResource extends Resource
 
     protected static ?int $navigationSort = 4;
 
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function canAccess(): bool
     {
-        /** @var \App\Models\Karyawan|null $user */
-        $user = Auth::user();
-        return $user && (
-            $user->role_id === 'R01' ||
-            $user->role_id === 'R06' ||
-            $user->hasRole(['Admin', 'admin', 'CEO', 'ceo'])
-        );
+        return false;
+    }
+
+    public static function canViewAny(): bool
+    {
+        return false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canView(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return false;
     }
 
     public static function form(Form $form): Form

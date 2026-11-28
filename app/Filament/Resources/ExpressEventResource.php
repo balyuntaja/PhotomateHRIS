@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\ExpressEventResource\Pages;
 use App\Filament\Resources\ExpressEventResource\Widgets\ExpressEventStatsOverview;
 use App\Models\ExpressEvent;
+use App\Models\ExpressEventInvoice;
 use App\Models\SessionReport;
 use App\Services\ExpressEventAllocationService;
 use App\Utils\MonthHelper;
@@ -86,7 +87,26 @@ class ExpressEventResource extends Resource
                                 }
 
                                 $newAllocations = [];
+                                $candidateInvoiceIds = [];
+                                $selectedReportModels = SessionReport::with('cabang')
+                                    ->whereIn('id', $matchingRecaps->pluck('id')->all())
+                                    ->get()
+                                    ->keyBy('id');
+
                                 foreach ($matchingRecaps as $recap) {
+                                    $repModel = $selectedReportModels->get($recap['id']);
+                                    if ($repModel && $repModel->invoice_id) {
+                                        $isUsedElsewhere = ExpressEventInvoice::query()
+                                            ->where('invoice_id', $repModel->invoice_id)
+                                            ->whereHas('expressEvent')
+                                            ->when($record !== null, fn ($q) => $q->where('express_event_id', '!=', $record->id))
+                                            ->exists();
+
+                                        if (! $isUsedElsewhere) {
+                                            $candidateInvoiceIds[] = (int) $repModel->invoice_id;
+                                        }
+                                    }
+
                                     $newAllocations[] = [
                                         'session_report_id' => $recap['id'],
                                         'allocated_sessions' => $recap['remaining_sessions'],
@@ -95,6 +115,40 @@ class ExpressEventResource extends Resource
                                         'notes' => null,
                                     ];
                                 }
+
+                                $existingInvoiceIds = collect($get('linked_invoice_ids') ?? [])
+                                    ->map(fn ($id): int => (int) $id)
+                                    ->filter(fn (int $id): bool => $id > 0)
+                                    ->all();
+                                $mergedInvoiceIds = array_values(array_unique(array_merge($existingInvoiceIds, $candidateInvoiceIds)));
+
+                                $context = ExpressEvent::resolveFormContext($newAllocations, $mergedInvoiceIds, $record);
+                                if ($context['is_sharing_profit']) {
+                                    $set('linked_invoice_ids', []);
+                                } else {
+                                    $set('linked_invoice_ids', $mergedInvoiceIds);
+
+                                    if ($context['requires_invoice']) {
+                                        $totalContract = (int) $context['invoice_total_revenue'];
+                                        $totalSheets = array_sum(array_map(fn ($r): int => (int) $r['allocated_sheets'], $newAllocations));
+                                        $count = count($newAllocations);
+                                        $distributed = 0;
+
+                                        foreach ($newAllocations as $idx => $row) {
+                                            if ($idx === $count - 1) {
+                                                $share = max(0, $totalContract - $distributed);
+                                            } elseif ($totalSheets > 0) {
+                                                $share = (int) floor(($totalContract * (int) $row['allocated_sheets']) / $totalSheets);
+                                                $distributed += $share;
+                                            } else {
+                                                $share = (int) floor($totalContract / max(1, $count));
+                                                $distributed += $share;
+                                            }
+                                            $newAllocations[$idx]['allocated_revenue'] = $share;
+                                        }
+                                    }
+                                }
+
                                 $set('allocations_data', $newAllocations);
 
                                 // Auto-fill start_date and end_date from recap operational dates
@@ -194,33 +248,56 @@ class ExpressEventResource extends Resource
                                             }
                                         }
 
-                                        $isExpressSewa = str_contains(strtolower($report->cabang?->nama_cabang ?? ''), 'express sewa');
-                                        if ($isExpressSewa) {
-                                            if (! $report->invoice) {
-                                                Notification::make()
-                                                    ->title('Invoice Belum Tersedia')
-                                                    ->body("Rekap sesi {$report->report_number} belum memiliki invoice terhubung. Alokasi omzet tidak dapat diisi otomatis.")
-                                                    ->warning()
-                                                    ->persistent()
-                                                    ->send();
+                                        $opType = ExpressEvent::classifyBranchOperationalType($report->cabang?->nama_cabang);
+                                        $requiresInvoice = in_array($opType, [ExpressEvent::TYPE_SELF_RUN, ExpressEvent::TYPE_SEWA], true);
 
+                                        if ($opType === ExpressEvent::TYPE_SHARING_PROFIT) {
+                                            $set('../../linked_invoice_ids', []);
+                                            $set('allocated_revenue', $remaining['revenue']);
+
+                                            return;
+                                        }
+
+                                        $linkedIds = collect($get('../../linked_invoice_ids') ?? [])
+                                            ->map(fn ($id): int => (int) $id)
+                                            ->filter(fn (int $id): bool => $id > 0)
+                                            ->unique()
+                                            ->values()
+                                            ->all();
+
+                                        if ($requiresInvoice && $report->invoice_id && ! in_array((int) $report->invoice_id, $linkedIds, true)) {
+                                            $usedElsewhere = ExpressEventInvoice::query()
+                                                ->where('invoice_id', $report->invoice_id)
+                                                ->whereHas('expressEvent')
+                                                ->when($record !== null, fn ($q) => $q->where('express_event_id', '!=', $record->id))
+                                                ->exists();
+
+                                            if (! $usedElsewhere) {
+                                                $linkedIds[] = (int) $report->invoice_id;
+                                                $set('../../linked_invoice_ids', $linkedIds);
+                                            }
+                                        }
+
+                                        if ($requiresInvoice) {
+                                            if ($linkedIds === []) {
                                                 $set('allocated_revenue', 0);
                                             } else {
-                                                // Agregasi alokasi untuk invoice yang sama dalam form repeater saat ini (mencegah double-count)
+                                                $totalInvoiceContract = (int) \App\Models\Invoice::query()
+                                                    ->whereIn('id', $linkedIds)
+                                                    ->get()
+                                                    ->unique('id')
+                                                    ->sum(fn (\App\Models\Invoice $inv): int => $inv->contract_amount);
+
                                                 $allocations = $get('../../allocations_data') ?? [];
                                                 $otherAllocatedRevenue = 0;
                                                 foreach ($allocations as $alloc) {
                                                     $otherReportId = (int) ($alloc['session_report_id'] ?? 0);
                                                     if ($otherReportId && $otherReportId !== (int) $state) {
-                                                        $otherReport = SessionReport::find($otherReportId);
-                                                        if ($otherReport && $otherReport->invoice_id === $report->invoice_id) {
-                                                            $otherAllocatedRevenue += (int) ($alloc['allocated_revenue'] ?? 0);
-                                                        }
+                                                        $otherAllocatedRevenue += RupiahHelper::toInt($alloc['allocated_revenue'] ?? 0);
                                                     }
                                                 }
 
-                                                $availableRevenue = max(0, $remaining['revenue'] - $otherAllocatedRevenue);
-                                                $set('allocated_revenue', $availableRevenue);
+                                                $set('allocated_revenue', max(0, $totalInvoiceContract - $otherAllocatedRevenue));
                                             }
                                         } else {
                                             $set('allocated_revenue', $remaining['revenue']);
@@ -263,16 +340,18 @@ class ExpressEventResource extends Resource
                                     ->live()
                                     ->helperText(function (Get $get) {
                                         $reportId = $get('session_report_id');
-                                        if (! $reportId) return null;
-                                        $report = SessionReport::with(['cabang', 'invoice'])->find($reportId);
-                                        if (! $report) return null;
-                                        $isExpressSewa = str_contains(strtolower($report->cabang?->nama_cabang ?? ''), 'express sewa');
-                                        if ($isExpressSewa) {
-                                            if ($report->invoice) {
-                                                return 'Omzet otomatis dari Invoice ' . $report->invoice->invoice_number . ' (' . RupiahHelper::format($report->invoice->total) . ').';
-                                            }
-                                            return '⚠️ Invoice belum tersedia untuk rekap ini. Hubungkan rekap dengan invoice pada menu Rekap Sesi.';
+                                        if (! $reportId) {
+                                            return null;
                                         }
+                                        $report = SessionReport::with('cabang')->find($reportId);
+                                        if (! $report) {
+                                            return null;
+                                        }
+                                        $opType = ExpressEvent::classifyBranchOperationalType($report->cabang?->nama_cabang);
+                                        if (in_array($opType, [ExpressEvent::TYPE_SELF_RUN, ExpressEvent::TYPE_SEWA], true)) {
+                                            return 'Omzet Self Run & Sewa mengikuti Total Nilai Invoice pada section Alokasi Invoice Event.';
+                                        }
+
                                         return null;
                                     })
                                     ->columnSpan([
@@ -309,6 +388,19 @@ class ExpressEventResource extends Resource
                             ->columnSpanFull(),
                     ]),
 
+                Forms\Components\Section::make('Alokasi Invoice Event')
+                    ->description('Hubungkan satu atau lebih invoice Express untuk menentukan nilai kontrak event (khusus Express Self Run & Express Sewa).')
+                    ->schema([
+                        Forms\Components\Hidden::make('linked_invoice_ids')
+                            ->default([]),
+
+                        Forms\Components\Hidden::make('invoices_modified')
+                            ->default(false),
+
+                        Forms\Components\View::make('filament.resources.express-events.partials.form-invoice-allocation')
+                            ->columnSpanFull(),
+                    ]),
+
                 Forms\Components\Section::make('Tarif HPP & Realtime Preview')
                     ->schema([
                         Forms\Components\TextInput::make('hpp_rate_per_sheet')
@@ -321,19 +413,21 @@ class ExpressEventResource extends Resource
 
                         Forms\Components\Placeholder::make('realtime_preview')
                             ->label('Ringkasan Perhitungan Real-Time')
-                            ->content(function (Get $get) {
+                            ->content(function (Get $get, ?ExpressEvent $record) {
                                 $allocations = $get('allocations_data') ?? [];
-                                $rate = (int) $get('hpp_rate_per_sheet');
+                                $linkedInvoiceIds = $get('linked_invoice_ids') ?? [];
+                                $rate = max(0, RupiahHelper::toInt($get('hpp_rate_per_sheet')));
 
-                                $totalSessions = 0;
-                                $totalSheets = 0;
-                                $totalRevenue = 0;
+                                $context = ExpressEvent::resolveFormContext(
+                                    is_array($allocations) ? $allocations : [],
+                                    is_array($linkedInvoiceIds) ? $linkedInvoiceIds : [],
+                                    $record,
+                                );
 
-                                foreach ($allocations as $alloc) {
-                                    $totalSessions += (int) ($alloc['allocated_sessions'] ?? 0);
-                                    $totalSheets += (int) ($alloc['allocated_sheets'] ?? 0);
-                                    $totalRevenue += (int) ($alloc['allocated_revenue'] ?? 0);
-                                }
+                                $totalSessions = $context['total_sessions'];
+                                $totalSheets = $context['total_sheets'];
+                                $totalRevenue = $context['effective_revenue'];
+                                $revenueSourceLabel = e($context['revenue_source_label']);
 
                                 $totalHpp = $rate * $totalSheets;
                                 $grossProfit = $totalRevenue - $totalHpp;
@@ -351,6 +445,7 @@ class ExpressEventResource extends Resource
                                         <div>
                                             <div class='text-xs text-gray-500'>Total Omzet</div>
                                             <div class='font-semibold text-blue-600 dark:text-blue-400'>" . RupiahHelper::format($totalRevenue) . "</div>
+                                            <div class='text-[11px] text-gray-500'>{$revenueSourceLabel}</div>
                                         </div>
                                         <div>
                                             <div class='text-xs text-gray-500'>Tarif HPP</div>

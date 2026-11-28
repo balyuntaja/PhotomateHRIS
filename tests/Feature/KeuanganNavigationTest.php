@@ -87,17 +87,87 @@ class KeuanganNavigationTest extends TestCase
         $this->assertSame('Keuangan', FinancialCategoryResource::getNavigationGroup());
         $this->assertSame('Kategori Keuangan', FinancialCategoryResource::getNavigationLabel());
         $this->assertSame(6, FinancialCategoryResource::getNavigationSort());
-
-        // 7. Metode Pembayaran
-        $this->assertSame('Keuangan', FinancialPaymentMethodResource::getNavigationGroup());
-        $this->assertSame('Metode Pembayaran', FinancialPaymentMethodResource::getNavigationLabel());
-        $this->assertSame(7, FinancialPaymentMethodResource::getNavigationSort());
     }
 
     public function test_dashboard_keuangan_tidak_terdaftar_di_navigasi_sidebar(): void
     {
         $this->assertFalse(KeuanganDashboard::shouldRegisterNavigation());
         $this->assertFalse(FinancialParentCategoryResource::shouldRegisterNavigation());
+        $this->assertFalse(FinancialPaymentMethodResource::shouldRegisterNavigation());
+    }
+
+    public function test_menu_metode_pembayaran_disembunyikan_dari_sidebar_seluruh_role(): void
+    {
+        $financeAdmin = $this->makeUser('K0008', 'Manager Finance', 'R08', 'finance@photomate.id', [
+            'view_any_keuangan_payment_method',
+            'view_keuangan_payment_method',
+            'create_keuangan_payment_method',
+            'update_keuangan_payment_method',
+            'delete_keuangan_payment_method',
+            'view_any_keuangan_transaction',
+            'create_keuangan_transaction',
+            'view_keuangan_report',
+            'view_keuangan_dashboard',
+        ]);
+
+        $ceo = $this->makeUser('K0009', 'CEO Nav', 'R09', 'ceo.nav@photomate.id', [
+            'view_any_keuangan_payment_method',
+            'view_keuangan_report',
+            'view_keuangan_dashboard',
+        ]);
+
+        $roles = [
+            $this->superAdmin,
+            $financeAdmin,
+            $ceo,
+            $this->userWithDashboardPermission,
+            $this->userWithReportPermission,
+            $this->userWithoutPermission,
+        ];
+
+        foreach ($roles as $user) {
+            $this->flushSession();
+            $this->actingAs($user);
+
+            $this->assertFalse(FinancialPaymentMethodResource::shouldRegisterNavigation());
+
+            $this->get('/admin')
+                ->assertOk()
+                ->assertDontSee('/admin/keuangan-metode-pembayaran');
+
+            $navItems = collect(Filament::getNavigation())
+                ->flatMap(fn ($group) => $group->getItems());
+
+            $navLabels = $navItems
+                ->map(fn ($item): string => $item->getLabel())
+                ->values();
+
+            $navUrls = $navItems
+                ->map(fn ($item): ?string => $item->getUrl())
+                ->filter()
+                ->values();
+
+            $this->assertNotContains('Metode Pembayaran', $navLabels->all());
+            $this->assertFalse($navUrls->contains(fn (string $url): bool => str_contains($url, 'keuangan-metode-pembayaran')));
+        }
+
+        // Pastikan model/data Metode Pembayaran, form transaksi, dan laporan keuangan tetap berjalan normal
+        $this->flushSession();
+        $this->actingAs($financeAdmin);
+
+        $activeMethodNames = \App\Models\FinancialPaymentMethod::query()->active()->pluck('name')->all();
+        $this->assertNotEmpty($activeMethodNames);
+
+        $this->get('/admin/keuangan-transaksi')
+            ->assertOk();
+
+        $this->get('/admin/keuangan-input-transaksi')
+            ->assertOk();
+
+        $this->get('/admin/keuangan-laporan')
+            ->assertOk()
+            ->assertSee('Laporan Keuangan')
+            ->assertDontSee('/admin/keuangan-metode-pembayaran');
     }
 
     public function test_menu_laporan_keuangan_penggajian_disembunyikan_dari_sidebar_seluruh_role(): void

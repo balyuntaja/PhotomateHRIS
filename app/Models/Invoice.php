@@ -79,6 +79,71 @@ class Invoice extends Model
     }
 
     /**
+     * Periksa apakah invoice relevan dengan operasional cabang Express
+     * (bukan cabang Golio maupun Newspaper Janus).
+     */
+    public function isExpressRelevant(): bool
+    {
+        $cabang = $this->relationLoaded('cabang')
+            ? $this->cabang
+            : ($this->cabang_id ? Cabang::withTrashed()->find($this->cabang_id) : null);
+
+        $branchName = strtolower(trim((string) ($cabang?->nama_cabang ?? '')));
+
+        if ($branchName !== '') {
+            if (str_contains($branchName, 'golio') || str_contains($branchName, 'janus')) {
+                return false;
+            }
+
+            return str_contains($branchName, 'express') || str_contains($branchName, 'wedding');
+        }
+
+        // Untuk invoice tanpa cabang_id eksplisit, pastikan tidak terikat khusus ke rekap Golio/Janus
+        $hasNonExpressReport = $this->sessionReports()
+            ->whereHas('cabang', function (Builder $q): void {
+                $q->whereRaw('LOWER(nama_cabang) LIKE ?', ['%golio%'])
+                    ->orWhereRaw('LOWER(nama_cabang) LIKE ?', ['%janus%']);
+            })
+            ->exists();
+
+        return ! $hasNonExpressReport;
+    }
+
+    /**
+     * Label jenis operasional Express pada invoice (Express Self Run / Express Sewa / Express).
+     */
+    public function getExpressTypeLabelAttribute(): string
+    {
+        $cabang = $this->relationLoaded('cabang')
+            ? $this->cabang
+            : ($this->cabang_id ? Cabang::withTrashed()->find($this->cabang_id) : null);
+
+        $branchName = strtolower(trim((string) ($cabang?->nama_cabang ?? '')));
+
+        if (str_contains($branchName, 'self run')) {
+            return 'Express Self Run';
+        }
+
+        if (str_contains($branchName, 'sewa')) {
+            return 'Express Sewa';
+        }
+
+        if (str_contains($branchName, 'sharing profit')) {
+            return 'Express Sharing Profit';
+        }
+
+        if ($this->isExpressSelfRun()) {
+            return 'Express Self Run';
+        }
+
+        if ($this->isExpressSewa()) {
+            return 'Express Sewa';
+        }
+
+        return 'Express';
+    }
+
+    /**
      * Cek apakah invoice cocok untuk cabang Express Self Run.
      */
     public function isExpressSelfRun(): bool

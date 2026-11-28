@@ -30,7 +30,7 @@ class ExpressEventInvoiceService
         ?string $dateFrom = null,
         ?string $dateTo = null
     ): Collection {
-        $event->loadMissing(['recaps.sessionReport']);
+        $event->loadMissing(['recaps.sessionReport', 'invoices']);
 
         $referencedInvoiceIds = $event->recaps
             ->map(fn ($r) => $r->sessionReport?->invoice_id)
@@ -40,8 +40,50 @@ class ExpressEventInvoiceService
             ->values()
             ->all();
 
+        $currentlyLinkedIds = $event->invoices
+            ->pluck('id')
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        return $this->getSelectableInvoicesForForm(
+            currentEventId: (int) $event->id,
+            currentlySelectedIds: $currentlyLinkedIds,
+            search: $search,
+            status: $status,
+            dateFrom: $dateFrom,
+            dateTo: $dateTo,
+            referencedInvoiceIds: $referencedInvoiceIds,
+        );
+    }
+
+    /**
+     * Daftar invoice yang relevan dengan cabang Express untuk modal pemilihan
+     * baik pada halaman Create/Edit maupun Detail Event HPP.
+     *
+     * @param  array<int, int|string>  $currentlySelectedIds
+     * @param  array<int, int>  $referencedInvoiceIds
+     * @return Collection<int, array<string, mixed>>
+     */
+    public function getSelectableInvoicesForForm(
+        ?int $currentEventId = null,
+        array $currentlySelectedIds = [],
+        ?string $search = null,
+        ?string $status = null,
+        ?string $dateFrom = null,
+        ?string $dateTo = null,
+        array $referencedInvoiceIds = [],
+    ): Collection {
+        $normalizedCurrentSelected = collect($currentlySelectedIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
         $query = Invoice::query()
-            ->with(['cabang', 'expressEventLink.expressEvent'])
+            ->with(['cabang', 'invoiceItems', 'expressEventLink.expressEvent'])
             ->when(filled($search), function (Builder $q) use ($search): void {
                 $term = '%' . trim((string) $search) . '%';
                 $q->where(function (Builder $sub) use ($term): void {
@@ -72,36 +114,47 @@ class ExpressEventInvoiceService
             ->orderByDesc('invoice_date')
             ->orderByDesc('id');
 
-        return $query->get()->map(function (Invoice $invoice) use ($event, $referencedInvoiceIds): array {
-            $link = $invoice->expressEventLink;
-            $linkedEvent = $link?->expressEvent;
+        return $query->get()
+            ->filter(fn (Invoice $invoice): bool => $invoice->isExpressRelevant())
+            ->values()
+            ->map(function (Invoice $invoice) use ($currentEventId, $normalizedCurrentSelected, $referencedInvoiceIds): array {
+                $link = $invoice->expressEventLink;
+                $linkedEvent = $link?->expressEvent;
 
-            $isLinkedToCurrent = $linkedEvent !== null && (int) $linkedEvent->id === (int) $event->id;
-            $isUsedByOther = $linkedEvent !== null && (int) $linkedEvent->id !== (int) $event->id;
+                $isLinkedToCurrentDb = $currentEventId !== null
+                    && $linkedEvent !== null
+                    && (int) $linkedEvent->id === (int) $currentEventId;
 
-            $eventDateLabel = '-';
-            if ($invoice->event_date) {
-                $eventDateLabel = $invoice->event_end_date && $invoice->event_end_date->ne($invoice->event_date)
-                    ? $invoice->event_date->format('d/m/Y') . ' - ' . $invoice->event_end_date->format('d/m/Y')
-                    : $invoice->event_date->format('d/m/Y');
-            }
+                $isLinkedToCurrent = $isLinkedToCurrentDb
+                    || in_array((int) $invoice->id, $normalizedCurrentSelected, true);
 
-            return [
-                'id' => (int) $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-                'client_name' => $invoice->client_name,
-                'event_name' => $invoice->event_name,
-                'event_date_label' => $eventDateLabel,
-                'invoice_date_label' => $invoice->invoice_date?->format('d/m/Y') ?? '-',
-                'contract_amount' => $invoice->contract_amount,
-                'down_payment' => (int) round((float) ($invoice->down_payment ?? 0)),
-                'status' => $invoice->status,
-                'linked_to_current' => $isLinkedToCurrent,
-                'used_by_other' => $isUsedByOther,
-                'other_event_name' => $isUsedByOther ? $linkedEvent->event_name : null,
-                'referenced_by_recap' => in_array((int) $invoice->id, $referencedInvoiceIds, true),
-            ];
-        });
+                $isUsedByOther = $linkedEvent !== null
+                    && ($currentEventId === null || (int) $linkedEvent->id !== (int) $currentEventId);
+
+                $eventDateLabel = '-';
+                if ($invoice->event_date) {
+                    $eventDateLabel = $invoice->event_end_date && $invoice->event_end_date->ne($invoice->event_date)
+                        ? $invoice->event_date->format('d/m/Y') . ' - ' . $invoice->event_end_date->format('d/m/Y')
+                        : $invoice->event_date->format('d/m/Y');
+                }
+
+                return [
+                    'id' => (int) $invoice->id,
+                    'invoice_number' => $invoice->invoice_number,
+                    'client_name' => $invoice->client_name,
+                    'event_name' => $invoice->event_name,
+                    'express_type_label' => $invoice->express_type_label,
+                    'event_date_label' => $eventDateLabel,
+                    'invoice_date_label' => $invoice->invoice_date?->format('d/m/Y') ?? '-',
+                    'contract_amount' => $invoice->contract_amount,
+                    'down_payment' => (int) round((float) ($invoice->down_payment ?? 0)),
+                    'status' => $invoice->status,
+                    'linked_to_current' => $isLinkedToCurrent,
+                    'used_by_other' => $isUsedByOther,
+                    'other_event_name' => $isUsedByOther ? $linkedEvent->event_name : null,
+                    'referenced_by_recap' => in_array((int) $invoice->id, $referencedInvoiceIds, true),
+                ];
+            });
     }
 
     /**
@@ -180,6 +233,7 @@ class ExpressEventInvoiceService
             }
 
             $this->syncEventInvoiceAllocations($lockedEvent);
+            $this->refreshHppAfterInvoiceChange($lockedEvent);
 
             $lockedEvent->unsetRelation('invoices');
             $afterInvoices = $lockedEvent->invoices()->get();
@@ -197,6 +251,164 @@ class ExpressEventInvoiceService
                 ],
                 'Invoice dihubungkan: ' . $afterInvoices->pluck('invoice_number')->implode(', ')
             );
+
+            return $lockedEvent->fresh(['invoices', 'recaps.allocations', 'recaps.sessionReport.cabang']);
+        });
+    }
+
+    /**
+     * Sinkronkan himpunan penuh invoice yang terhubung pada Event HPP dari form Create / Edit Event.
+     *
+     * @param  array<int, int|string>  $invoiceIds
+     */
+    public function syncInvoices(
+        ExpressEvent $event,
+        array $invoiceIds,
+        ?Karyawan $actor = null,
+        bool $forceClearWhenEmpty = false,
+    ): ExpressEvent {
+        if (! Schema::hasTable('express_event_invoices')) {
+            return $event;
+        }
+
+        $normalizedIds = collect($invoiceIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        return DB::transaction(function () use ($event, $normalizedIds, $actor, $forceClearWhenEmpty): ExpressEvent {
+            $lockedEvent = ExpressEvent::where('id', $event->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedEvent->isFinalized()) {
+                throw new RuntimeException('Event telah berstatus finalized dan tidak dapat diubah tanpa proses pembukaan kembali (reopen).');
+            }
+
+            // Express Sharing Profit selalu memakai omzet dari rekap sesi (tidak menghubungkan invoice kontrak)
+            if ($lockedEvent->isSharingProfit()) {
+                ExpressEventInvoice::where('express_event_id', $lockedEvent->id)->delete();
+
+                return $lockedEvent->fresh(['invoices', 'recaps.allocations', 'recaps.sessionReport.cabang']);
+            }
+
+            $existingInvoiceIds = ExpressEventInvoice::query()
+                ->where('express_event_id', $lockedEvent->id)
+                ->lockForUpdate()
+                ->pluck('invoice_id')
+                ->map(fn ($id): int => (int) $id)
+                ->unique()
+                ->values()
+                ->all();
+
+            if ($normalizedIds === [] && $existingInvoiceIds === [] && ! $forceClearWhenEmpty) {
+                return $lockedEvent->fresh(['invoices', 'recaps.allocations', 'recaps.sessionReport.cabang']);
+            }
+
+            if ($normalizedIds !== []) {
+                $invoices = Invoice::query()
+                    ->with('cabang')
+                    ->whereIn('id', $normalizedIds)
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                if ($invoices->count() !== count($normalizedIds)) {
+                    throw new RuntimeException('Terdapat invoice yang tidak ditemukan di database.');
+                }
+
+                foreach ($invoices as $inv) {
+                    if (! $inv->isExpressRelevant()) {
+                        throw new RuntimeException("Invoice {$inv->invoice_number} bukan merupakan invoice cabang Express.");
+                    }
+                }
+
+                $existingLinks = ExpressEventInvoice::query()
+                    ->whereIn('invoice_id', $normalizedIds)
+                    ->with('expressEvent')
+                    ->lockForUpdate()
+                    ->get();
+
+                foreach ($existingLinks as $link) {
+                    if ($link->expressEvent === null) {
+                        $link->delete();
+                        continue;
+                    }
+
+                    if ((int) $link->express_event_id !== (int) $lockedEvent->id) {
+                        $invNumber = $invoices[$link->invoice_id]?->invoice_number ?? "#{$link->invoice_id}";
+                        throw new RuntimeException(
+                            "Invoice {$invNumber} sudah digunakan pada event HPP lain ({$link->expressEvent->event_name}) dan tidak dapat dipilih kembali."
+                        );
+                    }
+                }
+
+                // Jika operational_type belum terisi pada event tanpa rekap, turunkan dari invoice pertama
+                if (blank($lockedEvent->operational_type)) {
+                    foreach ($invoices as $inv) {
+                        $typeLabel = strtolower($inv->express_type_label);
+                        if (str_contains($typeLabel, 'self run')) {
+                            $lockedEvent->update(['operational_type' => ExpressEvent::TYPE_SELF_RUN]);
+                            break;
+                        }
+                        if (str_contains($typeLabel, 'sewa')) {
+                            $lockedEvent->update(['operational_type' => ExpressEvent::TYPE_SEWA]);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            $beforeInvoiceNumbers = $lockedEvent->invoices()->pluck('invoice_number')->all();
+            $beforeRevenue = $lockedEvent->total_allocated_revenue;
+
+            if ($normalizedIds === []) {
+                ExpressEventInvoice::where('express_event_id', $lockedEvent->id)->delete();
+            } else {
+                ExpressEventInvoice::where('express_event_id', $lockedEvent->id)
+                    ->whereNotIn('invoice_id', $normalizedIds)
+                    ->delete();
+
+                foreach ($normalizedIds as $invId) {
+                    ExpressEventInvoice::firstOrCreate(
+                        [
+                            'express_event_id' => $lockedEvent->id,
+                            'invoice_id' => $invId,
+                        ],
+                        [
+                            'linked_by' => $actor?->karyawan_id ?? auth()->id(),
+                        ]
+                    );
+                }
+            }
+
+            $this->syncEventInvoiceAllocations($lockedEvent);
+            $this->refreshHppAfterInvoiceChange($lockedEvent);
+
+            $lockedEvent->unsetRelation('invoices');
+            $afterInvoices = $lockedEvent->invoices()->get();
+            $afterInvoiceNumbers = $afterInvoices->pluck('invoice_number')->all();
+
+            if ($beforeInvoiceNumbers !== $afterInvoiceNumbers) {
+                $action = $afterInvoiceNumbers === [] ? 'INVOICE_DETACHED' : 'INVOICE_LINKED';
+                $summary = $afterInvoiceNumbers === []
+                    ? 'Seluruh invoice dilepas dari event.'
+                    : 'Alokasi invoice event disinkronkan: ' . implode(', ', $afterInvoiceNumbers);
+
+                ExpressEventAuditLog::record(
+                    $lockedEvent,
+                    $action,
+                    [
+                        'invoices' => $beforeInvoiceNumbers,
+                        'previous_revenue' => $beforeRevenue,
+                    ],
+                    [
+                        'invoices' => $afterInvoiceNumbers,
+                        'total_invoice_amount' => $lockedEvent->total_invoice_amount,
+                    ],
+                    $summary
+                );
+            }
 
             return $lockedEvent->fresh(['invoices', 'recaps.allocations', 'recaps.sessionReport.cabang']);
         });
@@ -230,6 +442,7 @@ class ExpressEventInvoiceService
             $link->delete();
 
             $this->syncEventInvoiceAllocations($lockedEvent);
+            $this->refreshHppAfterInvoiceChange($lockedEvent);
 
             $lockedEvent->unsetRelation('invoices');
 
@@ -328,6 +541,60 @@ class ExpressEventInvoiceService
 
         if ($updates !== []) {
             $event->update($updates);
+        }
+    }
+
+    /**
+     * Perbarui status & snapshot perhitungan HPP secara otomatis ketika invoice dihubungkan atau dilepas.
+     */
+    protected function refreshHppAfterInvoiceChange(ExpressEvent $event): void
+    {
+        $event->unsetRelation('invoices');
+        $event->unsetRelation('recaps');
+        $event->unsetRelation('allocations');
+        $event->unsetRelation('latestHpp');
+        $event->load(['invoices', 'recaps.allocations', 'recaps.sessionReport.cabang', 'latestHpp']);
+
+        if (! $event->requiresInvoice() || $event->isPosted()) {
+            return;
+        }
+
+        // Jika seluruh invoice dilepas dari event yang sebelumnya terkonfirmasi, kembalikan ke preview/pending
+        if (! $event->hasLinkedInvoices()) {
+            if ($event->hpp_status === ExpressEvent::HPP_CONFIRMED) {
+                $event->update([
+                    'hpp_status' => $event->hpp_rate_per_sheet !== null
+                        ? ExpressEvent::HPP_CALCULATED
+                        : ExpressEvent::HPP_PENDING,
+                    'confirmed_at' => null,
+                    'confirmed_by' => null,
+                ]);
+            }
+
+            if ($event->latestHpp && $event->hpp_rate_per_sheet !== null) {
+                $preview = app(ExpressEventHppService::class)->calculatePreview($event);
+                $event->latestHpp->update([
+                    'total_revenue' => $preview['total_revenue'],
+                    'total_hpp' => $preview['total_hpp'],
+                    'gross_profit' => $preview['gross_profit'],
+                    'calculated_at' => now(),
+                ]);
+            }
+
+            return;
+        }
+
+        // Jika masih memiliki snapshot HPP (belum diposting jurnal), perbarui angkanya secara otomatis
+        if ($event->latestHpp && $event->hpp_rate_per_sheet !== null) {
+            $preview = app(ExpressEventHppService::class)->calculatePreview($event);
+            $event->latestHpp->update([
+                'total_sessions' => $preview['total_sessions'],
+                'total_sheets' => $preview['total_sheets'],
+                'total_revenue' => $preview['total_revenue'],
+                'total_hpp' => $preview['total_hpp'],
+                'gross_profit' => $preview['gross_profit'],
+                'calculated_at' => now(),
+            ]);
         }
     }
 

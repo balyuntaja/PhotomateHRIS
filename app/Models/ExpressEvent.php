@@ -297,11 +297,172 @@ class ExpressEvent extends Model
             }
         }
 
+        if (Schema::hasTable('express_event_invoices')) {
+            $invoices = $this->relationLoaded('invoices')
+                ? $this->invoices
+                : $this->invoices()->with('cabang')->get();
+
+            foreach ($invoices as $invoice) {
+                $invTypeLabel = strtolower($invoice->express_type_label);
+                if (str_contains($invTypeLabel, 'self run')) {
+                    return self::TYPE_SELF_RUN;
+                }
+                if (str_contains($invTypeLabel, 'sewa')) {
+                    return self::TYPE_SEWA;
+                }
+            }
+        }
+
         if (filled($this->operational_type)) {
             return $this->operational_type;
         }
 
         return $detectedTypes[0] ?? null;
+    }
+
+    /**
+     * Resolusi konteks jenis Express, daftar invoice terpilih, serta sumber & nilai Total Omzet
+     * secara real-time untuk form Create / Edit Event HPP.
+     *
+     * @param  array<int, array<string, mixed>>  $allocationsData
+     * @param  array<int, int|string>  $linkedInvoiceIds
+     * @return array{
+     *     operational_type: string|null,
+     *     operational_type_label: string,
+     *     is_sharing_profit: bool,
+     *     requires_invoice: bool,
+     *     linked_invoices: \Illuminate\Support\Collection<int, Invoice>,
+     *     total_sessions: int,
+     *     total_sheets: int,
+     *     recap_allocated_revenue: int,
+     *     invoice_total_revenue: int,
+     *     effective_revenue: int,
+     *     revenue_source_label: string
+     * }
+     */
+    public static function resolveFormContext(
+        array $allocationsData,
+        array $linkedInvoiceIds,
+        ?self $record = null,
+    ): array {
+        $totalSessions = 0;
+        $totalSheets = 0;
+        $recapAllocatedRevenue = 0;
+        $reportIds = [];
+
+        foreach ($allocationsData as $alloc) {
+            if (! is_array($alloc)) {
+                continue;
+            }
+            $totalSessions += max(0, (int) ($alloc['allocated_sessions'] ?? 0));
+            $totalSheets += max(0, (int) ($alloc['allocated_sheets'] ?? 0));
+            $recapAllocatedRevenue += max(0, RupiahHelper::toInt($alloc['allocated_revenue'] ?? 0));
+
+            $repId = (int) ($alloc['session_report_id'] ?? 0);
+            if ($repId > 0) {
+                $reportIds[] = $repId;
+            }
+        }
+
+        $detectedTypes = [];
+        if ($reportIds !== []) {
+            $reports = SessionReport::with('cabang')
+                ->whereIn('id', array_values(array_unique($reportIds)))
+                ->get();
+
+            foreach ($reports as $report) {
+                $type = static::classifyBranchOperationalType($report->resolveCabangWithTrashed()?->nama_cabang);
+                if ($type !== null) {
+                    $detectedTypes[] = $type;
+                }
+            }
+        }
+
+        $normalizedInvoiceIds = collect($linkedInvoiceIds)
+            ->map(fn ($id): int => (int) $id)
+            ->filter(fn (int $id): bool => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        $linkedInvoices = $normalizedInvoiceIds !== []
+            ? Invoice::with(['cabang', 'invoiceItems'])
+                ->whereIn('id', $normalizedInvoiceIds)
+                ->get()
+                ->sortBy(fn (Invoice $inv): int => (int) array_search($inv->id, $normalizedInvoiceIds, true))
+                ->values()
+            : collect();
+
+        $operationalType = null;
+        foreach ([self::TYPE_SELF_RUN, self::TYPE_SEWA, self::TYPE_SHARING_PROFIT] as $specificType) {
+            if (in_array($specificType, $detectedTypes, true)) {
+                $operationalType = $specificType;
+                break;
+            }
+        }
+
+        if ($operationalType === null && $linkedInvoices->isNotEmpty()) {
+            foreach ($linkedInvoices as $inv) {
+                $label = strtolower($inv->express_type_label);
+                if (str_contains($label, 'self run')) {
+                    $operationalType = self::TYPE_SELF_RUN;
+                    break;
+                }
+                if (str_contains($label, 'sewa')) {
+                    $operationalType = self::TYPE_SEWA;
+                    break;
+                }
+            }
+        }
+
+        if ($operationalType === null && $record !== null) {
+            $operationalType = $record->resolved_operational_type;
+        }
+
+        if ($operationalType === null && isset($detectedTypes[0])) {
+            $operationalType = $detectedTypes[0];
+        }
+
+        $isSharingProfit = $operationalType === self::TYPE_SHARING_PROFIT;
+        $requiresInvoice = in_array($operationalType, [self::TYPE_SELF_RUN, self::TYPE_SEWA], true);
+
+        if ($isSharingProfit) {
+            $linkedInvoices = collect();
+        }
+
+        $invoiceTotalRevenue = (int) $linkedInvoices
+            ->unique('id')
+            ->sum(fn (Invoice $inv): int => $inv->contract_amount);
+
+        if ($isSharingProfit) {
+            $effectiveRevenue = $recapAllocatedRevenue;
+            $revenueSourceLabel = 'Alokasi Omzet Rekap Sesi';
+        } elseif ($requiresInvoice) {
+            $effectiveRevenue = $invoiceTotalRevenue;
+            $revenueSourceLabel = $linkedInvoices->isNotEmpty()
+                ? sprintf('Total Nilai Invoice (%d Invoice)', $linkedInvoices->count())
+                : 'Belum Ada Invoice Terhubung';
+        } elseif ($linkedInvoices->isNotEmpty()) {
+            $effectiveRevenue = $invoiceTotalRevenue;
+            $revenueSourceLabel = sprintf('Total Nilai Invoice (%d Invoice)', $linkedInvoices->count());
+        } else {
+            $effectiveRevenue = $recapAllocatedRevenue;
+            $revenueSourceLabel = 'Alokasi Omzet';
+        }
+
+        return [
+            'operational_type' => $operationalType,
+            'operational_type_label' => $operationalType !== null ? (self::TYPE_LABELS[$operationalType] ?? 'Express') : 'Express',
+            'is_sharing_profit' => $isSharingProfit,
+            'requires_invoice' => $requiresInvoice,
+            'linked_invoices' => $linkedInvoices,
+            'total_sessions' => $totalSessions,
+            'total_sheets' => $totalSheets,
+            'recap_allocated_revenue' => $recapAllocatedRevenue,
+            'invoice_total_revenue' => $invoiceTotalRevenue,
+            'effective_revenue' => $effectiveRevenue,
+            'revenue_source_label' => $revenueSourceLabel,
+        ];
     }
 
     public function getOperationalTypeLabelAttribute(): string

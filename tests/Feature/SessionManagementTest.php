@@ -1451,4 +1451,74 @@ class SessionManagementTest extends TestCase
         $this->assertEquals(1, $report->total_sessions);
         $this->assertEquals(30000, $report->grand_total_amount);
     }
+
+    /**
+     * Test 31: Menu Aturan Harga Sesi disembunyikan dari sidebar dan akses halamannya ditutup
+     * untuk seluruh role tanpa mengganggu data, perhitungan harga, Rekap Sesi, Approval, maupun History.
+     */
+    public function test_aturan_harga_menu_and_pages_are_hidden_and_blocked_for_all_roles(): void
+    {
+        Role::firstOrCreate(['name' => 'CEO', 'guard_name' => 'web'], ['role_id' => 'R06']);
+        $ceo = Karyawan::firstOrCreate(
+            ['karyawan_id' => 'CEO01'],
+            [
+                'role_id' => 'R06',
+                'perusahaan_id' => 'P01',
+                'nik' => '1234567890123499',
+                'nama_lengkap' => 'CEO Photomate',
+                'email' => 'ceo.pricing@photomate.id',
+                'password' => bcrypt('password'),
+                'tanggal_lahir' => '1988-01-01',
+                'jenis_kelamin' => 'Laki-laki',
+                'alamat' => 'Malang',
+            ]
+        );
+        $ceo->assignRole('CEO');
+        $this->superAdmin->assignRole('Admin');
+
+        $pricingRecord = PricingSetting::query()->firstOrFail();
+
+        foreach ([$this->superAdmin, $ceo, $this->supervisor, $this->crewKia] as $user) {
+            $this->flushSession();
+            $this->actingAs($user);
+
+            $this->assertFalse(\App\Filament\Resources\PricingSettingResource::shouldRegisterNavigation());
+            $this->assertFalse(\App\Filament\Resources\PricingSettingResource::canAccess());
+            $this->assertFalse(\App\Filament\Resources\PricingSettingResource::canViewAny());
+
+            $navItems = collect(\Filament\Facades\Filament::getNavigation())
+                ->flatMap(fn ($group) => $group->getItems());
+
+            $navLabels = $navItems->map(fn ($item): string => $item->getLabel())->all();
+            $navUrls = $navItems->map(fn ($item): ?string => $item->getUrl())->filter()->all();
+
+            $this->assertNotContains('Aturan Harga', $navLabels);
+            $this->assertNotContains('Aturan Harga Sesi', $navLabels);
+            $this->assertFalse(
+                collect($navUrls)->contains(fn (string $url): bool => str_contains($url, 'pricing-settings'))
+            );
+
+            $this->get('/admin')
+                ->assertOk()
+                ->assertDontSee('Aturan Harga')
+                ->assertDontSee('/admin/session-management/pricing-settings');
+
+            // Akses halaman daftar, tambah, dan edit Aturan Harga Sesi ditutup
+            $this->get('/admin/session-management/pricing-settings')->assertForbidden();
+            $this->get('/admin/session-management/pricing-settings/create')->assertForbidden();
+            $this->get('/admin/session-management/pricing-settings/' . $pricingRecord->id . '/edit')->assertForbidden();
+        }
+
+        // Data tabel pricing_settings dan perhitungan PricingService tetap utuh
+        $this->assertGreaterThan(0, PricingSetting::query()->count());
+        $this->assertSame(2, $this->pricingService->calculateSessionsFromPrice(45000));
+
+        // Fitur Rekap Sesi, Approval, dan History tetap berjalan normal
+        $this->flushSession();
+        $this->actingAs($this->superAdmin);
+
+        $this->get(\App\Filament\Resources\SessionReportResource::getUrl('index'))->assertOk();
+        $this->get(\App\Filament\Resources\SessionApprovalResource::getUrl('index'))->assertOk();
+        $this->get(\App\Filament\Resources\SessionHistoryResource::getUrl('index'))->assertOk();
+    }
 }
