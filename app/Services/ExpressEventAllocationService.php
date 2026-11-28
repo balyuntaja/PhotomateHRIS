@@ -571,7 +571,9 @@ class ExpressEventAllocationService
                     throw new RuntimeException("Alokasi lembar ({$allocSheets}) pada rekap {$report->report_number} melebihi sisa yang tersedia ({$maxSheets} dari total {$source['sheets']}).");
                 }
 
-                if ($allocRevenue > $maxRevenue) {
+                $usesLinkedInvoiceRevenue = $lockedEvent->requiresInvoice() && $lockedEvent->hasLinkedInvoices();
+
+                if (! $usesLinkedInvoiceRevenue && $allocRevenue > $maxRevenue) {
                     throw new RuntimeException("Alokasi omzet (Rp " . number_format($allocRevenue, 0, ',', '.') . ") pada rekap {$report->report_number} melebihi sisa yang tersedia (Rp " . number_format($maxRevenue, 0, ',', '.') . " dari total Rp " . number_format($source['revenue'], 0, ',', '.') . ").");
                 }
 
@@ -631,9 +633,14 @@ class ExpressEventAllocationService
             }
 
             $lockedEvent->update([
+                'operational_type' => $lockedEvent->resolved_operational_type,
                 'reconciliation_status' => $newReconStatus,
                 'hpp_status' => $newHppStatus,
             ]);
+
+            if ($lockedEvent->requiresInvoice() && $lockedEvent->hasLinkedInvoices()) {
+                app(ExpressEventInvoiceService::class)->syncEventInvoiceAllocations($lockedEvent);
+            }
 
             // Audit log
             ExpressEventAuditLog::record(
@@ -656,7 +663,9 @@ class ExpressEventAllocationService
      */
     public function checkReconciliationIntegrity(ExpressEvent $event): bool
     {
-        $event->loadMissing(['recaps.allocations', 'recaps.sessionReport']);
+        $event->loadMissing(['recaps.allocations', 'recaps.sessionReport', 'invoices']);
+
+        $usesLinkedInvoiceRevenue = $event->requiresInvoice() && $event->hasLinkedInvoices();
 
         foreach ($event->recaps as $recap) {
             $report = $recap->sessionReport;
@@ -669,7 +678,7 @@ class ExpressEventAllocationService
             $totalAllocatedAcrossEvents = $this->getAllocatedTotals($report);
 
             if ($totalAllocatedAcrossEvents['sheets'] > $source['sheets']
-                || $totalAllocatedAcrossEvents['revenue'] > $source['revenue']) {
+                || (! $usesLinkedInvoiceRevenue && $totalAllocatedAcrossEvents['revenue'] > $source['revenue'])) {
                 $event->update(['reconciliation_status' => ExpressEvent::RECON_NEEDS_REVIEW]);
                 return false;
             }

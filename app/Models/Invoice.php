@@ -5,7 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -51,6 +53,29 @@ class Invoice extends Model
     public function sessionReports(): HasMany
     {
         return $this->hasMany(SessionReport::class, 'invoice_id');
+    }
+
+    public function expressEventLink(): HasOne
+    {
+        return $this->hasOne(ExpressEventInvoice::class, 'invoice_id');
+    }
+
+    public function expressEvents(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            ExpressEvent::class,
+            'express_event_invoices',
+            'invoice_id',
+            'express_event_id'
+        )->withPivot(['id', 'linked_by', 'notes'])->withTimestamps();
+    }
+
+    /**
+     * Nilai kontrak penuh invoice (bukan nominal DP atau pembayaran parsial).
+     */
+    public function getContractAmountAttribute(): int
+    {
+        return max(0, (int) round((float) $this->total));
     }
 
     /**

@@ -11,6 +11,11 @@
 @endphp
 
 <div class="space-y-6">
+    {{-- 0. Invoice Terkait (Khusus Express Self Run & Express Sewa) --}}
+    @if ($record && $record->requiresInvoice())
+        @livewire('express-event-invoice-manager', ['eventId' => $record->id], key('express-event-invoice-manager-' . $record->id))
+    @endif
+
     {{-- 1. Rekap Terhubung & Rincian Alokasi --}}
     <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
         <div class="mb-4 flex items-center justify-between">

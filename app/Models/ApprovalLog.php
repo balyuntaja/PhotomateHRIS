@@ -46,6 +46,8 @@ class ApprovalLog extends Model
             'RESUBMITTED' => 'Diajukan Ulang (Resubmitted)',
             'APPROVED' => 'Disetujui (Approved)',
             'REJECTED' => 'Ditolak (Rejected)',
+            'APPROVAL_CANCELLED' => 'Approval Dibatalkan',
+            'SHEETS_CORRECTED' => 'Koreksi Total Lembar',
             'EVENT_DETAIL_UPDATED' => 'Detail Event Diperbarui',
             default => $this->action,
         };
@@ -55,8 +57,8 @@ class ApprovalLog extends Model
     {
         return match ($this->action) {
             'DRAFT_CREATED', 'DRAFT_UPDATED' => 'gray',
-            'SUBMITTED', 'RESUBMITTED' => 'warning',
-            'REVISION_REQUESTED' => 'danger',
+            'SUBMITTED', 'RESUBMITTED', 'SHEETS_CORRECTED' => 'warning',
+            'REVISION_REQUESTED', 'APPROVAL_CANCELLED' => 'danger',
             'APPROVED' => 'success',
             'REJECTED' => 'danger',
             'EVENT_DETAIL_UPDATED' => 'info',

@@ -260,7 +260,7 @@ class InventoryService
         // Stok habis hanya menghitung baris stok yang benar-benar terdaftar.
         // Barang yang belum didaftarkan pada cabang tidak dihitung.
         $outOfStock = (clone $stockQuery)
-            ->where('jumlah', 0)
+            ->where('jumlah', '<=', 0)
             ->count();
 
         $totalItems = $branchId !== null
@@ -286,13 +286,13 @@ class InventoryService
             ->with(['item', 'cabang'])
             ->whereHas('item', fn (Builder $query): Builder => $query->active())
             ->where(function (Builder $query): void {
-                $query->where('jumlah', 0)
+                $query->where('jumlah', '<=', 0)
                     ->orWhere(function (Builder $query): void {
                         $query->where('jumlah', '>', 0)
                             ->whereColumn('jumlah', '<=', 'min_stok');
                     });
             })
-            ->orderByRaw('case when jumlah = 0 then 0 else 1 end')
+            ->orderByRaw('case when jumlah <= 0 then 0 else 1 end')
             ->orderBy('jumlah')
             ->orderBy('cabang_id');
     }

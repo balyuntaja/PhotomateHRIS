@@ -16,6 +16,7 @@ class InventoryItem extends Model
 
     public const SATUAN_OPTIONS = [
         'pcs' => 'pcs',
+        'lembar' => 'lembar',
         'pack' => 'pack',
         'rim' => 'rim',
         'roll' => 'roll',
@@ -221,7 +222,7 @@ class InventoryItem extends Model
 
     public function getStockStatusAttribute(): string
     {
-        if ($this->total_stock === 0) {
+        if ($this->total_stock <= 0) {
             return InventoryStock::STATUS_HABIS;
         }
 

@@ -57,9 +57,13 @@ class SessionReport extends Model
 
     const INPUT_WINDOW_DAYS = 2;
 
+    const INVENTORY_CUTOFF_DATE = '2026-11-07';
+
     const HISTORY_BRANCH_FILTER_JANUS = 'newspaper_janus';
     const HISTORY_BRANCH_FILTER_EXPRESS = 'express';
     const HISTORY_BRANCH_FILTER_GOLIO = 'golio';
+
+    protected bool $allowAuthorizedApprovedMutation = false;
 
     protected $fillable = [
         'report_number',
@@ -132,7 +136,7 @@ class SessionReport extends Model
 
             // Immutability rule: If original was APPROVED, reject modifications to core data.
             // Super Admin may update only event_note and event_date metadata on Express branches without affecting approval.
-            if ($model->getOriginal('status') === self::STATUS_APPROVED) {
+            if ($model->getOriginal('status') === self::STATUS_APPROVED && ! $model->allowAuthorizedApprovedMutation) {
                 $dirty = array_keys($model->getDirty());
                 $canUpdateEventMetadata = $isSuperAdmin && $model->supportsEventDetail();
                 $allowedDirty = $canUpdateEventMetadata
@@ -152,6 +156,15 @@ class SessionReport extends Model
             static::assertInputWindowOpen($model);
         });
 
+        static::saved(function (self $model) {
+            if (
+                $model->status === self::STATUS_APPROVED
+                || $model->getOriginal('status') === self::STATUS_APPROVED
+            ) {
+                app(\App\Services\SessionReportInventoryService::class)->syncForReport($model);
+            }
+        });
+
         static::deleting(function ($model) {
             /** @var \App\Models\Karyawan|null $user */
             $user = \Illuminate\Support\Facades\Auth::user();
@@ -162,7 +175,54 @@ class SessionReport extends Model
             }
 
             static::assertInputWindowOpen($model);
+
+            if (\Illuminate\Support\Facades\Schema::hasTable('express_event_recaps')) {
+                $linkedRecaps = ExpressEventRecap::with('expressEvent')
+                    ->where('session_report_id', $model->id)
+                    ->get();
+
+                foreach ($linkedRecaps as $linkedRecap) {
+                    $event = $linkedRecap->expressEvent;
+                    if ($event && ($event->isConfirmed() || $event->isFinalized())) {
+                        throw new \RuntimeException(
+                            "Rekap sesi ini terhubung ke Event HPP '{$event->event_name}' yang sudah dikonfirmasi. Buka kembali (reopen) Event HPP terlebih dahulu sebelum menghapus rekap sesi."
+                        );
+                    }
+                }
+
+                foreach ($linkedRecaps as $linkedRecap) {
+                    $event = $linkedRecap->expressEvent;
+                    $linkedRecap->delete();
+
+                    if ($event) {
+                        $remainingRecaps = $event->recaps()->count();
+                        if ($remainingRecaps === 0) {
+                            $event->update(['reconciliation_status' => ExpressEvent::RECON_UNALLOCATED]);
+                        } elseif ($event->requiresInvoice() && $event->hasLinkedInvoices()) {
+                            app(\App\Services\ExpressEventInvoiceService::class)->syncEventInvoiceAllocations($event);
+                        }
+
+                        ExpressEventAuditLog::record(
+                            $event,
+                            'RECAP_DELETED',
+                            ['session_report_id' => $model->id, 'report_number' => $model->report_number],
+                            null,
+                            "Rekap sesi {$model->report_number} dihapus; alokasi disesuaikan."
+                        );
+                    }
+                }
+            }
+
+            app(\App\Services\SessionReportInventoryService::class)
+                ->reverseForReport($model, $user, 'Rekap sesi dihapus');
         });
+    }
+
+    public function allowAuthorizedApprovedMutation(bool $allow = true): self
+    {
+        $this->allowAuthorizedApprovedMutation = $allow;
+
+        return $this;
     }
 
     /**
@@ -275,6 +335,11 @@ class SessionReport extends Model
     public function approvalLogs(): HasMany
     {
         return $this->hasMany(ApprovalLog::class, 'session_report_id')->orderBy('created_at', 'desc');
+    }
+
+    public function inventoryTransactions(): HasMany
+    {
+        return $this->hasMany(InventoryTransaction::class, 'session_report_id')->orderBy('id');
     }
 
     public function submitter(): BelongsTo
@@ -499,7 +564,36 @@ class SessionReport extends Model
      */
     public function usesManualSessionInput(): bool
     {
-        return app(\App\Services\BranchInputModeService::class)->usesManualSessionInput($this->cabang);
+        return app(\App\Services\BranchInputModeService::class)->usesManualSessionInput($this->resolveCabangWithTrashed());
+    }
+
+    /**
+     * Hitung Total Lembar efektif rekap sesi sebagai dasar pengurangan stok Kertas Foto.
+     */
+    public function totalSheetCount(): int
+    {
+        if ($this->usesManualSessionInput()) {
+            if ($this->wedding_total_sheets !== null && (int) $this->wedding_total_sheets > 0) {
+                return (int) $this->wedding_total_sheets;
+            }
+
+            return max(0, (int) ($this->total_sessions ?? 0));
+        }
+
+        if ((int) ($this->total_sessions ?? 0) > 0) {
+            return (int) $this->total_sessions;
+        }
+
+        if ($this->relationLoaded('transactions')) {
+            return max(0, (int) $this->transactions->sum('session_count'));
+        }
+
+        return max(0, (int) $this->transactions()->sum('session_count'));
+    }
+
+    public function isEligibleForInventoryDeduction(): bool
+    {
+        return app(\App\Services\SessionReportInventoryService::class)->isEligibleForAutoDeduction($this);
     }
 
     /**

@@ -196,7 +196,7 @@ class InventoryStockPage extends Page implements HasTable
                     ->options(InventoryStock::STATUS_LABELS)
                     ->query(function (Builder $query, array $data): Builder {
                         return match ($data['value'] ?? null) {
-                            InventoryStock::STATUS_HABIS => $query->where('jumlah', 0),
+                            InventoryStock::STATUS_HABIS => $query->where('jumlah', '<=', 0),
                             InventoryStock::STATUS_MENIPIS => $query
                                 ->where('jumlah', '>', 0)
                                 ->whereColumn('jumlah', '<=', 'min_stok'),

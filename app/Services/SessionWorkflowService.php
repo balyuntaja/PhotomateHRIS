@@ -281,6 +281,14 @@ class SessionWorkflowService
             // Bila kategori/mapping gagal, seluruh approval ikut dibatalkan dengan pesan jelas.
             app(SessionReportFinancialService::class)->record($report, $supervisor);
 
+            // Catat pengurangan stok Kertas Foto otomatis khusus Express & Newspaper Janus mulai 7 November 2026.
+            app(SessionReportInventoryService::class)->syncForReport($report, $supervisor);
+
+            // Sinkronisasi otomatis ke Manajemen HPP Express apabila rekap Express sudah lengkap Nama & Tanggal Event.
+            if ($report->supportsEventDetail() && $report->hasCompleteEventDetail()) {
+                app(ExpressEventSyncService::class)->syncSingleReport($report, $supervisor);
+            }
+
             // Notify submitter and crew
             $notifiables = collect([$report->submitter])
                 ->merge($report->crews)
@@ -369,7 +377,133 @@ class SessionWorkflowService
                 )
             );
 
-            return $lockedReport->fresh(['cabang', 'invoice', 'crews', 'transactions', 'submitter', 'approver', 'approvalLogs']);
+            $freshReport = $lockedReport->fresh(['cabang', 'invoice', 'crews', 'transactions', 'submitter', 'approver', 'approvalLogs']);
+
+            if ($freshReport && $freshReport->isApproved() && $freshReport->supportsEventDetail() && $freshReport->hasCompleteEventDetail()) {
+                app(ExpressEventSyncService::class)->syncSingleReport($freshReport, $actor);
+            }
+
+            return $freshReport;
+        });
+    }
+
+    /**
+     * Koreksi resmi Total Lembar pada rekap sesi yang sudah Approved (oleh Supervisor / Admin / Super Admin).
+     * Menyesuaikan stok Kertas Foto hanya sebesar selisih (delta) tanpa pengurangan penuh ulang.
+     */
+    public function correctApprovedSheets(
+        SessionReport $report,
+        Karyawan $actor,
+        int $newTotalSheets,
+        ?int $newTotalSessions = null,
+        ?string $reason = null,
+    ): SessionReport {
+        if (! $this->isSupervisorOrAdmin($actor)) {
+            throw new RuntimeException('Anda tidak memiliki hak akses untuk mengoreksi total lembar rekap sesi.');
+        }
+
+        if ($newTotalSheets < 1) {
+            throw new InvalidArgumentException('Total Lembar koreksi minimal harus 1 lembar.');
+        }
+
+        return DB::transaction(function () use ($report, $actor, $newTotalSheets, $newTotalSessions, $reason): SessionReport {
+            $lockedReport = SessionReport::query()->lockForUpdate()->findOrFail($report->id);
+
+            if ($lockedReport->status !== SessionReport::STATUS_APPROVED) {
+                throw new RuntimeException('Koreksi total lembar hanya berlaku untuk rekap sesi yang sudah berstatus Approved.');
+            }
+
+            $previousSheets = $lockedReport->totalSheetCount();
+
+            if ($lockedReport->usesManualSessionInput()) {
+                $sessions = $newTotalSessions !== null
+                    ? max(1, $newTotalSessions)
+                    : max(1, (int) ($lockedReport->wedding_total_sessions ?: $lockedReport->total_transactions ?: 1));
+
+                $lockedReport->wedding_total_sessions = $sessions;
+                $lockedReport->wedding_total_sheets = $newTotalSheets;
+                $lockedReport->total_transactions = $sessions;
+                $lockedReport->total_sessions = $newTotalSheets;
+            } else {
+                $lockedReport->total_sessions = $newTotalSheets;
+                if ($newTotalSessions !== null) {
+                    $lockedReport->total_transactions = max(1, $newTotalSessions);
+                }
+            }
+
+            $lockedReport->saveQuietly();
+
+            app(BranchBonusService::class)->syncDailyBonusAmounts($lockedReport);
+
+            $noteText = sprintf(
+                'Koreksi Total Lembar dari %d menjadi %d lembar.%s',
+                $previousSheets,
+                $newTotalSheets,
+                filled($reason) ? ' Alasan: ' . trim($reason) : ''
+            );
+
+            $this->logAction($lockedReport, $actor, 'SHEETS_CORRECTED', $noteText);
+
+            $reasonContext = filled($reason)
+                ? trim($reason)
+                : sprintf('perubahan %d ke %d lembar', $previousSheets, $newTotalSheets);
+
+            app(SessionReportInventoryService::class)->syncForReport($lockedReport, $actor, $reasonContext);
+
+            return $lockedReport->fresh(['cabang', 'crews', 'transactions', 'inventoryTransactions', 'approvalLogs']);
+        });
+    }
+
+    /**
+     * Batalkan / ubah status rekap sesi yang sudah Approved menjadi tidak valid (Rejected / Revision),
+     * dan kembalikan stok Kertas Foto melalui mekanisme transaksi reversal tanpa menghapus histori.
+     */
+    public function cancelApproval(
+        SessionReport $report,
+        Karyawan $actor,
+        string $reason,
+        string $targetStatus = SessionReport::STATUS_REJECTED,
+    ): SessionReport {
+        if (! $this->isSupervisorOrAdmin($actor)) {
+            throw new RuntimeException('Anda tidak memiliki hak akses untuk membatalkan approval rekap sesi.');
+        }
+
+        if (blank($reason)) {
+            throw new InvalidArgumentException('Alasan pembatalan rekap sesi wajib diisi.');
+        }
+
+        $allowedTargetStatuses = [
+            SessionReport::STATUS_REJECTED,
+            SessionReport::STATUS_REVISION,
+            SessionReport::STATUS_DRAFT,
+        ];
+
+        if (! in_array($targetStatus, $allowedTargetStatuses, true)) {
+            throw new InvalidArgumentException('Status tujuan pembatalan tidak valid.');
+        }
+
+        return DB::transaction(function () use ($report, $actor, $reason, $targetStatus): SessionReport {
+            $lockedReport = SessionReport::query()->lockForUpdate()->findOrFail($report->id);
+
+            if ($lockedReport->status !== SessionReport::STATUS_APPROVED) {
+                throw new RuntimeException('Hanya rekap sesi berstatus Approved yang dapat dibatalkan approval-nya.');
+            }
+
+            $trimmedReason = trim($reason);
+
+            $lockedReport->status = $targetStatus;
+            $lockedReport->revision_note = $trimmedReason;
+            $lockedReport->approved_by = null;
+            $lockedReport->approved_at = null;
+            $lockedReport->saveQuietly();
+
+            app(BranchBonusService::class)->syncDailyBonusAmounts($lockedReport);
+
+            $this->logAction($lockedReport, $actor, 'APPROVAL_CANCELLED', $trimmedReason);
+
+            app(SessionReportInventoryService::class)->reverseForReport($lockedReport, $actor, $trimmedReason);
+
+            return $lockedReport->fresh(['cabang', 'crews', 'transactions', 'inventoryTransactions', 'approvalLogs']);
         });
     }
 }

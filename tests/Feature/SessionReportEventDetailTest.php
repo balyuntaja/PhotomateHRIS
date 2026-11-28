@@ -505,37 +505,18 @@ class SessionReportEventDetailTest extends TestCase
         $this->assertSame(SessionReport::STATUS_APPROVED, $historicalReport->status);
         $this->assertSame(1, SessionReport::count());
 
-        // 3. Manajemen HPP dropdown now shows the proper event name instead of fallback
-        $namesAfter = $allocationService->getAvailableEventNames();
-        $this->assertArrayHasKey('Gathering Tahunan Siegwerk 2025', $namesAfter);
-        $this->assertArrayNotHasKey('Rekap SR-OLD-2025-001 (Photomate Express)', $namesAfter);
-
-        $eligible = $allocationService->getEligibleRecapsForEventName('Gathering Tahunan Siegwerk 2025');
-        $this->assertCount(1, $eligible);
-        $this->assertSame($historicalReport->id, $eligible->first()['id']);
-        $this->assertSame(55, $eligible->first()['source_sessions']);
-        $this->assertSame(64, $eligible->first()['source_sheets']);
-        $this->assertSame(2199000, $eligible->first()['source_revenue']);
-        $this->assertSame('2025-11-09', $eligible->first()['raw_date']);
-
-        // 4. Buat Event Express di Manajemen HPP & konfirmasi HPP
-        Livewire::test(CreateExpressEvent::class)
-            ->set('data.event_name', 'Gathering Tahunan Siegwerk 2025')
-            ->assertSet('data.start_date', '2025-11-09')
-            ->assertSet('data.end_date', '2025-11-09')
-            ->assertSet('data.allocations_data.0.session_report_id', $historicalReport->id)
-            ->assertSet('data.allocations_data.0.allocated_sessions', 55)
-            ->assertSet('data.allocations_data.0.allocated_sheets', 64)
-            ->assertSet('data.allocations_data.0.allocated_revenue', 2199000)
-            ->set('data.hpp_rate_per_sheet', 5500)
-            ->call('create')
-            ->assertHasNoFormErrors();
-
+        // 3. Setelah dilengkapi, Event Express otomatis tersinkronisasi ke Manajemen HPP tanpa membuat duplikat
         $event = ExpressEvent::where('event_name', 'Gathering Tahunan Siegwerk 2025')->firstOrFail();
+        $this->assertSame('2025-11-09', $event->start_date?->toDateString());
+        $this->assertSame('2025-11-09', $event->end_date?->toDateString());
         $this->assertSame(1, $event->recaps()->count());
         $this->assertSame(55, $event->total_allocated_sessions);
         $this->assertSame(64, $event->total_allocated_sheets);
         $this->assertSame(2199000, $event->total_allocated_revenue);
+
+        // 4. Atur tarif HPP & konfirmasi HPP
+        app(ExpressEventHppService::class)->updateRate($event, 5500, $this->superAdmin);
+        $event->refresh();
         $this->assertSame(352000, $event->calculated_hpp);
 
         app(ExpressEventHppService::class)->confirmHpp($event, $this->superAdmin);
@@ -684,9 +665,7 @@ class SessionReportEventDetailTest extends TestCase
         $day1 = $this->createHistoricalApprovedReport([
             'report_number' => 'SR-MULTI-001',
             'report_date' => '2025-10-18',
-            'cabang_id' => $this->cabangExpressSelfRun->cabang_id,
-            'wedding_total_sessions' => 30,
-            'wedding_total_sheets' => 45,
+            'cabang_id' => $this->cabangExpressSharingProfit->cabang_id,
             'total_transactions' => 30,
             'total_sessions' => 45,
             'grand_total_amount' => 1500000,
@@ -705,25 +684,15 @@ class SessionReportEventDetailTest extends TestCase
         $workflow->updateEventDetail($day1, $this->superAdmin, 'Festival Raya 2025', '2025-10-18');
         $workflow->updateEventDetail($day2, $this->superAdmin, 'Festival Raya 2025', '2025-10-19');
 
-        $allocationService = app(ExpressEventAllocationService::class);
-        $names = $allocationService->getAvailableEventNames();
-
-        // Grouped under one unique event name
-        $this->assertArrayHasKey('Festival Raya 2025', $names);
-        $this->assertSame(1, collect($names)->filter(fn ($n) => $n === 'Festival Raya 2025')->count());
-
-        $eligible = $allocationService->getEligibleRecapsForEventName('Festival Raya 2025');
-        $this->assertCount(2, $eligible);
-
-        Livewire::test(CreateExpressEvent::class)
-            ->set('data.event_name', 'Festival Raya 2025')
-            ->assertSet('data.start_date', '2025-10-18')
-            ->assertSet('data.end_date', '2025-10-19')
-            ->set('data.hpp_rate_per_sheet', 4000)
-            ->call('create')
-            ->assertHasNoFormErrors();
+        // Kedua rekap sesi otomatis dikelompokkan ke dalam satu Event HPP yang sama (tanpa duplikasi)
+        $this->assertSame(1, ExpressEvent::where('event_name', 'Festival Raya 2025')->count());
 
         $event = ExpressEvent::where('event_name', 'Festival Raya 2025')->firstOrFail();
+        $this->assertSame('2025-10-18', $event->start_date?->toDateString());
+        $this->assertSame('2025-10-19', $event->end_date?->toDateString());
+        app(ExpressEventHppService::class)->updateRate($event, 4000, $this->superAdmin);
+        $event->refresh();
+
         $this->assertSame(2, $event->recaps()->count());
         $this->assertSame(50, $event->total_allocated_sessions);
         $this->assertSame(70, $event->total_allocated_sheets);
@@ -781,7 +750,10 @@ class SessionReportEventDetailTest extends TestCase
 
         $allocationService = app(ExpressEventAllocationService::class);
         $this->assertSame('Nama Event Final Terkoreksi', $allocationService->resolveReportEventName($report->fresh(['cabang', 'invoice'])));
-        $this->assertArrayHasKey('Nama Event Final Terkoreksi', $allocationService->getAvailableEventNames());
+        $this->assertDatabaseHas('express_events', [
+            'event_name' => 'Nama Event Final Terkoreksi',
+            'operational_type' => ExpressEvent::TYPE_SELF_RUN,
+        ]);
     }
 
     public function test_golio_and_newspaper_janus_hide_event_section_and_block_backend_updates(): void

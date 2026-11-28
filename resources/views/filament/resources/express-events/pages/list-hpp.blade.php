@@ -21,7 +21,7 @@
                 </select>
 
                 <select wire:model.live="filterYear" class="text-sm rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white py-1.5 px-3 focus:ring-primary-500 focus:border-primary-500">
-                    @foreach(range(now()->year - 2, now()->year + 1) as $y)
+                    @foreach(range(now()->year - 5, now()->year + 1) as $y)
                         <option value="{{ $y }}">{{ $y }}</option>
                     @endforeach
                 </select>

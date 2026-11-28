@@ -17,6 +17,8 @@ class InventoryTransaction extends Model
 
     public const TYPE_ADJUSTMENT = 'penyesuaian';
 
+    public const REFERENCE_SESSION_REPORT = 'session_report';
+
     public const TYPE_LABELS = [
         self::TYPE_IN => 'Barang Masuk',
         self::TYPE_OUT => 'Barang Keluar',
@@ -40,6 +42,9 @@ class InventoryTransaction extends Model
     protected $fillable = [
         'nomor_transaksi',
         'idempotency_key',
+        'session_report_id',
+        'reference_type',
+        'reference_number',
         'tanggal_transaksi',
         'jenis_transaksi',
         'inventory_item_id',
@@ -53,6 +58,7 @@ class InventoryTransaction extends Model
     ];
 
     protected $casts = [
+        'session_report_id' => 'integer',
         'tanggal_transaksi' => 'date',
         'jumlah' => 'integer',
         'stok_sebelum' => 'integer',
@@ -62,7 +68,9 @@ class InventoryTransaction extends Model
     protected static function booted(): void
     {
         static::creating(function (self $transaction): void {
-            $transaction->user_id ??= auth()->id();
+            if (blank($transaction->user_id) && blank($transaction->user_name)) {
+                $transaction->user_id = auth()->id();
+            }
 
             if (filled($transaction->user_id) && blank($transaction->user_name)) {
                 $transaction->user_name = Karyawan::withTrashed()
@@ -70,6 +78,11 @@ class InventoryTransaction extends Model
                     ->value('nama_lengkap');
             }
         });
+    }
+
+    public function sessionReport(): BelongsTo
+    {
+        return $this->belongsTo(SessionReport::class, 'session_report_id');
     }
 
     public function item(): BelongsTo

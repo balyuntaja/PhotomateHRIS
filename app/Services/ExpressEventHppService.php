@@ -149,6 +149,10 @@ class ExpressEventHppService
                 throw new RuntimeException('Event belum memiliki alokasi rekap sesi yang valid.');
             }
 
+            if ($lockedEvent->requiresInvoice() && ! $lockedEvent->hasLinkedInvoices()) {
+                throw new RuntimeException('Invoice belum terhubung. Event Express Self Run dan Express Sewa wajib dihubungkan dengan minimal satu invoice sebelum HPP dapat dikonfirmasi.');
+            }
+
             if ($lockedEvent->hpp_rate_per_sheet === null) {
                 throw new RuntimeException('Tarif HPP belum ditentukan. Masukkan tarif HPP per lembar (bisa Rp 0 jika bebas biaya).');
             }

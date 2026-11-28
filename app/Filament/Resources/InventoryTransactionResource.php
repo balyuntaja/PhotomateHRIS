@@ -250,6 +250,15 @@ class InventoryTransactionResource extends Resource
                     ->alignCenter()
                     ->weight('semibold'),
 
+                Tables\Columns\TextColumn::make('reference_number')
+                    ->label('Referensi Rekap')
+                    ->placeholder('-')
+                    ->badge()
+                    ->color('info')
+                    ->copyable()
+                    ->searchable()
+                    ->toggleable(),
+
                 Tables\Columns\TextColumn::make('alasan')
                     ->label('Keterangan')
                     ->placeholder('-')
@@ -270,7 +279,7 @@ class InventoryTransactionResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
-            ->searchPlaceholder('Cari nomor transaksi atau nama barang')
+            ->searchPlaceholder('Cari nomor transaksi, referensi rekap, atau nama barang')
             ->filters([
                 Tables\Filters\Filter::make('rentang_tanggal')
                     ->label('Rentang Tanggal')
@@ -380,6 +389,13 @@ class InventoryTransactionResource extends Resource
                         ->label('Stok Sesudah')
                         ->numeric()
                         ->weight('semibold'),
+
+                    Infolists\Components\TextEntry::make('reference_number')
+                        ->label('Referensi Rekap Sesi')
+                        ->badge()
+                        ->color('info')
+                        ->copyable()
+                        ->placeholder('-'),
 
                     Infolists\Components\TextEntry::make('alasan')
                         ->label('Alasan / Keterangan')

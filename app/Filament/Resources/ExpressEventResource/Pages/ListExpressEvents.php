@@ -9,6 +9,7 @@ use App\Models\BoothSessionHppSetting;
 use App\Models\ExpressEvent;
 use App\Services\BoothHppAccountingService;
 use App\Services\BoothHppService;
+use App\Services\ExpressEventSyncService;
 use App\Services\HppDashboardService;
 use App\Utils\RupiahHelper;
 use Carbon\Carbon;
@@ -57,8 +58,9 @@ class ListExpressEvents extends ListRecords
         $this->filterYear = (int) now()->year;
         $this->filterMonth = (int) now()->month;
 
-        // Auto sync approved recaps for Janus and Golio on load
+        // Auto sync approved recaps for Express, Janus, and Golio on load
         try {
+            app(ExpressEventSyncService::class)->syncAllApprovedRecaps(auth()->user());
             app(BoothHppService::class)->syncApprovedRecaps();
         } catch (\Throwable $e) {
             // Graceful ignore during testing / migration
@@ -113,12 +115,18 @@ class ListExpressEvents extends ListRecords
 
     public function syncRecaps(): void
     {
-        $service = app(BoothHppService::class);
-        $result = $service->syncApprovedRecaps(null, $this->getStartDate(), $this->getEndDate());
+        $expressStats = app(ExpressEventSyncService::class)->syncAllApprovedRecaps(auth()->user());
+        $boothStats = app(BoothHppService::class)->syncApprovedRecaps();
+
+        $expressNew = $expressStats['events_created'] + $expressStats['recaps_attached'];
+        $expressUpdated = $expressStats['events_updated'];
 
         Notification::make()
             ->title('Sinkronisasi Selesai')
-            ->body("Ditemukan {$result['created']} rekap baru dan {$result['updated']} diperbarui.")
+            ->body(
+                "Express: {$expressStats['events_created']} event baru, {$expressStats['recaps_attached']} rekap digabungkan, {$expressUpdated} diperbarui. "
+                . "Booth Janus & Golio: {$boothStats['created']} rekap baru dan {$boothStats['updated']} diperbarui."
+            )
             ->success()
             ->send();
     }
@@ -169,11 +177,11 @@ class ListExpressEvents extends ListRecords
                 'type' => 'Express',
                 'title' => $ev->event_name,
                 'date' => $ev->start_date ? Carbon::parse($ev->start_date)->format('d M Y') : '-',
-                'sheets' => $latestHpp ? (int) $latestHpp->total_sheets : 0,
+                'sheets' => $latestHpp ? (int) $latestHpp->total_sheets : $ev->total_allocated_sheets,
                 'rate' => $ev->hpp_rate_per_sheet !== null ? RupiahHelper::format($ev->hpp_rate_per_sheet) : '-',
                 'total_hpp' => $latestHpp ? RupiahHelper::format($latestHpp->total_hpp) : '-',
-                'status' => $ev->hpp_status_label,
-                'status_color' => $ev->hpp_status_badge_color,
+                'status' => $ev->completeness_status_label,
+                'status_color' => $ev->completeness_status_color,
                 'raw_status' => $ev->hpp_status,
                 'event_id' => $ev->id,
             ]);

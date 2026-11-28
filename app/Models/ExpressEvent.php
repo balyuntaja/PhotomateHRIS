@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Utils\InventoryBranches;
 use App\Utils\RupiahHelper;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Schema;
 
 class ExpressEvent extends Model
 {
@@ -62,8 +64,43 @@ class ExpressEvent extends Model
         self::HPP_REVERSED => 'danger',
     ];
 
+    public const TYPE_SHARING_PROFIT = 'sharing_profit';
+    public const TYPE_SELF_RUN = 'self_run';
+    public const TYPE_SEWA = 'sewa';
+    public const TYPE_EXPRESS_GENERAL = 'express';
+
+    public const TYPE_LABELS = [
+        self::TYPE_SHARING_PROFIT => 'Express Sharing Profit',
+        self::TYPE_SELF_RUN => 'Express Self Run',
+        self::TYPE_SEWA => 'Express Sewa',
+        self::TYPE_EXPRESS_GENERAL => 'Photomate Express',
+    ];
+
+    public const COMPLETENESS_INCOMPLETE_EVENT = 'incomplete_event';
+    public const COMPLETENESS_INVOICE_UNLINKED = 'invoice_unlinked';
+    public const COMPLETENESS_WAITING_HPP = 'waiting_hpp';
+    public const COMPLETENESS_WAITING_CONFIRMATION = 'waiting_confirmation';
+    public const COMPLETENESS_CONFIRMED = 'confirmed';
+
+    public const COMPLETENESS_LABELS = [
+        self::COMPLETENESS_INCOMPLETE_EVENT => 'Data event belum lengkap',
+        self::COMPLETENESS_INVOICE_UNLINKED => 'Invoice Belum Terhubung',
+        self::COMPLETENESS_WAITING_HPP => 'Menunggu pengelolaan HPP',
+        self::COMPLETENESS_WAITING_CONFIRMATION => 'Menunggu konfirmasi',
+        self::COMPLETENESS_CONFIRMED => 'Sudah dikonfirmasi',
+    ];
+
+    public const COMPLETENESS_COLORS = [
+        self::COMPLETENESS_INCOMPLETE_EVENT => 'danger',
+        self::COMPLETENESS_INVOICE_UNLINKED => 'warning',
+        self::COMPLETENESS_WAITING_HPP => 'info',
+        self::COMPLETENESS_WAITING_CONFIRMATION => 'warning',
+        self::COMPLETENESS_CONFIRMED => 'success',
+    ];
+
     protected $fillable = [
         'event_name',
+        'operational_type',
         'start_date',
         'end_date',
         'hpp_rate_per_sheet',
@@ -84,9 +121,35 @@ class ExpressEvent extends Model
         'finalized_at' => 'datetime',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::deleting(function (self $event): void {
+            if (Schema::hasTable('express_event_invoices')) {
+                $event->eventInvoices()->delete();
+            }
+        });
+    }
+
     public function recaps(): HasMany
     {
         return $this->hasMany(ExpressEventRecap::class, 'express_event_id');
+    }
+
+    public function eventInvoices(): HasMany
+    {
+        return $this->hasMany(ExpressEventInvoice::class, 'express_event_id');
+    }
+
+    public function invoices(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Invoice::class,
+            'express_event_invoices',
+            'express_event_id',
+            'invoice_id'
+        )->withPivot(['id', 'linked_by', 'notes'])->withTimestamps();
     }
 
     public function sessionReports(): BelongsToMany
@@ -180,7 +243,243 @@ class ExpressEvent extends Model
 
     public function getGrossProfitAttribute(): int
     {
-        return (int) ($this->total_allocated_revenue - $this->calculated_hpp);
+        return (int) ($this->effective_revenue - $this->calculated_hpp);
+    }
+
+    public static function classifyBranchOperationalType(?string $branchName): ?string
+    {
+        $normalized = InventoryBranches::normalizeName($branchName);
+
+        if ($normalized === '' || str_contains($normalized, 'janus') || str_contains($normalized, 'golio')) {
+            return null;
+        }
+
+        if (str_contains($normalized, 'self run') || str_contains($normalized, 'selfrun')) {
+            return self::TYPE_SELF_RUN;
+        }
+
+        if (str_contains($normalized, 'sewa')) {
+            return self::TYPE_SEWA;
+        }
+
+        if (str_contains($normalized, 'sharing profit')) {
+            return self::TYPE_SHARING_PROFIT;
+        }
+
+        if (str_contains($normalized, 'express')) {
+            return self::TYPE_EXPRESS_GENERAL;
+        }
+
+        return null;
+    }
+
+    public function getResolvedOperationalTypeAttribute(): ?string
+    {
+        $recaps = $this->relationLoaded('recaps')
+            ? $this->recaps
+            : $this->recaps()->with('sessionReport.cabang')->get();
+
+        $detectedTypes = [];
+        foreach ($recaps as $recap) {
+            $report = $recap->relationLoaded('sessionReport')
+                ? $recap->sessionReport
+                : $recap->sessionReport()->first();
+            $cabangName = $report?->resolveCabangWithTrashed()?->nama_cabang;
+            $type = static::classifyBranchOperationalType($cabangName);
+            if ($type !== null) {
+                $detectedTypes[] = $type;
+            }
+        }
+
+        foreach ([self::TYPE_SELF_RUN, self::TYPE_SEWA, self::TYPE_SHARING_PROFIT] as $specificType) {
+            if (in_array($specificType, $detectedTypes, true)) {
+                return $specificType;
+            }
+        }
+
+        if (filled($this->operational_type)) {
+            return $this->operational_type;
+        }
+
+        return $detectedTypes[0] ?? null;
+    }
+
+    public function getOperationalTypeLabelAttribute(): string
+    {
+        $type = $this->resolved_operational_type;
+
+        return $type !== null ? (self::TYPE_LABELS[$type] ?? 'Express') : 'Express';
+    }
+
+    public function isSharingProfit(): bool
+    {
+        return $this->resolved_operational_type === self::TYPE_SHARING_PROFIT;
+    }
+
+    public function isSelfRun(): bool
+    {
+        return $this->resolved_operational_type === self::TYPE_SELF_RUN;
+    }
+
+    public function isSewa(): bool
+    {
+        return $this->resolved_operational_type === self::TYPE_SEWA;
+    }
+
+    public function requiresInvoice(): bool
+    {
+        return in_array($this->resolved_operational_type, [self::TYPE_SELF_RUN, self::TYPE_SEWA], true);
+    }
+
+    public function hasLinkedInvoices(): bool
+    {
+        if (! Schema::hasTable('express_event_invoices')) {
+            return false;
+        }
+
+        return $this->relationLoaded('invoices')
+            ? $this->invoices->isNotEmpty()
+            : $this->invoices()->exists();
+    }
+
+    public function getTotalInvoiceAmountAttribute(): int
+    {
+        if (! Schema::hasTable('express_event_invoices')) {
+            return 0;
+        }
+
+        $invoices = $this->relationLoaded('invoices')
+            ? $this->invoices
+            : $this->invoices()->get(['invoices.id', 'invoices.total']);
+
+        return (int) $invoices
+            ->unique('id')
+            ->sum(fn (Invoice $invoice): int => $invoice->contract_amount);
+    }
+
+    public function getTotalRecapQrisAmountAttribute(): int
+    {
+        $reports = $this->uniqueLinkedSessionReports();
+
+        return (int) $reports->sum(fn (SessionReport $r): int => (int) $r->total_qris_amount);
+    }
+
+    public function getTotalRecapCashAmountAttribute(): int
+    {
+        $reports = $this->uniqueLinkedSessionReports();
+
+        return (int) $reports->sum(fn (SessionReport $r): int => (int) $r->total_cash_amount);
+    }
+
+    public function getTotalRecapGrandTotalAmountAttribute(): int
+    {
+        $reports = $this->uniqueLinkedSessionReports();
+
+        return (int) $reports->sum(fn (SessionReport $r): int => (int) $r->grand_total_amount);
+    }
+
+    public function getEffectiveRevenueAttribute(): int
+    {
+        if ($this->isSharingProfit()) {
+            return $this->total_allocated_revenue;
+        }
+
+        if ($this->requiresInvoice() && $this->hasLinkedInvoices()) {
+            return $this->total_invoice_amount;
+        }
+
+        return $this->total_allocated_revenue;
+    }
+
+    public function hasCompleteEventData(): bool
+    {
+        $hasRecap = $this->relationLoaded('recaps')
+            ? $this->recaps->where('status', ExpressEventRecap::STATUS_ACTIVE)->isNotEmpty()
+            : $this->recaps()->where('status', ExpressEventRecap::STATUS_ACTIVE)->exists();
+
+        return filled($this->event_name)
+            && $this->start_date !== null
+            && $this->end_date !== null
+            && $hasRecap;
+    }
+
+    public function isReadyForHppCalculation(): bool
+    {
+        if (! $this->hasCompleteEventData()) {
+            return false;
+        }
+
+        if ($this->requiresInvoice() && ! $this->hasLinkedInvoices()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function getInvoiceConnectionStatusLabelAttribute(): string
+    {
+        if (! $this->requiresInvoice()) {
+            return 'Tidak Memerlukan Invoice';
+        }
+
+        return $this->hasLinkedInvoices() ? 'Invoice Terhubung' : 'Invoice Belum Terhubung';
+    }
+
+    public function getInvoiceConnectionStatusColorAttribute(): string
+    {
+        if (! $this->requiresInvoice()) {
+            return 'gray';
+        }
+
+        return $this->hasLinkedInvoices() ? 'success' : 'warning';
+    }
+
+    public function getCompletenessStatusKeyAttribute(): string
+    {
+        if (! $this->hasCompleteEventData()) {
+            return self::COMPLETENESS_INCOMPLETE_EVENT;
+        }
+
+        if ($this->requiresInvoice() && ! $this->hasLinkedInvoices()) {
+            return self::COMPLETENESS_INVOICE_UNLINKED;
+        }
+
+        if ($this->isConfirmed()) {
+            return self::COMPLETENESS_CONFIRMED;
+        }
+
+        if ($this->hpp_rate_per_sheet === null) {
+            return self::COMPLETENESS_WAITING_HPP;
+        }
+
+        return self::COMPLETENESS_WAITING_CONFIRMATION;
+    }
+
+    public function getCompletenessStatusLabelAttribute(): string
+    {
+        return self::COMPLETENESS_LABELS[$this->completeness_status_key] ?? 'Menunggu pengelolaan HPP';
+    }
+
+    public function getCompletenessStatusColorAttribute(): string
+    {
+        return self::COMPLETENESS_COLORS[$this->completeness_status_key] ?? 'gray';
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, SessionReport>
+     */
+    protected function uniqueLinkedSessionReports(): \Illuminate\Support\Collection
+    {
+        $recaps = $this->relationLoaded('recaps')
+            ? $this->recaps
+            : $this->recaps()->with('sessionReport')->get();
+
+        return $recaps
+            ->where('status', ExpressEventRecap::STATUS_ACTIVE)
+            ->map(fn (ExpressEventRecap $recap): ?SessionReport => $recap->sessionReport)
+            ->filter()
+            ->unique('id')
+            ->values();
     }
 
     public function getReconciliationLabelAttribute(): string

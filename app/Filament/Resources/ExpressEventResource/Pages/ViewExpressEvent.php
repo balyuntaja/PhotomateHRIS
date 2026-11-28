@@ -13,16 +13,24 @@ use Filament\Infolists;
 use Filament\Infolists\Infolist;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Livewire\Attributes\On;
 
 class ViewExpressEvent extends ViewRecord
 {
     protected static string $resource = ExpressEventResource::class;
 
+    #[On('express-event-updated')]
+    public function refreshOnEventUpdated(): void
+    {
+        $this->record?->refresh();
+        $this->record?->unsetRelations();
+    }
+
     public function infolist(Infolist $infolist): Infolist
     {
         return $infolist
             ->schema([
-                Infolists\Components\Section::make('Informasi Utama Event')
+                Infolists\Components\Section::make('Informasi Event')
                     ->schema([
                         Infolists\Components\TextEntry::make('event_name')
                             ->label('Nama Event')
@@ -30,54 +38,119 @@ class ViewExpressEvent extends ViewRecord
                             ->size(Infolists\Components\TextEntry\TextEntrySize::Large),
 
                         Infolists\Components\TextEntry::make('period_label')
-                            ->label('Periode Event')
-                            ->state(fn (ExpressEvent $record): string => ($record->start_date?->format('d/m/Y') ?? '-') . ' s/d ' . ($record->end_date?->format('d/m/Y') ?? '-')),
+                            ->label('Tanggal Event')
+                            ->state(function (ExpressEvent $record): string {
+                                $start = $record->start_date?->format('d/m/Y');
+                                $end = $record->end_date?->format('d/m/Y');
+                                if (! $start && ! $end) {
+                                    return '-';
+                                }
+
+                                return ($start === $end || ! $end) ? ($start ?? '-') : "{$start} s/d {$end}";
+                            }),
+
+                        Infolists\Components\TextEntry::make('operational_type_display')
+                            ->label('Jenis Operasional')
+                            ->badge()
+                            ->state(fn (ExpressEvent $record): string => $record->operational_type_label)
+                            ->color(fn (ExpressEvent $record): string => $record->isSharingProfit() ? 'success' : 'info'),
+
+                        Infolists\Components\TextEntry::make('recap_count')
+                            ->label('Jumlah Rekap Sesi')
+                            ->state(fn (ExpressEvent $record): string => number_format($record->recaps()->where('status', 'active')->count(), 0, ',', '.') . ' rekap sesi')
+                            ->weight('semibold'),
+
+                        Infolists\Components\TextEntry::make('total_sessions')
+                            ->label('Total Sesi')
+                            ->state(fn (ExpressEvent $record): string => number_format($record->total_allocated_sessions, 0, ',', '.') . ' sesi')
+                            ->helperText(fn (ExpressEvent $record): string => number_format($record->total_allocated_sheets, 0, ',', '.') . ' lembar cetak')
+                            ->weight('semibold'),
+
+                        Infolists\Components\TextEntry::make('notes')
+                            ->label('Catatan Event')
+                            ->placeholder('Tidak ada catatan.')
+                            ->columnSpan(3),
+                    ])
+                    ->columns(4),
+
+                Infolists\Components\Section::make('Informasi Pendapatan')
+                    ->schema([
+                        // Untuk Express Sharing Profit: QRIS, Tunai, Grand Total dari Rekap Sesi
+                        Infolists\Components\TextEntry::make('sharing_qris')
+                            ->label('Total QRIS')
+                            ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->total_recap_qris_amount))
+                            ->weight('semibold')
+                            ->visible(fn (ExpressEvent $record): bool => $record->isSharingProfit()),
+
+                        Infolists\Components\TextEntry::make('sharing_cash')
+                            ->label('Total Tunai')
+                            ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->total_recap_cash_amount))
+                            ->weight('semibold')
+                            ->visible(fn (ExpressEvent $record): bool => $record->isSharingProfit()),
+
+                        Infolists\Components\TextEntry::make('sharing_grand_total')
+                            ->label('Grand Total')
+                            ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->effective_revenue))
+                            ->helperText('Bersumber langsung dari Rekap Sesi Approved')
+                            ->weight('bold')
+                            ->color('primary')
+                            ->visible(fn (ExpressEvent $record): bool => $record->isSharingProfit()),
+
+                        // Untuk Express Self Run & Express Sewa: Daftar Invoice, Total Harga Invoice, Status Keterhubungan
+                        Infolists\Components\TextEntry::make('invoice_connection_status')
+                            ->label('Status Keterhubungan Invoice')
+                            ->badge()
+                            ->state(fn (ExpressEvent $record): string => $record->invoice_connection_status_label)
+                            ->color(fn (ExpressEvent $record): string => $record->invoice_connection_status_color)
+                            ->visible(fn (ExpressEvent $record): bool => $record->requiresInvoice()),
+
+                        Infolists\Components\TextEntry::make('linked_invoice_summary')
+                            ->label('Daftar Invoice Terkait')
+                            ->state(function (ExpressEvent $record): string {
+                                $numbers = $record->invoices()->pluck('invoice_number')->all();
+
+                                return $numbers !== [] ? implode(', ', $numbers) : 'Belum ada invoice terhubung';
+                            })
+                            ->weight('medium')
+                            ->visible(fn (ExpressEvent $record): bool => $record->requiresInvoice()),
+
+                        Infolists\Components\TextEntry::make('total_invoice_price')
+                            ->label('Total Harga Invoice')
+                            ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->total_invoice_amount))
+                            ->helperText('Dihitung dari total nilai kontrak invoice (bukan nominal DP)')
+                            ->weight('bold')
+                            ->color('primary')
+                            ->visible(fn (ExpressEvent $record): bool => $record->requiresInvoice()),
+
+                        // Fallback untuk event Express umum (historis sebelum pemisahan sub-kategori)
+                        Infolists\Components\TextEntry::make('general_total_revenue')
+                            ->label('Total Omzet Alokasi')
+                            ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->effective_revenue))
+                            ->weight('bold')
+                            ->color('primary')
+                            ->visible(fn (ExpressEvent $record): bool => ! $record->isSharingProfit() && ! $record->requiresInvoice()),
+                    ])
+                    ->columns(3),
+
+                Infolists\Components\Section::make('Informasi Pengelolaan HPP')
+                    ->schema([
+                        Infolists\Components\TextEntry::make('completeness_status')
+                            ->label('Status Kelengkapan Data HPP')
+                            ->badge()
+                            ->state(fn (ExpressEvent $record): string => $record->completeness_status_label)
+                            ->color(fn (ExpressEvent $record): string => $record->completeness_status_color),
+
+                        Infolists\Components\TextEntry::make('hpp_status')
+                            ->label('Status Konfirmasi')
+                            ->badge()
+                            ->state(fn (ExpressEvent $record): string => $record->hpp_status_label)
+                            ->color(fn (ExpressEvent $record): string => $record->hpp_status_color),
 
                         Infolists\Components\TextEntry::make('reconciliation_status')
                             ->label('Status Rekonsiliasi')
                             ->badge()
                             ->state(fn (ExpressEvent $record): string => $record->reconciliation_label)
                             ->color(fn (ExpressEvent $record): string => $record->reconciliation_color),
-
-                        Infolists\Components\TextEntry::make('hpp_status')
-                            ->label('Status HPP')
-                            ->badge()
-                            ->state(fn (ExpressEvent $record): string => $record->hpp_status_label)
-                            ->color(fn (ExpressEvent $record): string => $record->hpp_status_color),
-
-                        Infolists\Components\TextEntry::make('creator.nama_lengkap')
-                            ->label('Dibuat Oleh')
-                            ->placeholder('-'),
-
-                        Infolists\Components\TextEntry::make('confirmer.nama_lengkap')
-                            ->label('Dikonfirmasi Oleh')
-                            ->placeholder('-')
-                            ->helperText(fn (ExpressEvent $record): ?string => $record->confirmed_at?->format('d/m/Y H:i')),
-
-                        Infolists\Components\TextEntry::make('notes')
-                            ->label('Catatan Event')
-                            ->placeholder('Tidak ada catatan.')
-                            ->columnSpanFull(),
-                    ])
-                    ->columns(4),
-
-                Infolists\Components\Section::make('Ringkasan Keuangan & Hasil Perhitungan HPP')
-                    ->schema([
-                        Infolists\Components\TextEntry::make('total_sessions')
-                            ->label('Total Sesi Alokasi')
-                            ->state(fn (ExpressEvent $record): string => number_format($record->total_allocated_sessions, 0, ',', '.') . ' sesi')
-                            ->weight('semibold'),
-
-                        Infolists\Components\TextEntry::make('total_sheets')
-                            ->label('Total Lembar Alokasi')
-                            ->state(fn (ExpressEvent $record): string => number_format($record->total_allocated_sheets, 0, ',', '.') . ' lembar')
-                            ->weight('semibold'),
-
-                        Infolists\Components\TextEntry::make('total_revenue')
-                            ->label('Total Omzet Alokasi')
-                            ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->total_allocated_revenue))
-                            ->weight('bold')
-                            ->color('primary'),
 
                         Infolists\Components\TextEntry::make('hpp_rate')
                             ->label('Tarif HPP per Lembar')
@@ -92,11 +165,20 @@ class ViewExpressEvent extends ViewRecord
 
                         Infolists\Components\TextEntry::make('gross_profit')
                             ->label('Estimasi Laba Kotor')
-                            ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->gross_profit))
+                            ->state(fn (ExpressEvent $record): string => $record->isReadyForHppCalculation() ? RupiahHelper::format($record->gross_profit) : 'Menunggu Invoice Terhubung')
                             ->weight('bold')
-                            ->color(fn (ExpressEvent $record): string => $record->gross_profit >= 0 ? 'success' : 'danger'),
+                            ->color(fn (ExpressEvent $record): string => ! $record->isReadyForHppCalculation() ? 'warning' : ($record->gross_profit >= 0 ? 'success' : 'danger')),
+
+                        Infolists\Components\TextEntry::make('creator.nama_lengkap')
+                            ->label('Dibuat Oleh')
+                            ->placeholder('-'),
+
+                        Infolists\Components\TextEntry::make('confirmer.nama_lengkap')
+                            ->label('Dikonfirmasi Oleh')
+                            ->placeholder('-')
+                            ->helperText(fn (ExpressEvent $record): ?string => $record->confirmed_at?->format('d/m/Y H:i')),
                     ])
-                    ->columns(3),
+                    ->columns(4),
 
                 Infolists\Components\ViewEntry::make('details')
                     ->view('filament.resources.express-events.view-details')
@@ -111,7 +193,46 @@ class ViewExpressEvent extends ViewRecord
 
         return [
             Actions\EditAction::make()
-                ->visible(fn (): bool => ! $record->isFinalized()),
+                ->visible(fn (): bool => ! $this->record->isFinalized()),
+
+            Actions\Action::make('set_hpp_rate')
+                ->label('Atur Tarif HPP')
+                ->icon('heroicon-o-calculator')
+                ->color('info')
+                ->visible(fn (): bool => ! $this->record->isFinalized() && (auth()->user()?->can('manageHpp', $this->record) ?? false))
+                ->fillForm(fn (): array => [
+                    'hpp_rate_per_sheet' => $this->record->hpp_rate_per_sheet,
+                ])
+                ->form([
+                    Forms\Components\TextInput::make('hpp_rate_per_sheet')
+                        ->label('Tarif HPP per Lembar')
+                        ->rupiah()
+                        ->required()
+                        ->helperText('Masukkan 0 jika bebas biaya HPP.'),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        app(ExpressEventHppService::class)->updateRate(
+                            $this->record,
+                            (int) $data['hpp_rate_per_sheet'],
+                            auth()->user()
+                        );
+
+                        $this->record->refresh();
+
+                        Notification::make()
+                            ->title('Tarif HPP Diperbarui')
+                            ->body('Tarif HPP per lembar berhasil disimpan.')
+                            ->success()
+                            ->send();
+                    } catch (\Throwable $e) {
+                        Notification::make()
+                            ->title('Gagal Menyimpan Tarif')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
 
             Actions\Action::make('confirm_hpp')
                 ->label('Konfirmasi HPP')
@@ -120,10 +241,12 @@ class ViewExpressEvent extends ViewRecord
                 ->requiresConfirmation()
                 ->modalHeading('Konfirmasi Perhitungan HPP Event')
                 ->modalDescription('Apakah Anda yakin ingin mengonfirmasi perhitungan HPP event ini? Sistem akan menyimpan snapshot tarif dan nominal HPP.')
-                ->visible(fn (): bool => ! in_array($record->hpp_status, [ExpressEvent::HPP_CONFIRMED, ExpressEvent::HPP_POSTED], true) && $record->hpp_rate_per_sheet !== null)
-                ->action(function () use ($record) {
+                ->visible(fn (): bool => ! in_array($this->record->hpp_status, [ExpressEvent::HPP_CONFIRMED, ExpressEvent::HPP_POSTED], true)
+                    && $this->record->hpp_rate_per_sheet !== null
+                    && $this->record->isReadyForHppCalculation())
+                ->action(function () {
                     try {
-                        app(ExpressEventHppService::class)->confirmHpp($record, auth()->user());
+                        app(ExpressEventHppService::class)->confirmHpp($this->record, auth()->user());
 
                         Notification::make()
                             ->title('HPP Berhasil Dikonfirmasi')
@@ -131,6 +254,7 @@ class ViewExpressEvent extends ViewRecord
                             ->success()
                             ->send();
 
+                        $this->record->refresh();
                         $this->refreshFormData(['hpp_status', 'confirmed_at', 'confirmed_by']);
                     } catch (\Throwable $e) {
                         Notification::make()

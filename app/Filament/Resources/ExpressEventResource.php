@@ -384,6 +384,12 @@ class ExpressEventResource extends Resource
                     ->weight('bold')
                     ->description(fn (ExpressEvent $record): string => $record->start_date?->format('d/m/Y') . ' - ' . $record->end_date?->format('d/m/Y')),
 
+                Tables\Columns\TextColumn::make('operational_type_label')
+                    ->label('Jenis Operasional')
+                    ->badge()
+                    ->state(fn (ExpressEvent $record): string => $record->operational_type_label)
+                    ->color(fn (ExpressEvent $record): string => $record->isSharingProfit() ? 'success' : 'info'),
+
                 Tables\Columns\TextColumn::make('total_sessions')
                     ->label('Sesi')
                     ->state(fn (ExpressEvent $record): int => $record->total_allocated_sessions)
@@ -397,8 +403,9 @@ class ExpressEventResource extends Resource
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('total_revenue')
-                    ->label('Omzet')
-                    ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->total_allocated_revenue))
+                    ->label('Omzet / Kontrak')
+                    ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->effective_revenue))
+                    ->description(fn (ExpressEvent $record): ?string => $record->requiresInvoice() ? $record->invoice_connection_status_label : null)
                     ->alignEnd()
                     ->weight('medium'),
 
@@ -415,16 +422,16 @@ class ExpressEventResource extends Resource
 
                 Tables\Columns\TextColumn::make('gross_profit')
                     ->label('Laba Kotor')
-                    ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->gross_profit))
+                    ->state(fn (ExpressEvent $record): string => $record->isReadyForHppCalculation() ? RupiahHelper::format($record->gross_profit) : '-')
                     ->alignEnd()
-                    ->color(fn (ExpressEvent $record): string => $record->gross_profit >= 0 ? 'success' : 'danger')
+                    ->color(fn (ExpressEvent $record): string => ! $record->isReadyForHppCalculation() ? 'gray' : ($record->gross_profit >= 0 ? 'success' : 'danger'))
                     ->weight('semibold'),
 
-                Tables\Columns\TextColumn::make('reconciliation_status')
-                    ->label('Rekonsiliasi')
+                Tables\Columns\TextColumn::make('completeness_status')
+                    ->label('Kelengkapan Data')
                     ->badge()
-                    ->formatStateUsing(fn (ExpressEvent $record): string => $record->reconciliation_label)
-                    ->color(fn (ExpressEvent $record): string => $record->reconciliation_color),
+                    ->state(fn (ExpressEvent $record): string => $record->completeness_status_label)
+                    ->color(fn (ExpressEvent $record): string => $record->completeness_status_color),
 
                 Tables\Columns\TextColumn::make('hpp_status')
                     ->label('Status HPP')
