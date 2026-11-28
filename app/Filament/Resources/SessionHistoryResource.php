@@ -88,16 +88,19 @@ class SessionHistoryResource extends Resource
 
                 Tables\Columns\TextColumn::make('event_note')
                     ->label('Event')
-                    ->getStateUsing(fn (SessionReport $record): ?string => $record->resolved_event_name)
-                    ->description(fn (SessionReport $record): ?string => $record->event_date?->translatedFormat('d M Y'))
+                    ->getStateUsing(fn (SessionReport $record): ?string => $record->supportsEventDetail() ? $record->resolved_event_name : '-')
+                    ->description(fn (SessionReport $record): ?string => $record->supportsEventDetail() ? $record->event_date?->translatedFormat('d M Y') : null)
                     ->placeholder('Belum Ada Data Event')
                     ->limit(28)
-                    ->tooltip(fn (SessionReport $record): ?string => $record->resolved_event_name)
+                    ->tooltip(fn (SessionReport $record): ?string => $record->supportsEventDetail() ? $record->resolved_event_name : null)
                     ->searchable(query: function (Builder $query, string $search): Builder {
-                        return $query->where(function (Builder $q) use ($search) {
-                            $q->where('event_note', 'like', "%{$search}%")
-                                ->orWhereHas('invoice', fn (Builder $inv) => $inv->where('event_name', 'like', "%{$search}%"));
-                        });
+                        $expressCabangIds = SessionReport::expressEventCabangIds();
+
+                        return $query->whereIn('cabang_id', $expressCabangIds)
+                            ->where(function (Builder $q) use ($search) {
+                                $q->where('event_note', 'like', "%{$search}%")
+                                    ->orWhereHas('invoice', fn (Builder $inv) => $inv->where('event_name', 'like', "%{$search}%"));
+                            });
                     })
                     ->toggleable(),
 
@@ -193,10 +196,17 @@ class SessionHistoryResource extends Resource
                             );
                     }),
 
-                // 2. Cabang Filter
+                // 2. Cabang Filter (Newspaper Janus, Express gabungan, Golio)
                 Tables\Filters\SelectFilter::make('cabang_id')
                     ->label('Cabang')
-                    ->options(\App\Models\Cabang::pluck('nama_cabang', 'cabang_id')),
+                    ->options(fn (): array => SessionReport::historyCabangFilterOptions())
+                    ->query(function (Builder $query, array $data): Builder {
+                        $cabangIds = SessionReport::resolveHistoryCabangFilterIds($data['value'] ?? null);
+
+                        return $cabangIds === null
+                            ? $query
+                            : $query->whereIn('cabang_id', $cabangIds);
+                    }),
 
                 // 3. Status Filter
                 Tables\Filters\SelectFilter::make('status')

@@ -47,7 +47,9 @@
             </div>
         </div>
 
-        @livewire('session-report-event-detail', ['reportId' => $report->id], key('session-report-event-detail-' . $report->id))
+        @if ($report->supportsEventDetail())
+            @livewire('session-report-event-detail', ['reportId' => $report->id], key('session-report-event-detail-' . $report->id))
+        @endif
     </div>
 
     @if($revisionExempt)

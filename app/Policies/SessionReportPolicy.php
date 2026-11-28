@@ -78,11 +78,11 @@ class SessionReportPolicy
 
     /**
      * Hanya Super Admin yang diizinkan melengkapi atau mengedit detail event
-     * (Nama Event & Tanggal Event), termasuk pada rekap berstatus APPROVED.
+     * (Nama Event & Tanggal Event) pada rekap sesi cabang Express (termasuk status APPROVED).
      */
     public function updateEventDetail(Karyawan $user, SessionReport $report): bool
     {
-        return $user->isSuperAdmin();
+        return $user->isSuperAdmin() && $report->supportsEventDetail();
     }
 
     public function delete(Karyawan $user, SessionReport $report): bool

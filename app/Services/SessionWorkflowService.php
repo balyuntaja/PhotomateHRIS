@@ -320,11 +320,19 @@ class SessionWorkflowService
             throw new RuntimeException('Hanya Super Admin yang diizinkan mengedit detail event pada riwayat rekap sesi.');
         }
 
+        if (! $report->supportsEventDetail()) {
+            throw new RuntimeException('Detail event hanya tersedia dan dapat diperbarui untuk cabang Express.');
+        }
+
         $normalizedEventNote = filled($eventNote) ? trim((string) $eventNote) : null;
         $normalizedEventDate = filled($eventDate) ? Carbon::parse($eventDate)->toDateString() : null;
 
         return DB::transaction(function () use ($report, $actor, $normalizedEventNote, $normalizedEventDate): SessionReport {
             $lockedReport = SessionReport::query()->lockForUpdate()->findOrFail($report->id);
+
+            if (! $lockedReport->supportsEventDetail()) {
+                throw new RuntimeException('Detail event hanya tersedia dan dapat diperbarui untuk cabang Express.');
+            }
 
             $oldNote = filled($lockedReport->event_note) ? trim((string) $lockedReport->event_note) : null;
             $oldDate = $lockedReport->event_date?->toDateString();

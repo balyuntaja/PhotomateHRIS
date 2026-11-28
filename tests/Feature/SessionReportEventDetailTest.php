@@ -375,18 +375,22 @@ class SessionReportEventDetailTest extends TestCase
         $this->assertSame('2025-05-10', $report->fresh()->event_date?->toDateString());
     }
 
-    public function test_super_admin_can_update_existing_event_detail_on_all_statuses_and_branches(): void
+    public function test_super_admin_can_update_existing_event_detail_on_all_statuses_and_express_branches(): void
     {
         $this->actingAs($this->superAdmin);
 
-        $branches = [
+        $cabangExpressLiteral = Cabang::create([
+            'cabang_id' => 'C0010',
+            'perusahaan_id' => $this->perusahaan->perusahaan_id,
+            'nama_cabang' => 'Express',
+        ]);
+
+        $expressBranches = [
+            $cabangExpressLiteral,
             $this->cabangExpress,
             $this->cabangExpressSewa,
             $this->cabangExpressSelfRun,
             $this->cabangExpressSharingProfit,
-            $this->cabangWedding,
-            $this->cabangJanus,
-            $this->cabangGolio,
         ];
 
         $statuses = [
@@ -397,12 +401,11 @@ class SessionReportEventDetailTest extends TestCase
             SessionReport::STATUS_REJECTED,
         ];
 
-        foreach ($branches as $index => $cabang) {
+        foreach ($expressBranches as $index => $cabang) {
             $status = $statuses[$index % count($statuses)];
             $isManual = in_array($cabang->cabang_id, [
                 $this->cabangExpressSewa->cabang_id,
                 $this->cabangExpressSelfRun->cabang_id,
-                $this->cabangWedding->cabang_id,
             ], true);
 
             $report = $this->createHistoricalApprovedReport([
@@ -420,8 +423,13 @@ class SessionReportEventDetailTest extends TestCase
                 'approved_at' => $status === SessionReport::STATUS_APPROVED ? now()->subMonths(6) : null,
             ]);
 
+            $this->assertTrue(Gate::allows('updateEventDetail', $report));
+            $this->assertContains($cabang->cabang_id, SessionReport::expressEventCabangIds());
+
             Livewire::test(SessionReportEventDetail::class, ['reportId' => $report->id])
+                ->assertSee('Informasi Event')
                 ->assertSee('Data Event Belum Lengkap')
+                ->assertSee('Edit Detail Event')
                 ->call('openEdit')
                 ->assertSet('data.event_note', 'Event Lama ' . $cabang->nama_cabang)
                 ->fillForm([
@@ -774,5 +782,143 @@ class SessionReportEventDetailTest extends TestCase
         $allocationService = app(ExpressEventAllocationService::class);
         $this->assertSame('Nama Event Final Terkoreksi', $allocationService->resolveReportEventName($report->fresh(['cabang', 'invoice'])));
         $this->assertArrayHasKey('Nama Event Final Terkoreksi', $allocationService->getAvailableEventNames());
+    }
+
+    public function test_golio_and_newspaper_janus_hide_event_section_and_block_backend_updates(): void
+    {
+        $nonExpressBranches = [
+            $this->cabangGolio,
+            $this->cabangJanus,
+            $this->cabangWedding,
+        ];
+
+        foreach ($nonExpressBranches as $cabang) {
+            $isManual = $cabang->cabang_id === $this->cabangWedding->cabang_id;
+
+            $report = $this->createHistoricalApprovedReport([
+                'report_date' => '2025-10-15',
+                'status' => SessionReport::STATUS_APPROVED,
+                'cabang_id' => $cabang->cabang_id,
+                'event_note' => null,
+                'event_date' => null,
+                'wedding_total_sessions' => $isManual ? 20 : null,
+                'wedding_total_sheets' => $isManual ? 40 : null,
+                'total_transactions' => $isManual ? 20 : 6,
+                'total_sessions' => $isManual ? 40 : 12,
+                'grand_total_amount' => $isManual ? 0 : 345000,
+            ]);
+
+            $this->assertFalse($report->supportsEventDetail());
+            $this->assertNotContains($cabang->cabang_id, SessionReport::expressEventCabangIds());
+
+            foreach ([$this->superAdmin, $this->superAdminRoleUser, $this->supervisor, $this->crew] as $user) {
+                $this->actingAs($user);
+
+                $this->assertFalse(Gate::allows('updateEventDetail', $report));
+
+                // Livewire detail component hides Informasi Event, badge, and Edit button completely
+                Livewire::test(SessionReportEventDetail::class, ['reportId' => $report->id])
+                    ->assertDontSee('Informasi Event')
+                    ->assertDontSee('Belum Ada Data Event')
+                    ->assertDontSee('Data Event Belum Lengkap')
+                    ->assertDontSee('Data Event Lengkap')
+                    ->assertDontSee('Edit Detail Event')
+                    ->call('openEdit')
+                    ->assertSet('isEditing', false)
+                    ->assertNotified('Fitur tidak tersedia')
+                    ->set('data.event_note', 'Percobaan Event Non Express')
+                    ->set('data.event_date', '2025-10-15')
+                    ->call('save')
+                    ->assertNotified('Fitur tidak tersedia');
+
+                // Riwayat Rekap Sesi detail modal hides Informasi Event section & badges completely
+                Livewire::test(ListSessionHistories::class)
+                    ->assertDontSee('Belum Ada Data Event')
+                    ->mountTableAction('detail', $report->id)
+                    ->assertDontSee('Informasi Event')
+                    ->assertDontSee('Belum Ada Data Event')
+                    ->assertDontSee('Data Event Belum Lengkap')
+                    ->assertDontSee('Data Event Lengkap')
+                    ->assertDontSee('Edit Detail Event');
+            }
+
+            // Direct backend workflow service call is rejected even for Super Admin
+            $this->actingAs($this->superAdmin);
+            try {
+                app(SessionWorkflowService::class)->updateEventDetail(
+                    $report,
+                    $this->superAdmin,
+                    'Event Paksa ' . $cabang->nama_cabang,
+                    '2025-10-15'
+                );
+                $this->fail("Expected RuntimeException when updating event detail for {$cabang->nama_cabang}.");
+            } catch (RuntimeException $e) {
+                $this->assertStringContainsString('Express', $e->getMessage());
+            }
+
+            // Model immutability guard also blocks event field updates on APPROVED non-Express reports
+            try {
+                $report->fresh()->update([
+                    'event_note' => 'Bypass Model ' . $cabang->nama_cabang,
+                    'event_date' => '2025-10-15',
+                ]);
+                $this->fail("Expected model immutability exception on APPROVED {$cabang->nama_cabang} report.");
+            } catch (RuntimeException $e) {
+                $this->assertStringContainsString('APPROVED', $e->getMessage());
+            }
+
+            $fresh = $report->fresh();
+            $this->assertNull($fresh->event_note);
+            $this->assertNull($fresh->event_date);
+            $this->assertSame(SessionReport::STATUS_APPROVED, $fresh->status);
+            $this->assertDatabaseMissing('approval_logs', [
+                'session_report_id' => $report->id,
+                'action' => 'EVENT_DETAIL_UPDATED',
+            ]);
+        }
+
+        // Golio & Newspaper Janus Booth HPP sync remains completely unaffected
+        \App\Models\BoothSessionHppSetting::updateOrCreate(['booth_type' => 'Janus'], ['default_rate_per_sheet' => 2500]);
+        \App\Models\BoothSessionHppSetting::updateOrCreate(['booth_type' => 'Golio'], ['default_rate_per_sheet' => 3000]);
+        $sync = app(\App\Services\BoothHppService::class)->syncApprovedRecaps();
+        $this->assertSame(2, $sync['created']);
+    }
+
+    public function test_express_and_express_sharing_profit_detail_modal_shows_event_section_even_when_branch_soft_deleted(): void
+    {
+        $this->actingAs($this->superAdmin);
+
+        $expressReport = $this->createHistoricalApprovedReport([
+            'report_number' => 'SR-EXP-001',
+            'cabang_id' => $this->cabangExpress->cabang_id,
+            'event_note' => null,
+            'event_date' => null,
+        ]);
+
+        $sharingProfitReport = $this->createHistoricalApprovedReport([
+            'report_number' => 'SR-SHP-001',
+            'cabang_id' => $this->cabangExpressSharingProfit->cabang_id,
+            'event_note' => 'Sharing Profit Festival',
+            'event_date' => '2025-06-14',
+        ]);
+
+        // Historical soft-deleted Express branch record must still be recognized via cabang_id lookup
+        $this->cabangExpress->delete();
+
+        $this->assertTrue($expressReport->fresh()->supportsEventDetail());
+        $this->assertTrue($sharingProfitReport->fresh()->supportsEventDetail());
+
+        Livewire::test(ListSessionHistories::class)
+            ->mountTableAction('detail', $expressReport->id)
+            ->assertSee('Informasi Event')
+            ->assertSee('Belum Ada Data Event')
+            ->assertSee('Edit Detail Event');
+
+        Livewire::test(ListSessionHistories::class)
+            ->mountTableAction('detail', $sharingProfitReport->id)
+            ->assertSee('Informasi Event')
+            ->assertSee('Sharing Profit Festival')
+            ->assertSee('Data Event Lengkap')
+            ->assertSee('Edit Detail Event');
     }
 }

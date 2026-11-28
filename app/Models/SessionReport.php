@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Utils\InventoryBranches;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -55,6 +56,10 @@ class SessionReport extends Model
     const STATUS_REJECTED = 'REJECTED';
 
     const INPUT_WINDOW_DAYS = 2;
+
+    const HISTORY_BRANCH_FILTER_JANUS = 'newspaper_janus';
+    const HISTORY_BRANCH_FILTER_EXPRESS = 'express';
+    const HISTORY_BRANCH_FILTER_GOLIO = 'golio';
 
     protected $fillable = [
         'report_number',
@@ -126,10 +131,11 @@ class SessionReport extends Model
             $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
 
             // Immutability rule: If original was APPROVED, reject modifications to core data.
-            // Super Admin may update only event_note and event_date metadata without affecting approval.
+            // Super Admin may update only event_note and event_date metadata on Express branches without affecting approval.
             if ($model->getOriginal('status') === self::STATUS_APPROVED) {
                 $dirty = array_keys($model->getDirty());
-                $allowedDirty = $isSuperAdmin
+                $canUpdateEventMetadata = $isSuperAdmin && $model->supportsEventDetail();
+                $allowedDirty = $canUpdateEventMetadata
                     ? ['event_note', 'event_date', 'updated_at']
                     : ['updated_at'];
                 $disallowed = array_diff($dirty, $allowedDirty);
@@ -340,6 +346,122 @@ class SessionReport extends Model
     public function hasAnyEventDetail(): bool
     {
         return filled($this->resolved_event_name) || $this->event_date !== null;
+    }
+
+    /**
+     * Cek apakah nama cabang termasuk kelompok Express yang mendukung detail event
+     * (Express, Photomate Express, Express Sharing Profit, Express Sewa, Express Self Run),
+     * sambil mengecualikan Golio, Newspaper Janus, dan cabang non-Express lainnya.
+     */
+    public static function isExpressEventCabangName(?string $branchName): bool
+    {
+        $normalized = InventoryBranches::normalizeName($branchName);
+
+        if ($normalized === '' || str_contains($normalized, 'janus') || str_contains($normalized, 'golio')) {
+            return false;
+        }
+
+        return str_contains($normalized, 'express') || str_contains($normalized, 'sharing profit');
+    }
+
+    /**
+     * Daftar ID cabang dari database (termasuk soft-deleted) yang memenuhi predicate.
+     *
+     * @param callable(Cabang): bool $predicate
+     * @return array<int, string>
+     */
+    protected static function matchingCabangIds(callable $predicate): array
+    {
+        return Cabang::withTrashed()
+            ->orderBy('cabang_id')
+            ->get(['cabang_id', 'nama_cabang'])
+            ->filter($predicate)
+            ->pluck('cabang_id')
+            ->map(fn ($id): string => (string) $id)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Daftar ID cabang dari database (termasuk soft-deleted) yang mendukung Detail Event.
+     *
+     * @return array<int, string>
+     */
+    public static function expressEventCabangIds(): array
+    {
+        return static::matchingCabangIds(
+            fn (Cabang $cabang): bool => static::isExpressEventCabangName($cabang->nama_cabang)
+        );
+    }
+
+    /**
+     * Pilihan filter cabang pada Riwayat Rekap Sesi (Newspaper Janus, Express gabungan, Golio).
+     *
+     * @return array<string, string>
+     */
+    public static function historyCabangFilterOptions(): array
+    {
+        return [
+            self::HISTORY_BRANCH_FILTER_JANUS => 'Newspaper Janus',
+            self::HISTORY_BRANCH_FILTER_EXPRESS => 'Express',
+            self::HISTORY_BRANCH_FILTER_GOLIO => 'Golio',
+        ];
+    }
+
+    /**
+     * Terjemahkan pilihan filter cabang Riwayat Rekap Sesi menjadi daftar cabang_id dari database.
+     * Null berarti tampilkan semua cabang (pilihan All).
+     *
+     * @return array<int, string>|null
+     */
+    public static function resolveHistoryCabangFilterIds(?string $filterValue): ?array
+    {
+        if (blank($filterValue)) {
+            return null;
+        }
+
+        return match ($filterValue) {
+            self::HISTORY_BRANCH_FILTER_EXPRESS => static::expressEventCabangIds(),
+            self::HISTORY_BRANCH_FILTER_JANUS => static::matchingCabangIds(
+                fn (Cabang $cabang): bool => str_contains(InventoryBranches::normalizeName($cabang->nama_cabang), 'janus')
+            ),
+            self::HISTORY_BRANCH_FILTER_GOLIO => static::matchingCabangIds(
+                fn (Cabang $cabang): bool => str_contains(InventoryBranches::normalizeName($cabang->nama_cabang), 'golio')
+            ),
+            default => [(string) $filterValue],
+        };
+    }
+
+    /**
+     * Resolve record Cabang berdasarkan cabang_id (termasuk soft-deleted) agar validasi
+     * cabang selalu berdasar identitas backend.
+     */
+    public function resolveCabangWithTrashed(): ?Cabang
+    {
+        if (blank($this->cabang_id)) {
+            return null;
+        }
+
+        if (
+            $this->relationLoaded('cabang')
+            && $this->cabang instanceof Cabang
+            && (string) $this->cabang->cabang_id === (string) $this->cabang_id
+        ) {
+            return $this->cabang;
+        }
+
+        return Cabang::withTrashed()->find($this->cabang_id);
+    }
+
+    /**
+     * Hanya rekap sesi dari cabang Express (termasuk Express Sharing Profit)
+     * yang mendukung informasi dan edit detail event.
+     */
+    public function supportsEventDetail(): bool
+    {
+        $cabang = $this->resolveCabangWithTrashed();
+
+        return static::isExpressEventCabangName($cabang?->nama_cabang);
     }
 
     public function getStatusLabelAttribute(): string

@@ -59,15 +59,9 @@ class SessionReportEventDetail extends Component implements HasForms
 
     public function openEdit(): void
     {
-        $report = SessionReport::with('invoice')->findOrFail($this->reportId);
+        $report = SessionReport::with(['cabang', 'invoice'])->findOrFail($this->reportId);
 
-        if (! $this->canEdit($report)) {
-            Notification::make()
-                ->title('Akses ditolak')
-                ->body('Hanya Super Admin yang dapat mengedit detail event.')
-                ->danger()
-                ->send();
-
+        if (! $this->authorizeEventEdit($report, 'Hanya Super Admin yang dapat mengedit detail event.')) {
             return;
         }
 
@@ -87,15 +81,9 @@ class SessionReportEventDetail extends Component implements HasForms
     {
         /** @var Karyawan|null $user */
         $user = Auth::user();
-        $report = SessionReport::with('invoice')->findOrFail($this->reportId);
+        $report = SessionReport::with(['cabang', 'invoice'])->findOrFail($this->reportId);
 
-        if (! $user instanceof Karyawan || ! $user->can('updateEventDetail', $report)) {
-            Notification::make()
-                ->title('Akses ditolak')
-                ->body('Hanya Super Admin yang dapat menyimpan detail event.')
-                ->danger()
-                ->send();
-
+        if (! $this->authorizeEventEdit($report, 'Hanya Super Admin yang dapat menyimpan detail event.') || ! $user instanceof Karyawan) {
             return;
         }
 
@@ -129,6 +117,37 @@ class SessionReportEventDetail extends Component implements HasForms
         }
     }
 
+    protected function authorizeEventEdit(SessionReport $report, string $superAdminMessage): bool
+    {
+        if (! $report->supportsEventDetail()) {
+            $this->isEditing = false;
+
+            Notification::make()
+                ->title('Fitur tidak tersedia')
+                ->body('Detail event hanya tersedia untuk cabang Express.')
+                ->danger()
+                ->send();
+
+            return false;
+        }
+
+        $user = Auth::user();
+
+        if (! $user instanceof Karyawan || ! $user->can('updateEventDetail', $report)) {
+            $this->isEditing = false;
+
+            Notification::make()
+                ->title('Akses ditolak')
+                ->body($superAdminMessage)
+                ->danger()
+                ->send();
+
+            return false;
+        }
+
+        return true;
+    }
+
     protected function canEdit(?SessionReport $report = null): bool
     {
         $user = Auth::user();
@@ -136,8 +155,8 @@ class SessionReportEventDetail extends Component implements HasForms
             return false;
         }
 
-        $report ??= SessionReport::find($this->reportId);
-        if (! $report) {
+        $report ??= SessionReport::with('cabang')->find($this->reportId);
+        if (! $report || ! $report->supportsEventDetail()) {
             return false;
         }
 
@@ -146,9 +165,9 @@ class SessionReportEventDetail extends Component implements HasForms
 
     protected function fillFormFromReport(?SessionReport $report = null): void
     {
-        $report ??= SessionReport::with('invoice')->find($this->reportId);
+        $report ??= SessionReport::with(['cabang', 'invoice'])->find($this->reportId);
 
-        if (! $report) {
+        if (! $report || ! $report->supportsEventDetail()) {
             $this->form->fill([]);
 
             return;
@@ -164,11 +183,13 @@ class SessionReportEventDetail extends Component implements HasForms
 
     public function render()
     {
-        $report = SessionReport::with('invoice')->find($this->reportId);
+        $report = SessionReport::with(['cabang', 'invoice'])->find($this->reportId);
+        $supportsEventDetail = $report?->supportsEventDetail() ?? false;
 
         return view('livewire.session-report-event-detail', [
             'report' => $report,
-            'canEdit' => $report ? $this->canEdit($report) : false,
+            'supportsEventDetail' => $supportsEventDetail,
+            'canEdit' => $supportsEventDetail && $report ? $this->canEdit($report) : false,
         ]);
     }
 }

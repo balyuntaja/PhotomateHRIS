@@ -1,11 +1,14 @@
 @php
-    $displayEventName = $report?->resolved_event_name;
+    $supportsEventDetail = (bool) ($supportsEventDetail ?? false);
+    $displayEventName = $supportsEventDetail ? $report?->resolved_event_name : null;
     $hasEventName = filled($displayEventName);
-    $hasEventDate = $report?->event_date !== null;
+    $hasEventDate = $supportsEventDetail && $report?->event_date !== null;
     $hasAnyEvent = $hasEventName || $hasEventDate;
     $isComplete = $hasEventName && $hasEventDate;
 @endphp
 
+<div>
+@if ($supportsEventDetail)
 <div class="pt-3 border-t border-gray-200/80 dark:border-gray-700/80 space-y-3">
     <div class="flex items-center justify-between flex-wrap gap-2">
         <div class="flex items-center gap-2 flex-wrap">
@@ -96,4 +99,6 @@
             </div>
         </div>
     @endif
+</div>
+@endif
 </div>
