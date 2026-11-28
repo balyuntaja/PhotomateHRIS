@@ -46,6 +46,7 @@ class ApprovalLog extends Model
             'RESUBMITTED' => 'Diajukan Ulang (Resubmitted)',
             'APPROVED' => 'Disetujui (Approved)',
             'REJECTED' => 'Ditolak (Rejected)',
+            'EVENT_DETAIL_UPDATED' => 'Detail Event Diperbarui',
             default => $this->action,
         };
     }
@@ -58,6 +59,7 @@ class ApprovalLog extends Model
             'REVISION_REQUESTED' => 'danger',
             'APPROVED' => 'success',
             'REJECTED' => 'danger',
+            'EVENT_DETAIL_UPDATED' => 'info',
             default => 'primary',
         };
     }

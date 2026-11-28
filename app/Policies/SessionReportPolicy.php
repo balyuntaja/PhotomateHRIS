@@ -76,6 +76,15 @@ class SessionReportPolicy
         return false;
     }
 
+    /**
+     * Hanya Super Admin yang diizinkan melengkapi atau mengedit detail event
+     * (Nama Event & Tanggal Event), termasuk pada rekap berstatus APPROVED.
+     */
+    public function updateEventDetail(Karyawan $user, SessionReport $report): bool
+    {
+        return $user->isSuperAdmin();
+    }
+
     public function delete(Karyawan $user, SessionReport $report): bool
     {
         // Super Admin can delete any report regardless of status

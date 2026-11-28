@@ -26,7 +26,7 @@
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;" class="text-xs">
             <div>
-                <span class="text-gray-500 block">Tanggal Event/Sesi:</span>
+                <span class="text-gray-500 block">Tanggal Sesi:</span>
                 <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $report->report_date ? $report->report_date->translatedFormat('d F Y') : '-' }}</span>
             </div>
             <div>
@@ -45,24 +45,9 @@
                 <span class="text-gray-500 block">Waktu Pengajuan:</span>
                 <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $report->submitted_at ? $report->submitted_at->translatedFormat('d F Y, H:i') : '-' }}</span>
             </div>
-            @if($report->invoice)
-            <div>
-                <span class="text-gray-500 block">Event / Invoice:</span>
-                <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $report->invoice->event_name }} ({{ $report->invoice->invoice_number }})</span>
-            </div>
-            @elseif($report->event_note)
-            <div>
-                <span class="text-gray-500 block">Nama Event:</span>
-                <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $report->event_note }}</span>
-            </div>
-            @endif
-            @if($report->event_date)
-            <div>
-                <span class="text-gray-500 block">Tanggal Event:</span>
-                <span class="font-semibold text-gray-900 dark:text-gray-100">{{ $report->event_date->translatedFormat('d F Y') }}</span>
-            </div>
-            @endif
         </div>
+
+        @livewire('session-report-event-detail', ['reportId' => $report->id], key('session-report-event-detail-' . $report->id))
     </div>
 
     @if($revisionExempt)
@@ -448,7 +433,7 @@
                             'APPROVED' => 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
                             'SUBMITTED', 'RESUBMITTED' => 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
                             'REVISION_REQUESTED', 'REJECTED' => 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300',
-                            'DRAFT_UPDATED' => 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
+                            'DRAFT_UPDATED', 'EVENT_DETAIL_UPDATED' => 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
                             'DRAFT_CREATED' => 'bg-primary-100 text-primary-800 dark:bg-primary-950 dark:text-primary-300',
                             default => 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
                         };

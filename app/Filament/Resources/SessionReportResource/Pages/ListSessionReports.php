@@ -10,10 +10,14 @@ use App\Services\SessionWorkflowService;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 
 class ListSessionReports extends ListRecords
 {
     protected static string $resource = SessionReportResource::class;
+
+    #[On('session-report-updated')]
+    public function refreshOnSessionReportUpdated(): void {}
 
     public function mountTableAction(string $name, ?string $record = null, array $arguments = []): mixed
     {

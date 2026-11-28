@@ -9,6 +9,7 @@ use App\Utils\RupiahHelper;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ListSessionHistories extends ListRecords
@@ -16,6 +17,9 @@ class ListSessionHistories extends ListRecords
     protected static string $resource = SessionHistoryResource::class;
 
     protected static ?string $title = 'Riwayat Rekap Sesi';
+
+    #[On('session-report-updated')]
+    public function refreshOnSessionReportUpdated(): void {}
 
     protected function getHeaderActions(): array
     {

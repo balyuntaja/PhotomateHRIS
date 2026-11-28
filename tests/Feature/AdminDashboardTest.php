@@ -127,11 +127,16 @@ class AdminDashboardTest extends TestCase
             ->assertSee('Ringkasan Pembayaran')
             ->assertSee('Status Operasional')
             ->assertSee('Perlu Perhatian')
-            ->assertSee('Aktivitas Hari Ini')
-            ->assertSee('Jadwal Karyawan')
-            ->assertSee('Karyawan Cuti')
-            ->assertSee('Karyawan Izin')
-            ->assertSee($crew->nama_lengkap);
+            ->assertDontSee('Aktivitas Hari Ini')
+            ->assertDontSee('karyawan sudah absen')
+            ->assertDontSee('Jadwal Karyawan')
+            ->assertDontSee('Karyawan Cuti')
+            ->assertDontSee('Karyawan Izin');
+
+        $this->assertSame(1, EmployeeSchedule::count());
+        $this->assertSame(1, Cuti::count());
+        $this->assertSame(1, Izin::count());
+        $this->assertSame(1, Absensi::count());
     }
 
     public function test_crew_hanya_melihat_rekap_revisinya_sendiri_di_perlu_perhatian(): void

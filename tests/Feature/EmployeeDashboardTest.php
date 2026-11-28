@@ -107,14 +107,18 @@ class EmployeeDashboardTest extends TestCase
             ->assertSee('Perlu Perhatian')
             ->assertSee('Informasi Deadline Rekap')
             ->assertSee('Rekap Sesi Terbaru')
-            ->assertSee('Aktivitas Hari Ini')
+            ->assertDontSee('Aktivitas Hari Ini')
+            ->assertDontSee('Jadwal Karyawan')
+            ->assertDontSee('Karyawan Cuti')
+            ->assertDontSee('Karyawan Izin')
+            ->assertDontSee('karyawan sudah absen')
             ->assertDontSee('Ringkasan Bisnis')
             ->assertDontSee('Total Pendapatan')
             ->assertDontSee('Tren Pendapatan')
             ->assertDontSee('Ringkasan Pembayaran')
             ->assertDontSee(RupiahHelper::format(1000000));
 
-        // Admin view preserves business summary untouched
+        // Admin view preserves business summary untouched and also hides Aktivitas Hari Ini
         $this->flushSession();
         $adminResponse = $this->actingAs($this->admin)
             ->get('/admin')
@@ -124,7 +128,24 @@ class EmployeeDashboardTest extends TestCase
             ->assertSee('Ringkasan Bisnis')
             ->assertSee('Total Pendapatan')
             ->assertSee('Ringkasan Pembayaran')
-            ->assertSee(RupiahHelper::format(1000000));
+            ->assertSee(RupiahHelper::format(1000000))
+            ->assertDontSee('Aktivitas Hari Ini')
+            ->assertDontSee('Jadwal Karyawan')
+            ->assertDontSee('Karyawan Cuti')
+            ->assertDontSee('Karyawan Izin')
+            ->assertDontSee('karyawan sudah absen');
+
+        // Supervisor view also hides Aktivitas Hari Ini
+        $this->flushSession();
+        $this->actingAs($this->supervisor)
+            ->get('/admin')
+            ->assertOk()
+            ->assertSee('Ringkasan Bisnis')
+            ->assertDontSee('Aktivitas Hari Ini')
+            ->assertDontSee('Jadwal Karyawan')
+            ->assertDontSee('Karyawan Cuti')
+            ->assertDontSee('Karyawan Izin')
+            ->assertDontSee('karyawan sudah absen');
 
         $this->assertFalse(app(EmployeeDashboardService::class)->isEmployeeDashboard($this->supervisor));
     }
@@ -350,17 +371,36 @@ class EmployeeDashboardTest extends TestCase
 
         $response = $this->actingAs($this->employee)->get('/admin')->assertOk();
 
+        // Section Aktivitas Hari Ini is temporarily hidden from the dashboard UI
         $response
-            ->assertSee('Aktivitas Hari Ini')
-            ->assertSee('Sudah absen masuk pukul 08:15')
-            ->assertSee('08:00 - 16:00')
-            ->assertSee('Cuti Tahunan')
-            ->assertSee('Izin Datang Terlambat')
-            ->assertDontSee($this->otherEmployee->nama_lengkap)
-            ->assertDontSee('16:00 - 24:00')
-            ->assertDontSee('Cuti Sakit')
-            ->assertDontSee('Izin Keperluan Keluarga')
+            ->assertDontSee('Aktivitas Hari Ini')
+            ->assertDontSee('Jadwal Karyawan')
+            ->assertDontSee('Karyawan Cuti')
+            ->assertDontSee('Karyawan Izin')
+            ->assertDontSee('Sudah absen masuk pukul 08:15')
+            ->assertDontSee('08:00 - 16:00')
+            ->assertDontSee('Cuti Tahunan')
+            ->assertDontSee('Izin Datang Terlambat')
             ->assertDontSee('karyawan sudah absen');
+
+        // Backend data, scoping, models, and HR resources remain intact
+        $activities = app(EmployeeDashboardService::class)->buildDashboardData($this->employee)['today_activities'];
+
+        $this->assertSame('Sudah absen masuk pukul 08:15', $activities['attendance_label']);
+        $this->assertSame(1, $activities['schedule_count']);
+        $this->assertSame('08:00 - 16:00', $activities['schedules']->first()['shift']);
+        $this->assertSame(1, $activities['leave_count']);
+        $this->assertSame('Cuti Tahunan', $activities['leaves']->first()['type']);
+        $this->assertSame(1, $activities['permission_count']);
+        $this->assertSame('Izin Datang Terlambat', $activities['permissions']->first()['type']);
+        $this->assertStringNotContainsString(
+            $this->otherEmployee->nama_lengkap,
+            json_encode($activities, JSON_THROW_ON_ERROR)
+        );
+        $this->assertSame(2, EmployeeSchedule::count());
+        $this->assertSame(2, Cuti::count());
+        $this->assertSame(2, Izin::count());
+        $this->assertSame(1, Absensi::count());
     }
 
     private function makeUser(string $id, string $name, string $roleId, string $email): Karyawan

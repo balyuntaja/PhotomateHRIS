@@ -30,7 +30,7 @@ class LaporanKeuanganResource extends Resource
 
     public static function shouldRegisterNavigation(): bool
     {
-        return Auth::user()?->can('menu_laporan_keuangan');
+        return false;
     }
 
     public static function canViewAny(): bool

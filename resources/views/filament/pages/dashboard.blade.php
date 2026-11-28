@@ -1,6 +1,5 @@
 @php
     use App\Filament\Pages\KeuanganInputTransaksi;
-    use App\Filament\Resources\EmployeeScheduleResource;
     use App\Filament\Resources\FinancialTransactionResource;
     use App\Filament\Resources\SessionApprovalResource;
     use App\Filament\Resources\SessionReportResource;
@@ -22,13 +21,6 @@
     $metrics = $this->getDashboardMetrics();
     $statuses = $this->getOperationalStatus();
     $attention = $this->getNeedsAttention();
-    $schedules = $this->getTodaySchedules();
-    $scheduleCount = $this->getTodayScheduleCount();
-    $leaves = $this->getTodayLeaves();
-    $leaveCount = $this->getTodayLeaveCount();
-    $permissions = $this->getTodayPermissions();
-    $permissionCount = $this->getTodayPermissionCount();
-    $attendanceCount = $this->getTodayAttendanceCount();
 
     $reportsUrl = SessionReportResource::getUrl('index');
     $canCreateReport = $user?->can('create', \App\Models\SessionReport::class) ?? false;
@@ -370,135 +362,6 @@
                     @endforeach
                 </div>
             @endif
-        </section>
-
-        {{-- Daily activities --}}
-        <section>
-            <div class="pm-section-head">
-                <div>
-                    <h3 class="pm-section-title">Aktivitas Hari Ini</h3>
-                    <p class="pm-section-subtitle">
-                        {{ $this->todayLabel() }} · {{ number_format($attendanceCount, 0, ',', '.') }} karyawan sudah absen
-                    </p>
-                </div>
-            </div>
-
-            <div class="grid gap-4 xl:grid-cols-3">
-                {{-- Schedules --}}
-                <div class="pm-panel">
-                    <div class="pm-panel-header">
-                        <div>
-                            <p class="pm-panel-title">Jadwal Karyawan</p>
-                            <p class="pm-panel-subtitle">{{ $scheduleCount }} shift hari ini</p>
-                        </div>
-                        @if (EmployeeScheduleResource::canAccess())
-                            <a href="{{ EmployeeScheduleResource::getUrl('index') }}" class="pm-section-link">
-                                Kelola
-                                <x-filament::icon icon="heroicon-m-arrow-right" class="h-3.5 w-3.5" />
-                            </a>
-                        @endif
-                    </div>
-
-                    @if ($schedules->isEmpty())
-                        <div class="pm-empty">
-                            <span class="pm-empty-icon">
-                                <x-filament::icon icon="heroicon-o-calendar-days" class="h-5 w-5" />
-                            </span>
-                            <p class="pm-empty-title">Belum ada jadwal</p>
-                            <p class="pm-empty-text">Jadwal shift hari ini belum diinput.</p>
-                        </div>
-                    @else
-                        <div class="pm-activity-list">
-                            @foreach ($schedules as $schedule)
-                                <div class="pm-activity-item">
-                                    <span class="pm-avatar">{{ $schedule['initials'] }}</span>
-                                    <div class="min-w-0 flex-1">
-                                        <p class="pm-activity-title truncate">{{ $schedule['name'] }}</p>
-                                        <p class="pm-activity-meta">
-                                            {{ $schedule['shift'] ?: '-' }}
-                                            @if ($schedule['location'])
-                                                · {{ $schedule['location'] }}
-                                            @endif
-                                        </p>
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
-
-                {{-- Cuti --}}
-                <div class="pm-panel">
-                    <div class="pm-panel-header">
-                        <div>
-                            <p class="pm-panel-title">Karyawan Cuti</p>
-                            <p class="pm-panel-subtitle">{{ $leaveCount }} karyawan cuti hari ini</p>
-                        </div>
-                        <span class="pm-avatar">C</span>
-                    </div>
-
-                    @if ($leaves->isEmpty())
-                        <div class="pm-empty">
-                            <span class="pm-empty-icon">
-                                <x-filament::icon icon="heroicon-o-sun" class="h-5 w-5" />
-                            </span>
-                            <p class="pm-empty-title">Tidak ada cuti</p>
-                            <p class="pm-empty-text">Semua karyawan masuk sesuai jadwal.</p>
-                        </div>
-                    @else
-                        <div class="pm-activity-list">
-                            @foreach ($leaves as $leave)
-                                <div class="pm-activity-item">
-                                    <span class="pm-avatar">{{ $leave['initials'] }}</span>
-                                    <div class="min-w-0 flex-1">
-                                        <p class="pm-activity-title truncate">{{ $leave['name'] }}</p>
-                                        <p class="pm-activity-meta">{{ $leave['period'] }}</p>
-                                    </div>
-                                    @if ($leave['type'])
-                                        <x-filament::badge color="gray">{{ $leave['type'] }}</x-filament::badge>
-                                    @endif
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
-
-                {{-- Izin --}}
-                <div class="pm-panel">
-                    <div class="pm-panel-header">
-                        <div>
-                            <p class="pm-panel-title">Karyawan Izin</p>
-                            <p class="pm-panel-subtitle">{{ $permissionCount }} karyawan izin hari ini</p>
-                        </div>
-                        <span class="pm-avatar">I</span>
-                    </div>
-
-                    @if ($permissions->isEmpty())
-                        <div class="pm-empty">
-                            <span class="pm-empty-icon">
-                                <x-filament::icon icon="heroicon-o-check-circle" class="h-5 w-5" />
-                            </span>
-                            <p class="pm-empty-title">Tidak ada izin</p>
-                            <p class="pm-empty-text">Tidak ada pengajuan izin yang aktif hari ini.</p>
-                        </div>
-                    @else
-                        <div class="pm-activity-list">
-                            @foreach ($permissions as $permission)
-                                <div class="pm-activity-item">
-                                    <span class="pm-avatar">{{ $permission['initials'] }}</span>
-                                    <div class="min-w-0 flex-1">
-                                        <p class="pm-activity-title truncate">{{ $permission['name'] }}</p>
-                                        <p class="pm-activity-meta">{{ $permission['period'] }}</p>
-                                    </div>
-                                    @if ($permission['type'])
-                                        <x-filament::badge color="gray">{{ $permission['type'] }}</x-filament::badge>
-                                    @endif
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-                </div>
-            </div>
         </section>
     </div>
 </x-filament-panels::page>

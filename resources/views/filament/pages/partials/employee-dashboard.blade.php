@@ -1,5 +1,4 @@
 @php
-    use App\Filament\Resources\EmployeeScheduleResource;
     use App\Filament\Resources\SessionReportResource;
     use App\Utils\RupiahHelper;
 
@@ -7,19 +6,6 @@
     $attention = $employeeData['needs_attention'] ?? ['items' => collect(), 'total' => 0];
     $deadlineInfo = $employeeData['deadline_info'] ?? [];
     $recentReports = $employeeData['recent_reports'] ?? collect();
-    $activities = $employeeData['today_activities'] ?? [];
-
-    $schedules = $activities['schedules'] ?? collect();
-    $scheduleCount = (int) ($activities['schedule_count'] ?? 0);
-    $canViewAllSchedules = (bool) ($activities['can_view_all_schedules'] ?? false);
-
-    $leaves = $activities['leaves'] ?? collect();
-    $leaveCount = (int) ($activities['leave_count'] ?? 0);
-    $canViewAllLeaves = (bool) ($activities['can_view_all_leaves'] ?? false);
-
-    $permissions = $activities['permissions'] ?? collect();
-    $permissionCount = (int) ($activities['permission_count'] ?? 0);
-    $canViewAllPermissions = (bool) ($activities['can_view_all_permissions'] ?? false);
 
     $reportsUrl = SessionReportResource::getUrl('index');
     $canCreateReport = $user?->can('create', \App\Models\SessionReport::class) ?? false;
@@ -38,7 +24,7 @@
                     {{ $this->greeting() }}, {{ $user?->nama_lengkap ?? 'Tim Photomate' }}
                 </h2>
                 <p class="pm-hero-subtitle">
-                    Pantau status rekap sesi pribadi, revisi dari supervisor, batas waktu input, dan aktivitas Anda hari ini.
+                    Pantau status rekap sesi pribadi, revisi dari supervisor, dan batas waktu input Anda.
                 </p>
             </div>
 
@@ -402,154 +388,5 @@
                 </table>
             </div>
         @endif
-    </section>
-
-    {{-- Aktivitas Hari Ini (Disesuaikan dengan Hak Akses Karyawan) --}}
-    <section>
-        <div class="pm-section-head">
-            <div>
-                <h3 class="pm-section-title">Aktivitas Hari Ini</h3>
-                <p class="pm-section-subtitle">
-                    {{ $this->todayLabel() }} · {{ $activities['attendance_label'] ?? 'Status absensi pribadi' }}
-                </p>
-            </div>
-        </div>
-
-        <div class="grid gap-4 lg:grid-cols-3">
-            {{-- Jadwal Karyawan --}}
-            <div class="pm-panel">
-                <div class="pm-panel-header">
-                    <div>
-                        <p class="pm-panel-title">Jadwal Karyawan</p>
-                        <p class="pm-panel-subtitle">
-                            {{ $canViewAllSchedules
-                                ? $scheduleCount . ' shift hari ini'
-                                : ($scheduleCount > 0 ? $scheduleCount . ' shift Anda hari ini' : 'Jadwal shift Anda hari ini') }}
-                        </p>
-                    </div>
-                    @if ($canViewAllSchedules && EmployeeScheduleResource::canAccess())
-                        <a href="{{ EmployeeScheduleResource::getUrl('index') }}" class="pm-section-link">
-                            Kelola
-                            <x-filament::icon icon="heroicon-m-arrow-right" class="h-3.5 w-3.5" />
-                        </a>
-                    @else
-                        <span class="pm-avatar">J</span>
-                    @endif
-                </div>
-
-                @if ($schedules->isEmpty())
-                    <div class="pm-empty">
-                        <span class="pm-empty-icon">
-                            <x-filament::icon icon="heroicon-o-calendar-days" class="h-5 w-5" />
-                        </span>
-                        <p class="pm-empty-title">Belum ada jadwal</p>
-                        <p class="pm-empty-text">
-                            {{ $canViewAllSchedules ? 'Jadwal shift hari ini belum diinput.' : 'Tidak ada jadwal shift untuk Anda hari ini.' }}
-                        </p>
-                    </div>
-                @else
-                    <div class="pm-activity-list">
-                        @foreach ($schedules as $schedule)
-                            <div class="pm-activity-item">
-                                <span class="pm-avatar">{{ $schedule['initials'] }}</span>
-                                <div class="min-w-0 flex-1">
-                                    <p class="pm-activity-title truncate">{{ $schedule['name'] }}</p>
-                                    <p class="pm-activity-meta">
-                                        {{ $schedule['shift'] ?: '-' }}
-                                        @if ($schedule['location'])
-                                            · {{ $schedule['location'] }}
-                                        @endif
-                                    </p>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
-            </div>
-
-            {{-- Karyawan Cuti --}}
-            <div class="pm-panel">
-                <div class="pm-panel-header">
-                    <div>
-                        <p class="pm-panel-title">Karyawan Cuti</p>
-                        <p class="pm-panel-subtitle">
-                            {{ $canViewAllLeaves
-                                ? $leaveCount . ' karyawan cuti hari ini'
-                                : ($leaveCount > 0 ? 'Cuti Anda yang aktif hari ini' : 'Status cuti pribadi hari ini') }}
-                        </p>
-                    </div>
-                    <span class="pm-avatar">C</span>
-                </div>
-
-                @if ($leaves->isEmpty())
-                    <div class="pm-empty">
-                        <span class="pm-empty-icon">
-                            <x-filament::icon icon="heroicon-o-sun" class="h-5 w-5" />
-                        </span>
-                        <p class="pm-empty-title">Tidak ada cuti</p>
-                        <p class="pm-empty-text">
-                            {{ $canViewAllLeaves ? 'Semua karyawan masuk sesuai jadwal.' : 'Anda tidak sedang cuti hari ini.' }}
-                        </p>
-                    </div>
-                @else
-                    <div class="pm-activity-list">
-                        @foreach ($leaves as $leave)
-                            <div class="pm-activity-item">
-                                <span class="pm-avatar">{{ $leave['initials'] }}</span>
-                                <div class="min-w-0 flex-1">
-                                    <p class="pm-activity-title truncate">{{ $leave['name'] }}</p>
-                                    <p class="pm-activity-meta">{{ $leave['period'] }}</p>
-                                </div>
-                                @if ($leave['type'])
-                                    <x-filament::badge color="gray">{{ $leave['type'] }}</x-filament::badge>
-                                @endif
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
-            </div>
-
-            {{-- Karyawan Izin --}}
-            <div class="pm-panel">
-                <div class="pm-panel-header">
-                    <div>
-                        <p class="pm-panel-title">Karyawan Izin</p>
-                        <p class="pm-panel-subtitle">
-                            {{ $canViewAllPermissions
-                                ? $permissionCount . ' karyawan izin hari ini'
-                                : ($permissionCount > 0 ? 'Izin Anda yang aktif hari ini' : 'Status izin pribadi hari ini') }}
-                        </p>
-                    </div>
-                    <span class="pm-avatar">I</span>
-                </div>
-
-                @if ($permissions->isEmpty())
-                    <div class="pm-empty">
-                        <span class="pm-empty-icon">
-                            <x-filament::icon icon="heroicon-o-check-circle" class="h-5 w-5" />
-                        </span>
-                        <p class="pm-empty-title">Tidak ada izin</p>
-                        <p class="pm-empty-text">
-                            {{ $canViewAllPermissions ? 'Tidak ada pengajuan izin yang aktif hari ini.' : 'Anda tidak memiliki izin aktif hari ini.' }}
-                        </p>
-                    </div>
-                @else
-                    <div class="pm-activity-list">
-                        @foreach ($permissions as $permission)
-                            <div class="pm-activity-item">
-                                <span class="pm-avatar">{{ $permission['initials'] }}</span>
-                                <div class="min-w-0 flex-1">
-                                    <p class="pm-activity-title truncate">{{ $permission['name'] }}</p>
-                                    <p class="pm-activity-meta">{{ $permission['period'] }}</p>
-                                </div>
-                                @if ($permission['type'])
-                                    <x-filament::badge color="gray">{{ $permission['type'] }}</x-filament::badge>
-                                @endif
-                            </div>
-                        @endforeach
-                    </div>
-                @endif
-            </div>
-        </div>
     </section>
 </div>

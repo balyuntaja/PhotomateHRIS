@@ -51,7 +51,12 @@
                                 <div class="text-xs text-gray-500">{{ $report?->cabang?->nama_cabang ?? '-' }}</div>
                             </td>
                             <td class="px-4 py-3">
-                                <div class="text-xs text-gray-900 dark:text-gray-100">{{ $report?->report_date?->format('d/m/Y') ?? '-' }}</div>
+                                @if ($report?->event_date)
+                                    <div class="text-xs font-medium text-gray-900 dark:text-gray-100">Event: {{ $report->event_date->format('d/m/Y') }}</div>
+                                    <div class="text-[11px] text-gray-500">Sesi: {{ $report?->report_date?->format('d/m/Y') ?? '-' }}</div>
+                                @else
+                                    <div class="text-xs text-gray-900 dark:text-gray-100">{{ $report?->report_date?->format('d/m/Y') ?? '-' }}</div>
+                                @endif
                                 <div class="text-xs text-gray-500">{{ $report?->crew_names ?? '-' }}</div>
                             </td>
                             <td class="px-4 py-3 text-right text-xs">

@@ -11,12 +11,19 @@ use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 
 class ViewSessionReport extends ViewRecord
 {
     protected static string $resource = SessionReportResource::class;
 
     protected static ?string $title = 'Detail Rekap Sesi';
+
+    #[On('session-report-updated')]
+    public function refreshOnSessionReportUpdated(): void
+    {
+        $this->record?->refresh();
+    }
 
     public function mount(int | string $record): void
     {

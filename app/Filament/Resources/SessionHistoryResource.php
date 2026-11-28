@@ -43,6 +43,8 @@ class SessionHistoryResource extends Resource
     {
         return $table
             ->modifyQueryUsing(function (Builder $query) {
+                $query->with(['invoice', 'cabang', 'crews', 'approver']);
+
                 /** @var Karyawan $user */
                 $user = Auth::user();
                 $workflow = app(SessionWorkflowService::class);
@@ -82,6 +84,21 @@ class SessionHistoryResource extends Resource
                     ->badge()
                     ->color('gray')
                     ->placeholder('-')
+                    ->toggleable(),
+
+                Tables\Columns\TextColumn::make('event_note')
+                    ->label('Event')
+                    ->getStateUsing(fn (SessionReport $record): ?string => $record->resolved_event_name)
+                    ->description(fn (SessionReport $record): ?string => $record->event_date?->translatedFormat('d M Y'))
+                    ->placeholder('Belum Ada Data Event')
+                    ->limit(28)
+                    ->tooltip(fn (SessionReport $record): ?string => $record->resolved_event_name)
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $q) use ($search) {
+                            $q->where('event_note', 'like', "%{$search}%")
+                                ->orWhereHas('invoice', fn (Builder $inv) => $inv->where('event_name', 'like', "%{$search}%"));
+                        });
+                    })
                     ->toggleable(),
 
                 Tables\Columns\TextColumn::make('total_sessions')

@@ -304,4 +304,64 @@ class SessionWorkflowService
             return $report;
         });
     }
+
+    /**
+     * Super Admin updates or completes only Nama Event (event_note) and Tanggal Event (event_date)
+     * without changing report_date, submitted_at, session/sheet totals, revenue, crews,
+     * transactions, or approval status/workflow.
+     */
+    public function updateEventDetail(
+        SessionReport $report,
+        Karyawan $actor,
+        ?string $eventNote,
+        Carbon|string|null $eventDate
+    ): SessionReport {
+        if (! $actor->isSuperAdmin()) {
+            throw new RuntimeException('Hanya Super Admin yang diizinkan mengedit detail event pada riwayat rekap sesi.');
+        }
+
+        $normalizedEventNote = filled($eventNote) ? trim((string) $eventNote) : null;
+        $normalizedEventDate = filled($eventDate) ? Carbon::parse($eventDate)->toDateString() : null;
+
+        return DB::transaction(function () use ($report, $actor, $normalizedEventNote, $normalizedEventDate): SessionReport {
+            $lockedReport = SessionReport::query()->lockForUpdate()->findOrFail($report->id);
+
+            $oldNote = filled($lockedReport->event_note) ? trim((string) $lockedReport->event_note) : null;
+            $oldDate = $lockedReport->event_date?->toDateString();
+
+            if ($oldNote === $normalizedEventNote && $oldDate === $normalizedEventDate) {
+                return $lockedReport;
+            }
+
+            $lockedReport->forceFill([
+                'event_note' => $normalizedEventNote,
+                'event_date' => $normalizedEventDate,
+            ]);
+
+            $dirty = array_keys($lockedReport->getDirty());
+            $disallowed = array_diff($dirty, ['event_note', 'event_date']);
+            if ($disallowed !== []) {
+                throw new RuntimeException('Pembaruan detail event hanya diizinkan untuk Nama Event dan Tanggal Event.');
+            }
+
+            $lockedReport->saveQuietly();
+
+            $formattedDate = $normalizedEventDate
+                ? Carbon::parse($normalizedEventDate)->translatedFormat('d F Y')
+                : '-';
+
+            $this->logAction(
+                $lockedReport,
+                $actor,
+                'EVENT_DETAIL_UPDATED',
+                sprintf(
+                    'Detail event diperbarui (Nama Event: %s | Tanggal Event: %s).',
+                    $normalizedEventNote ?? '-',
+                    $formattedDate
+                )
+            );
+
+            return $lockedReport->fresh(['cabang', 'invoice', 'crews', 'transactions', 'submitter', 'approver', 'approvalLogs']);
+        });
+    }
 }

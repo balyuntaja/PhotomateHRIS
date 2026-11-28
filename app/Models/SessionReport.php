@@ -121,11 +121,17 @@ class SessionReport extends Model
         });
 
         static::updating(function ($model) {
-            // Immutability rule: If original was APPROVED, reject modifications to core data
+            /** @var \App\Models\Karyawan|null $user */
+            $user = \Illuminate\Support\Facades\Auth::user();
+            $isSuperAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
+
+            // Immutability rule: If original was APPROVED, reject modifications to core data.
+            // Super Admin may update only event_note and event_date metadata without affecting approval.
             if ($model->getOriginal('status') === self::STATUS_APPROVED) {
-                // Allow only if re-opening via authorized action or identical
                 $dirty = array_keys($model->getDirty());
-                $allowedDirty = ['updated_at'];
+                $allowedDirty = $isSuperAdmin
+                    ? ['event_note', 'event_date', 'updated_at']
+                    : ['updated_at'];
                 $disallowed = array_diff($dirty, $allowedDirty);
                 if (!empty($disallowed)) {
                     throw new \RuntimeException('Data rekap sesi yang telah disetujui (APPROVED) tidak dapat diubah (immutable).');
@@ -313,6 +319,27 @@ class SessionReport extends Model
     public function getCrewNamesAttribute(): string
     {
         return $this->crews->pluck('nama_lengkap')->join(', ') ?: '-';
+    }
+
+    public function getResolvedEventNameAttribute(): ?string
+    {
+        if (filled($this->event_note)) {
+            return trim((string) $this->event_note);
+        }
+
+        $invoiceEventName = $this->invoice?->event_name;
+
+        return filled($invoiceEventName) ? trim((string) $invoiceEventName) : null;
+    }
+
+    public function hasCompleteEventDetail(): bool
+    {
+        return filled($this->resolved_event_name) && $this->event_date !== null;
+    }
+
+    public function hasAnyEventDetail(): bool
+    {
+        return filled($this->resolved_event_name) || $this->event_date !== null;
     }
 
     public function getStatusLabelAttribute(): string

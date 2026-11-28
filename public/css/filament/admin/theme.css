@@ -4459,6 +4459,10 @@ input:where([type='file']):focus {
   border-color: rgba(var(--gray-200), 0.7);
 }
 
+.border-gray-200\/80 {
+  border-color: rgba(var(--gray-200), 0.8);
+}
+
 .border-gray-300 {
   --tw-border-opacity: 1;
   border-color: rgba(var(--gray-300), var(--tw-border-opacity, 1));
@@ -6802,6 +6806,11 @@ input:where([type='file']):focus {
   border-color: rgb(16 185 129 / 0.2);
 }
 
+.dark\:border-emerald-700:is(.dark *) {
+  --tw-border-opacity: 1;
+  border-color: rgb(4 120 87 / var(--tw-border-opacity, 1));
+}
+
 .dark\:border-emerald-800:is(.dark *) {
   --tw-border-opacity: 1;
   border-color: rgb(6 95 70 / var(--tw-border-opacity, 1));
@@ -6835,6 +6844,10 @@ input:where([type='file']):focus {
 
 .dark\:border-gray-700\/60:is(.dark *) {
   border-color: rgba(var(--gray-700), 0.6);
+}
+
+.dark\:border-gray-700\/80:is(.dark *) {
+  border-color: rgba(var(--gray-700), 0.8);
 }
 
 .dark\:border-gray-800:is(.dark *) {

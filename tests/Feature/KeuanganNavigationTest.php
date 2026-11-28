@@ -11,6 +11,8 @@ use App\Filament\Resources\FinancialCategoryResource;
 use App\Filament\Resources\FinancialParentCategoryResource;
 use App\Filament\Resources\FinancialPaymentMethodResource;
 use App\Filament\Resources\FinancialTransactionResource;
+use App\Filament\Resources\LaporanKeuanganResource;
+use App\Filament\Resources\PenggajianResource;
 use App\Models\Karyawan;
 use App\Models\Permission;
 use App\Models\Perusahaan;
@@ -96,6 +98,86 @@ class KeuanganNavigationTest extends TestCase
     {
         $this->assertFalse(KeuanganDashboard::shouldRegisterNavigation());
         $this->assertFalse(FinancialParentCategoryResource::shouldRegisterNavigation());
+    }
+
+    public function test_menu_laporan_keuangan_penggajian_disembunyikan_dari_sidebar_seluruh_role(): void
+    {
+        $ceo = $this->makeUser('K0005', 'CEO', 'R02', 'ceo@photomate.id', [
+            'menu_laporan_keuangan',
+            'view_any_laporan_keuangan',
+            'view_laporan_keuangan',
+            'view_keuangan_report',
+            'view_keuangan_dashboard',
+            'view_any_slip::gaji',
+        ]);
+
+        $hrdManager = $this->makeUser('K0006', 'Manager HRD', 'R03', 'hrd@photomate.id', [
+            'menu_laporan_keuangan',
+            'view_any_laporan_keuangan',
+            'view_laporan_keuangan',
+            'view_any_slip::gaji',
+        ]);
+
+        $employee = $this->makeUser('K0007', 'Karyawan', 'R07', 'karyawan.nav@photomate.id', [
+            'menu_laporan_keuangan',
+        ]);
+
+        $roles = [
+            $this->superAdmin,
+            $ceo,
+            $hrdManager,
+            $this->userWithDashboardPermission,
+            $this->userWithReportPermission,
+            $this->userWithoutPermission,
+            $employee,
+        ];
+
+        foreach ($roles as $user) {
+            $this->flushSession();
+            $this->actingAs($user);
+
+            $this->assertFalse(LaporanKeuanganResource::shouldRegisterNavigation());
+
+            $this->get('/admin')
+                ->assertOk()
+                ->assertDontSee('Laporan Keuangan Penggajian')
+                ->assertDontSee('/admin/laporan-keuangan-penggajian');
+
+            $navItems = collect(Filament::getNavigation())
+                ->flatMap(fn ($group) => $group->getItems());
+
+            $navLabels = $navItems
+                ->map(fn ($item): string => $item->getLabel())
+                ->values();
+
+            $navUrls = $navItems
+                ->map(fn ($item): ?string => $item->getUrl())
+                ->filter()
+                ->values();
+
+            $this->assertNotContains('Laporan Keuangan Penggajian', $navLabels->all());
+            $this->assertFalse($navUrls->contains(fn (string $url): bool => str_contains($url, 'laporan-keuangan-penggajian')));
+        }
+
+        // Menu Laporan Keuangan utama dan menu Kelola Penggajian tetap tersedia & berfungsi normal
+        $this->flushSession();
+        $this->actingAs($ceo);
+
+        $this->assertTrue(KeuanganReport::shouldRegisterNavigation());
+        $this->assertTrue(KeuanganLabaRugiReport::shouldRegisterNavigation());
+        $this->assertTrue(RekapPerbulan::shouldRegisterNavigation());
+        $this->assertTrue(PenggajianResource::shouldRegisterNavigation());
+
+        $this->get('/admin/keuangan-laporan')
+            ->assertOk()
+            ->assertSee('Laporan Keuangan');
+
+        $this->get('/admin/keuangan-laba-rugi')
+            ->assertOk()
+            ->assertSee('Laporan Laba Rugi');
+
+        $this->get('/admin/penggajian')
+            ->assertOk();
     }
 
     public function test_akses_url_keuangan_oleh_user_finance_mengalihkan_ke_rekap_perbulan(): void

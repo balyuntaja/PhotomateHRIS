@@ -76,6 +76,8 @@ class ExpressEventAllocationService
 
         $query = DB::table('express_event_recap_allocations')
             ->join('express_event_recaps', 'express_event_recaps.id', '=', 'express_event_recap_allocations.express_event_recap_id')
+            ->join('express_events', 'express_events.id', '=', 'express_event_recaps.express_event_id')
+            ->whereNull('express_events.deleted_at')
             ->where('express_event_recaps.session_report_id', $reportId);
 
         if ($exceptEventId !== null) {
@@ -112,7 +114,9 @@ class ExpressEventAllocationService
         if ($report->invoice_id) {
             $allocatedForInvoiceQuery = DB::table('express_event_recap_allocations')
                 ->join('express_event_recaps', 'express_event_recaps.id', '=', 'express_event_recap_allocations.express_event_recap_id')
+                ->join('express_events', 'express_events.id', '=', 'express_event_recaps.express_event_id')
                 ->join('session_reports', 'session_reports.id', '=', 'express_event_recaps.session_report_id')
+                ->whereNull('express_events.deleted_at')
                 ->where('session_reports.invoice_id', $report->invoice_id);
 
             if ($exceptEventId !== null) {
@@ -152,37 +156,35 @@ class ExpressEventAllocationService
 
     /**
      * Resolves the event name for a session report according to Express branch rules:
-     * - Self Run: from connected invoice event_name, fallback to event_note
-     * - Sewa: from connected invoice event_name, fallback to event_note
-     * - Sharing Profit: from manual event_note, fallback to invoice event_name
-     * - Historical fallback: match invoice by date & cabang, or fallback to report number
+     * - Explicit event_note on the report (including historical data completed by Super Admin) takes priority
+     * - Fallback to connected invoice event_name
+     * - Historical fallback: match invoice by event_date/report_date & cabang for Self Run / Sewa
      */
     public function resolveReportEventName(SessionReport $report): ?string
     {
+        if (filled($report->event_note)) {
+            return trim((string) $report->event_note);
+        }
+
         $cabangName = strtolower($report->cabang?->nama_cabang ?? '');
         $invoice = $report->invoice ?? ($report->invoice_id ? Invoice::find($report->invoice_id) : null);
 
-        // Fallback pencocokan invoice berdasarkan tanggal jika invoice_id belum diset pada rekap historis
-        if (! $invoice && ! $report->event_note && $report->report_date && (str_contains($cabangName, 'self run') || str_contains($cabangName, 'sewa'))) {
-            $dateStr = $report->event_date?->toDateString() ?? $report->report_date->toDateString();
-            $matchingInvoice = Invoice::query()
-                ->whereDate('event_date', $dateStr)
-                ->forCabang($report->cabang)
-                ->first();
-            if ($matchingInvoice) {
-                $invoice = $matchingInvoice;
+        // Fallback pencocokan invoice berdasarkan tanggal jika invoice_id dan event_note belum diset pada rekap historis
+        if (! $invoice && ($report->event_date || $report->report_date) && (str_contains($cabangName, 'self run') || str_contains($cabangName, 'sewa'))) {
+            $dateStr = $report->event_date?->toDateString() ?? $report->report_date?->toDateString();
+            if ($dateStr) {
+                $matchingInvoice = Invoice::query()
+                    ->whereDate('event_date', $dateStr)
+                    ->forCabang($report->cabang)
+                    ->first();
+                if ($matchingInvoice) {
+                    $invoice = $matchingInvoice;
+                }
             }
         }
 
-        if (str_contains($cabangName, 'self run') || str_contains($cabangName, 'sewa')) {
-            $name = $invoice?->event_name ?? $report->event_note;
-        } elseif (str_contains($cabangName, 'sharing profit')) {
-            $name = $report->event_note ?? $invoice?->event_name;
-        } else {
-            $name = $invoice?->event_name ?? $report->event_note;
-        }
+        $trimmed = trim((string) ($invoice?->event_name ?? ''));
 
-        $trimmed = trim((string) $name);
         return $trimmed !== '' ? $trimmed : null;
     }
 
@@ -215,8 +217,10 @@ class ExpressEventAllocationService
     public function getAvailableEventNames(?int $currentEventId = null): array
     {
         $allocatedToOtherEventReportIds = DB::table('express_event_recaps')
-            ->when($currentEventId !== null, fn ($q) => $q->where('express_event_id', '!=', $currentEventId))
-            ->pluck('session_report_id')
+            ->join('express_events', 'express_events.id', '=', 'express_event_recaps.express_event_id')
+            ->whereNull('express_events.deleted_at')
+            ->when($currentEventId !== null, fn ($q) => $q->where('express_event_recaps.express_event_id', '!=', $currentEventId))
+            ->pluck('express_event_recaps.session_report_id')
             ->all();
 
         $reports = SessionReport::query()
@@ -228,6 +232,19 @@ class ExpressEventAllocationService
             ->get();
 
         $names = [];
+        $seenLower = [];
+        $registerName = function (string $value) use (&$names, &$seenLower): void {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return;
+            }
+            $lower = strtolower($trimmed);
+            if (! isset($seenLower[$lower])) {
+                $seenLower[$lower] = $trimmed;
+                $names[$trimmed] = $trimmed;
+            }
+        };
+
         foreach ($reports as $report) {
             if (! $this->isExpressBranch($report->cabang?->nama_cabang)) {
                 continue;
@@ -235,11 +252,10 @@ class ExpressEventAllocationService
 
             $eventName = $this->resolveReportEventName($report);
             if ($eventName !== null) {
-                $names[$eventName] = $eventName;
+                $registerName($eventName);
             } else {
                 // Rekap historis tanpa nama event tetap disediakan opsinya
-                $fallbackName = "Rekap {$report->report_number} ({$report->cabang?->nama_cabang})";
-                $names[$fallbackName] = $fallbackName;
+                $registerName("Rekap {$report->report_number} ({$report->cabang?->nama_cabang})");
             }
         }
 
@@ -253,10 +269,7 @@ class ExpressEventAllocationService
 
         foreach ($invoices as $inv) {
             if ($inv->isExpressSelfRun() || $inv->isExpressSewa()) {
-                $trimmedInvName = trim($inv->event_name);
-                if ($trimmedInvName !== '') {
-                    $names[$trimmedInvName] = $trimmedInvName;
-                }
+                $registerName((string) $inv->event_name);
             }
         }
 
@@ -300,8 +313,10 @@ class ExpressEventAllocationService
     public function getEligibleRecapsForEventName(?string $eventName, ?int $currentEventId = null): Collection
     {
         $allocatedToOtherEventReportIds = DB::table('express_event_recaps')
-            ->when($currentEventId !== null, fn ($q) => $q->where('express_event_id', '!=', $currentEventId))
-            ->pluck('session_report_id')
+            ->join('express_events', 'express_events.id', '=', 'express_event_recaps.express_event_id')
+            ->whereNull('express_events.deleted_at')
+            ->when($currentEventId !== null, fn ($q) => $q->where('express_event_recaps.express_event_id', '!=', $currentEventId))
+            ->pluck('express_event_recaps.session_report_id')
             ->all();
 
         $reports = SessionReport::query()
@@ -356,14 +371,16 @@ class ExpressEventAllocationService
                 ];
 
                 $branchType = $this->resolveReportBranchType($report);
-                $dateStr = $report->report_date ? $report->report_date->format('d/m/Y') : '-';
+                $dateStr = $this->formatRecapDisplayDate($report);
                 $revStr = RupiahHelper::format($source['revenue']);
                 $label = "{$report->report_number} · {$branchType} ({$dateStr}) — {$source['sessions']} sesi · {$source['sheets']} lbr · {$revStr}";
 
                 return [
                     'id' => $report->id,
                     'report_number' => $report->report_number,
-                    'report_date' => $dateStr,
+                    'report_date' => $report->report_date?->format('d/m/Y') ?? '-',
+                    'event_date' => $report->event_date?->format('d/m/Y'),
+                    'event_name' => $this->resolveReportEventName($report),
                     'raw_date' => $report->event_date?->toDateString() ?? $report->report_date?->toDateString(),
                     'cabang_name' => $report->cabang?->nama_cabang ?? '-',
                     'branch_type' => $branchType,
@@ -388,8 +405,10 @@ class ExpressEventAllocationService
     public function getEligibleRecaps(?int $currentEventId = null): Collection
     {
         $allocatedToOtherEventReportIds = DB::table('express_event_recaps')
-            ->when($currentEventId !== null, fn ($q) => $q->where('express_event_id', '!=', $currentEventId))
-            ->pluck('session_report_id')
+            ->join('express_events', 'express_events.id', '=', 'express_event_recaps.express_event_id')
+            ->whereNull('express_events.deleted_at')
+            ->when($currentEventId !== null, fn ($q) => $q->where('express_event_recaps.express_event_id', '!=', $currentEventId))
+            ->pluck('express_event_recaps.session_report_id')
             ->all();
 
         $reports = SessionReport::query()
@@ -414,14 +433,16 @@ class ExpressEventAllocationService
                 ];
 
                 $branchType = $this->resolveReportBranchType($report);
-                $dateStr = $report->report_date?->format('d/m/Y') ?? '-';
+                $dateStr = $this->formatRecapDisplayDate($report);
                 $revStr = RupiahHelper::format($source['revenue']);
                 $label = "{$report->report_number} · {$branchType} ({$dateStr}) — {$source['sessions']} sesi · {$source['sheets']} lbr · {$revStr}";
 
                 return [
                     'id' => $report->id,
                     'report_number' => $report->report_number,
-                    'report_date' => $dateStr,
+                    'report_date' => $report->report_date?->format('d/m/Y') ?? '-',
+                    'event_date' => $report->event_date?->format('d/m/Y'),
+                    'event_name' => $this->resolveReportEventName($report),
                     'raw_date' => $report->event_date?->toDateString() ?? $report->report_date?->toDateString(),
                     'cabang_name' => $report->cabang?->nama_cabang ?? '-',
                     'branch_type' => $branchType,
@@ -509,8 +530,10 @@ class ExpressEventAllocationService
 
                 // Satu rekap sesi hanya boleh terhubung ke satu Event HPP
                 $isAllocatedElsewhere = DB::table('express_event_recaps')
-                    ->where('session_report_id', $reportId)
-                    ->where('express_event_id', '!=', $lockedEvent->id)
+                    ->join('express_events', 'express_events.id', '=', 'express_event_recaps.express_event_id')
+                    ->whereNull('express_events.deleted_at')
+                    ->where('express_event_recaps.session_report_id', $reportId)
+                    ->where('express_event_recaps.express_event_id', '!=', $lockedEvent->id)
                     ->exists();
 
                 if ($isAllocatedElsewhere) {
@@ -653,5 +676,17 @@ class ExpressEventAllocationService
         }
 
         return true;
+    }
+
+    protected function formatRecapDisplayDate(SessionReport $report): string
+    {
+        $eventDate = $report->event_date?->format('d/m/Y');
+        $reportDate = $report->report_date?->format('d/m/Y');
+
+        if ($eventDate && $reportDate && $eventDate !== $reportDate) {
+            return "Event {$eventDate} · Sesi {$reportDate}";
+        }
+
+        return $eventDate ?? $reportDate ?? '-';
     }
 }

@@ -301,7 +301,7 @@ class ExpressEventResource extends Resource
                                 }
                                 $service = app(ExpressEventAllocationService::class);
                                 $branchType = $service->resolveReportBranchType($report);
-                                $dateStr = $report->report_date ? $report->report_date->format('d/m/Y') : '-';
+                                $dateStr = ($report->event_date ?? $report->report_date)?->format('d/m/Y') ?? '-';
 
                                 return "{$report->report_number} · {$branchType} ({$dateStr})";
                             })
