@@ -151,7 +151,13 @@ class ExpressEventInvoiceService
                     'status' => $invoice->status,
                     'linked_to_current' => $isLinkedToCurrent,
                     'used_by_other' => $isUsedByOther,
+                    'other_event_id' => $isUsedByOther ? (int) $linkedEvent->id : null,
                     'other_event_name' => $isUsedByOther ? $linkedEvent->event_name : null,
+                    'other_event_period' => $isUsedByOther ? $linkedEvent->period_range_label : null,
+                    'can_merge_into_other' => $isUsedByOther
+                        && $currentEventId !== null
+                        && ! $linkedEvent->isFinalized()
+                        && ! $linkedEvent->isPosted(),
                     'referenced_by_recap' => in_array((int) $invoice->id, $referencedInvoiceIds, true),
                 ];
             });

@@ -2,8 +2,10 @@
 
 namespace App\Livewire;
 
+use App\Filament\Resources\ExpressEventResource;
 use App\Models\ExpressEvent;
 use App\Models\Karyawan;
+use App\Services\ExpressEventConsolidationService;
 use App\Services\ExpressEventInvoiceService;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Collection;
@@ -162,6 +164,59 @@ class ExpressEventInvoiceManager extends Component
         } catch (\Throwable $e) {
             Notification::make()
                 ->title('Gagal Melepas Invoice')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function mergeIntoInvoiceOwnerEvent(int $targetEventId): void
+    {
+        $currentEvent = ExpressEvent::findOrFail($this->eventId);
+
+        if (! $this->canManage($currentEvent)) {
+            Notification::make()
+                ->title('Akses ditolak')
+                ->body('Anda tidak memiliki izin untuk menggabungkan event ini.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $targetEvent = ExpressEvent::find($targetEventId);
+        if (! $targetEvent) {
+            Notification::make()
+                ->title('Event Tidak Ditemukan')
+                ->body('Event HPP tujuan penggabungan tidak ditemukan.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        /** @var Karyawan|null $user */
+        $user = Auth::user();
+
+        try {
+            $merged = app(ExpressEventConsolidationService::class)->mergeEventsManually(
+                $targetEvent,
+                [$currentEvent->id],
+                $user instanceof Karyawan ? $user : null
+            );
+
+            $this->closeModal();
+
+            Notification::make()
+                ->title('Event Berhasil Digabungkan')
+                ->body("Seluruh rekap sesi berhasil disatukan ke '{$merged->event_name}' ({$merged->period_range_label}) dengan 1 invoice tanpa perhitungan ganda.")
+                ->success()
+                ->send();
+
+            $this->redirect(ExpressEventResource::getUrl('view', ['record' => $merged]));
+        } catch (\Throwable $e) {
+            Notification::make()
+                ->title('Gagal Menggabungkan Event')
                 ->body($e->getMessage())
                 ->danger()
                 ->send();

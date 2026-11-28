@@ -1035,4 +1035,200 @@ class ExpressEventGroupingAndHppTest extends TestCase
             'action' => 'ADMIN_VERIFIED_IDENTITY',
         ]);
     }
+
+    // =========================================================================
+    // SKENARIO 10 — Kasus Real di Lapangan: Baris 1 Sudah Terhubung Invoice,
+    // Baris 2 Historis Manual Tanpa ID -> Otomatis Tergabung & Tombol Gabungkan Event
+    // =========================================================================
+
+    public function test_split_multiday_events_where_row_1_has_invoice_and_row_2_has_manual_detail_auto_consolidate(): void
+    {
+        $this->actingAs($this->superAdmin);
+
+        $invoice = $this->makeInvoice([
+            'invoice_number' => 'INV-HLW-REAL-01',
+            'event_name' => 'Halloween Blockparty 2026',
+            'event_date' => '2026-10-29',
+            'event_end_date' => '2026-10-31',
+            'cabang_id' => $this->cabangSelfRun->cabang_id,
+            'total' => 5000000,
+        ]);
+
+        // Kedua rekap historis diisi lewat Riwayat Rekap Sesi (event_id = null, invoice_id = null)
+        $recap1 = $this->makeRecap([
+            'report_number' => 'SR-HLW-MANUAL-1',
+            'cabang_id' => $this->cabangSelfRun->cabang_id,
+            'event_id' => null,
+            'invoice_id' => null,
+            'event_note' => 'Halloween Blockparty 2026',
+            'event_date' => '2026-10-29',
+            'report_date' => '2026-10-29',
+            'sessions' => 23,
+            'sheets' => 20,
+        ]);
+
+        $recap2 = $this->makeRecap([
+            'report_number' => 'SR-HLW-MANUAL-2',
+            'cabang_id' => $this->cabangSelfRun->cabang_id,
+            'event_id' => null,
+            'invoice_id' => null,
+            'event_note' => 'Halloween Blockparty 2026',
+            'event_date' => '2026-10-31',
+            'report_date' => '2026-10-31',
+            'sessions' => 77,
+            'sheets' => 68,
+        ]);
+
+        // Kondisi di DB sebelum perbaikan: 2 baris ExpressEvent terpisah di mana Baris 1 sudah memakai invoice tersebut!
+        $row1 = ExpressEvent::create([
+            'event_name' => 'Halloween Blockparty 2026',
+            'operational_type' => ExpressEvent::TYPE_SELF_RUN,
+            'start_date' => '2026-10-29',
+            'end_date' => '2026-10-29',
+            'hpp_rate_per_sheet' => 5000,
+            'reconciliation_status' => ExpressEvent::RECON_FULLY_ALLOCATED,
+            'hpp_status' => ExpressEvent::HPP_CALCULATED,
+        ]);
+        $link1 = ExpressEventRecap::create([
+            'express_event_id' => $row1->id,
+            'session_report_id' => $recap1->id,
+            'status' => ExpressEventRecap::STATUS_ACTIVE,
+        ]);
+        ExpressEventRecapAllocation::create([
+            'express_event_recap_id' => $link1->id,
+            'allocated_sessions' => 23,
+            'allocated_sheets' => 20,
+            'allocated_revenue' => 5000000,
+        ]);
+        ExpressEventInvoice::create([
+            'express_event_id' => $row1->id,
+            'invoice_id' => $invoice->id,
+        ]);
+
+        $row2 = ExpressEvent::create([
+            'event_name' => 'Halloween Blockparty 2026',
+            'operational_type' => ExpressEvent::TYPE_SELF_RUN,
+            'start_date' => '2026-10-31',
+            'end_date' => '2026-10-31',
+            'reconciliation_status' => ExpressEvent::RECON_FULLY_ALLOCATED,
+            'hpp_status' => ExpressEvent::HPP_PENDING,
+        ]);
+        $link2 = ExpressEventRecap::create([
+            'express_event_id' => $row2->id,
+            'session_report_id' => $recap2->id,
+            'status' => ExpressEventRecap::STATUS_ACTIVE,
+        ]);
+        ExpressEventRecapAllocation::create([
+            'express_event_recap_id' => $link2->id,
+            'allocated_sessions' => 77,
+            'allocated_sheets' => 68,
+            'allocated_revenue' => 0,
+        ]);
+
+        // Saat Admin membuka halaman Manajemen HPP, sinkronisasi otomatis langsung menyatukan Baris 2 ke Baris 1!
+        Livewire::test(ListExpressEvents::class)
+            ->call('setTab', 'express');
+
+        $events = ExpressEvent::where('event_name', 'Halloween Blockparty 2026')->get();
+        $this->assertCount(1, $events);
+
+        $unified = $events->first();
+        $this->assertSame('29/10/2026 - 31/10/2026', $unified->period_range_label);
+        $this->assertSame(100, $unified->total_allocated_sessions);
+        $this->assertSame(88, $unified->total_allocated_sheets);
+        $this->assertSame(5000000, $unified->effective_revenue);
+        $this->assertSame(440000, $unified->calculated_hpp);
+        $this->assertSame(4560000, $unified->gross_profit);
+    }
+
+    public function test_admin_can_merge_two_split_events_via_invoice_modal_and_via_gabungkan_event_action(): void
+    {
+        $this->actingAs($this->superAdmin);
+
+        $invoice = $this->makeInvoice([
+            'invoice_number' => 'INV-MERGE-UI-01',
+            'event_name' => 'Pameran Otomotif Nasional',
+            'event_date' => '2026-10-01',
+            'event_end_date' => '2026-10-01',
+            'cabang_id' => $this->cabangSewa->cabang_id,
+            'total' => 8000000,
+        ]);
+
+        // Buat 2 baris event dengan penulisan nama berbeda sehingga tidak digabung otomatis,
+        // namun Admin mengetahui keduanya adalah 1 event operasional yang sama.
+        $recapA = $this->makeRecap([
+            'report_number' => 'SR-PON-DAY1',
+            'cabang_id' => $this->cabangSewa->cabang_id,
+            'event_note' => 'Pameran Otomotif Nasional (Hari 1)',
+            'event_date' => '2026-10-01',
+            'report_date' => '2026-10-01',
+            'sessions' => 40,
+            'sheets' => 50,
+        ]);
+
+        $recapB = $this->makeRecap([
+            'report_number' => 'SR-PON-DAY5',
+            'cabang_id' => $this->cabangSewa->cabang_id,
+            'event_note' => 'Pameran Otomotif Nasional (Penutupan)',
+            'event_date' => '2026-10-05',
+            'report_date' => '2026-10-05',
+            'sessions' => 60,
+            'sheets' => 70,
+        ]);
+
+        $recapC = $this->makeRecap([
+            'report_number' => 'SR-PON-BONUS',
+            'cabang_id' => $this->cabangSewa->cabang_id,
+            'event_note' => 'Pameran Otomotif Nasional (Afterparty)',
+            'event_date' => '2026-10-06',
+            'report_date' => '2026-10-06',
+            'sessions' => 20,
+            'sheets' => 30,
+        ]);
+
+        app(ExpressEventSyncService::class)->syncAllApprovedRecaps($this->superAdmin);
+
+        $eventDay1 = ExpressEvent::where('event_name', 'Pameran Otomotif Nasional (Hari 1)')->firstOrFail();
+        $eventDay5 = ExpressEvent::where('event_name', 'Pameran Otomotif Nasional (Penutupan)')->firstOrFail();
+        $eventDay6 = ExpressEvent::where('event_name', 'Pameran Otomotif Nasional (Afterparty)')->firstOrFail();
+
+        app(ExpressEventInvoiceService::class)->attachInvoices($eventDay1, [$invoice->id], $this->superAdmin);
+        app(ExpressEventHppService::class)->updateRate($eventDay1, 5000, $this->superAdmin);
+
+        // 1. Dari modal Hubungkan Invoice pada Event Hari 5, Admin klik "Gabungkan ke Event Ini"
+        Livewire::test(\App\Livewire\ExpressEventInvoiceManager::class, ['eventId' => $eventDay5->id])
+            ->call('openModal')
+            ->assertSee('Gabungkan ke Event Ini')
+            ->call('mergeIntoInvoiceOwnerEvent', $eventDay1->id)
+            ->assertRedirect();
+
+        $this->assertSoftDeleted('express_events', ['id' => $eventDay5->id]);
+        $eventDay1 = $eventDay1->fresh();
+        $this->assertSame('01/10/2026 - 05/10/2026', $eventDay1->period_range_label);
+        $this->assertSame(100, $eventDay1->total_allocated_sessions);
+        $this->assertSame(120, $eventDay1->total_allocated_sheets);
+        $this->assertSame(8000000, $eventDay1->effective_revenue); // Invoice tetap dihitung 1x
+
+        // 2. Dari halaman View Event Hari 1, Admin juga bisa memakai tombol header "Gabungkan Event" untuk menarik Event Hari 6
+        Livewire::test(ViewExpressEvent::class, ['record' => $eventDay1->getRouteKey()])
+            ->callAction('merge_events', [
+                'source_event_ids' => [$eventDay6->id],
+            ])
+            ->assertHasNoActionErrors()
+            ->assertNotified();
+
+        $this->assertSoftDeleted('express_events', ['id' => $eventDay6->id]);
+        $eventDay1 = $eventDay1->fresh();
+        $this->assertSame('01/10/2026 - 06/10/2026', $eventDay1->period_range_label);
+        $this->assertSame(120, $eventDay1->total_allocated_sessions);
+        $this->assertSame(150, $eventDay1->total_allocated_sheets);
+        $this->assertSame(8000000, $eventDay1->effective_revenue);
+        $this->assertSame(750000, $eventDay1->calculated_hpp); // 150 × 5.000
+
+        // Pastikan tidak ada data SessionReport atau Invoice asli yang terhapus
+        $this->assertDatabaseHas('session_reports', ['id' => $recapA->id]);
+        $this->assertDatabaseHas('session_reports', ['id' => $recapB->id]);
+        $this->assertDatabaseHas('session_reports', ['id' => $recapC->id]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice->id]);
+    }
 }

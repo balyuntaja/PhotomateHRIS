@@ -607,28 +607,67 @@ class ExpressEventSyncService
         }
 
         foreach ($candidates as $candidate) {
-            // Jangan pernah menggabungkan rekap tanpa ID ke kandidat yang sudah punya event_id atau invoice_id eksplisit
-            if ($this->collectCandidateEventIds($candidate) !== [] || $this->collectCandidateInvoiceIds($candidate) !== []) {
-                continue;
-            }
-
             if ($this->normalizeEventName($candidate->event_name) !== $normalizedEventName) {
                 continue;
             }
 
             $candidateOpType = $candidate->resolved_operational_type;
-            if ($candidateOpType !== null && $candidateOpType !== $opType) {
+            if (
+                $candidateOpType !== null
+                && $candidateOpType !== ExpressEvent::TYPE_EXPRESS_GENERAL
+                && $opType !== ExpressEvent::TYPE_EXPRESS_GENERAL
+                && $candidateOpType !== $opType
+            ) {
+                continue;
+            }
+
+            // Cek apakah rekap masuk dalam rentang tanggal kontrak invoice yang sudah terhubung ke kandidat
+            $coveredByLinkedInvoice = false;
+            foreach ($candidate->invoices as $linkedInv) {
+                if ($linkedInv->event_date && $linkedInv->event_end_date) {
+                    $invStart = $linkedInv->event_date->toDateString();
+                    $invEnd = $linkedInv->event_end_date->toDateString();
+                    if ($eventDate >= $invStart && $eventDate <= $invEnd) {
+                        $coveredByLinkedInvoice = true;
+                        break;
+                    }
+                }
+            }
+
+            // Pastikan pada tanggal rekap ini tidak ada Invoice atau Event terpisah lain dengan nama yang sama
+            $candInvIds = $this->collectCandidateInvoiceIds($candidate);
+            $candEvIds = $this->collectCandidateEventIds($candidate);
+
+            $hasConflictingInvoiceOnDate = \App\Models\Invoice::query()
+                ->whereNotNull('event_name')
+                ->whereDate('event_date', $eventDate)
+                ->when($candInvIds !== [], fn ($q) => $q->whereNotIn('id', $candInvIds))
+                ->get(['id', 'event_name'])
+                ->contains(fn (\App\Models\Invoice $inv): bool => $this->normalizeEventName($inv->event_name) === $normalizedEventName);
+
+            if ($hasConflictingInvoiceOnDate && $candInvIds !== []) {
+                continue;
+            }
+
+            $hasConflictingEventOnDate = \App\Models\Event::query()
+                ->whereNotNull('name')
+                ->whereDate('date', $eventDate)
+                ->when($candEvIds !== [], fn ($q) => $q->whereNotIn('id', $candEvIds))
+                ->get(['id', 'name'])
+                ->contains(fn (\App\Models\Event $ev): bool => $this->normalizeEventName($ev->name) === $normalizedEventName);
+
+            if ($hasConflictingEventOnDate && $candEvIds !== []) {
                 continue;
             }
 
             $minAllowed = $candidate->start_date
-                ? $candidate->start_date->copy()->subDay()->toDateString()
+                ? $candidate->start_date->copy()->subDays(2)->toDateString()
                 : $eventDate;
             $maxAllowed = $candidate->end_date
-                ? $candidate->end_date->copy()->addDay()->toDateString()
+                ? $candidate->end_date->copy()->addDays(2)->toDateString()
                 : $eventDate;
 
-            if ($eventDate >= $minAllowed && $eventDate <= $maxAllowed) {
+            if ($coveredByLinkedInvoice || ($eventDate >= $minAllowed && $eventDate <= $maxAllowed)) {
                 return $candidate;
             }
         }

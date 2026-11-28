@@ -220,6 +220,66 @@ class ViewExpressEvent extends ViewRecord
                         ->send();
                 }),
 
+            Actions\Action::make('merge_events')
+                ->label('Gabungkan Event')
+                ->icon('heroicon-o-arrows-pointing-in')
+                ->color('gray')
+                ->visible(fn (): bool => ! $this->record->isFinalized()
+                    && (auth()->user()?->can('update', $this->record) ?? false)
+                    && app(\App\Services\ExpressEventConsolidationService::class)->getMergeableCandidateEvents($this->record)->isNotEmpty())
+                ->modalHeading(fn (): string => "Gabungkan Event Terpisah ke '{$this->record->event_name}'")
+                ->modalDescription('Gunakan fitur ini apabila satu event operasional yang sama (mis. event beberapa hari) masih tampil terpisah sebagai lebih dari satu baris Event HPP. Rekap sesi dan invoice akan disatukan ke event ini tanpa menduplikasi nilai invoice.')
+                ->form([
+                    Forms\Components\Select::make('source_event_ids')
+                        ->label('Pilih Baris Event HPP yang Akan Digabungkan ke Event Ini')
+                        ->multiple()
+                        ->searchable()
+                        ->preload()
+                        ->required()
+                        ->options(function (): array {
+                            $candidates = app(\App\Services\ExpressEventConsolidationService::class)
+                                ->getMergeableCandidateEvents($this->record);
+
+                            $opts = [];
+                            foreach ($candidates as $cand) {
+                                $opts[$cand->id] = sprintf(
+                                    '%s · %s (%d sesi, %d lbr · %s)',
+                                    $cand->event_name,
+                                    $cand->period_range_label,
+                                    $cand->total_allocated_sessions,
+                                    $cand->total_allocated_sheets,
+                                    $cand->invoice_connection_status_label
+                                );
+                            }
+
+                            return $opts;
+                        }),
+                ])
+                ->action(function (array $data): void {
+                    try {
+                        $merged = app(\App\Services\ExpressEventConsolidationService::class)->mergeEventsManually(
+                            $this->record,
+                            $data['source_event_ids'] ?? [],
+                            auth()->user()
+                        );
+
+                        $this->record->refresh();
+                        $this->record->unsetRelations();
+
+                        Notification::make()
+                            ->title('Event Berhasil Digabungkan')
+                            ->body("Periode event kini {$merged->period_range_label} dengan total {$merged->total_allocated_sessions} sesi dan {$merged->total_allocated_sheets} lembar.")
+                            ->success()
+                            ->send();
+                    } catch (\Throwable $e) {
+                        Notification::make()
+                            ->title('Gagal Menggabungkan Event')
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
+                }),
+
             Actions\EditAction::make()
                 ->visible(fn (): bool => ! $this->record->isFinalized()),
 

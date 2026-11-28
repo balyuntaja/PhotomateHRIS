@@ -263,9 +263,21 @@
                                     <td class="px-3 py-3">
                                         <div class="font-mono font-semibold text-gray-900 dark:text-white">{{ $inv['invoice_number'] }}</div>
                                         @if ($inv['used_by_other'])
-                                            <span class="mt-1 inline-flex items-center rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800 dark:bg-rose-900/50 dark:text-rose-200">
-                                                Sudah terhubung: {{ $inv['other_event_name'] }}
-                                            </span>
+                                            <div class="mt-1 flex flex-col items-start gap-1">
+                                                <span class="inline-flex items-center rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-800 dark:bg-rose-900/50 dark:text-rose-200">
+                                                    Sudah terhubung: {{ $inv['other_event_name'] }}{{ !empty($inv['other_event_period']) ? ' (' . $inv['other_event_period'] . ')' : '' }}
+                                                </span>
+                                                @if ($record && !$record->isPosted() && !empty($inv['can_merge_into_other']) && !empty($inv['other_event_id']))
+                                                    <button
+                                                        type="button"
+                                                        wire:click="mergeIntoInvoiceOwnerEvent({{ $inv['other_event_id'] }})"
+                                                        wire:confirm="Apabila baris ini merupakan satu event operasional yang sama dengan '{{ e($inv['other_event_name']) }}', seluruh rekap sesi akan digabungkan menjadi 1 Event HPP dengan 1 invoice (tanpa duplikasi omzet). Lanjutkan penggabungan?"
+                                                        class="inline-flex items-center gap-1 rounded bg-primary-600 px-2 py-0.5 text-[10px] font-semibold text-white shadow-xs hover:bg-primary-500"
+                                                    >
+                                                        Gabungkan ke Event Ini →
+                                                    </button>
+                                                @endif
+                                            </div>
                                         @elseif ($inv['linked_to_current'])
                                             <span class="mt-1 inline-flex items-center rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
                                                 Terhubung di event ini

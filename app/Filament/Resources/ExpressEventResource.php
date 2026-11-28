@@ -696,6 +696,61 @@ class ExpressEventResource extends Resource
                     ->falseLabel('Sudah Jelas / Terverifikasi'),
             ])
             ->actions([
+                Tables\Actions\Action::make('merge_events')
+                    ->label('Gabungkan')
+                    ->icon('heroicon-o-arrows-pointing-in')
+                    ->color('gray')
+                    ->visible(fn (ExpressEvent $record): bool => ! $record->isFinalized()
+                        && (auth()->user()?->can('update', $record) ?? false))
+                    ->modalHeading(fn (ExpressEvent $record): string => "Gabungkan Event Terpisah ke '{$record->event_name}'")
+                    ->modalDescription('Pilih baris Event HPP lain yang sebenarnya merupakan satu event operasional yang sama agar rekap sesi dan invoice-nya disatukan ke event ini.')
+                    ->form(fn (ExpressEvent $record): array => [
+                        Forms\Components\Select::make('source_event_ids')
+                            ->label('Pilih Baris Event HPP yang Akan Digabungkan')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->required()
+                            ->options(function () use ($record): array {
+                                $candidates = app(\App\Services\ExpressEventConsolidationService::class)
+                                    ->getMergeableCandidateEvents($record);
+
+                                $opts = [];
+                                foreach ($candidates as $cand) {
+                                    $opts[$cand->id] = sprintf(
+                                        '%s · %s (%d sesi, %d lbr · %s)',
+                                        $cand->event_name,
+                                        $cand->period_range_label,
+                                        $cand->total_allocated_sessions,
+                                        $cand->total_allocated_sheets,
+                                        $cand->invoice_connection_status_label
+                                    );
+                                }
+
+                                return $opts;
+                            }),
+                    ])
+                    ->action(function (ExpressEvent $record, array $data): void {
+                        try {
+                            $merged = app(\App\Services\ExpressEventConsolidationService::class)->mergeEventsManually(
+                                $record,
+                                $data['source_event_ids'] ?? [],
+                                auth()->user()
+                            );
+
+                            Notification::make()
+                                ->title('Event Berhasil Digabungkan')
+                                ->body("Periode event '{$merged->event_name}' kini {$merged->period_range_label} ({$merged->total_allocated_sessions} sesi, {$merged->total_allocated_sheets} lembar).")
+                                ->success()
+                                ->send();
+                        } catch (\Throwable $e) {
+                            Notification::make()
+                                ->title('Gagal Menggabungkan Event')
+                                ->body($e->getMessage())
+                                ->danger()
+                                ->send();
+                        }
+                    }),
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
             ])
