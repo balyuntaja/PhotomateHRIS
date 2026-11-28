@@ -1,7 +1,7 @@
 @php
     $record = isset($getRecord) ? $getRecord() : ($record ?? null);
     if ($record) {
-        $record->loadMissing(['recaps.allocations', 'recaps.sessionReport.cabang', 'recaps.sessionReport.crews', 'auditLogs.user']);
+        $record->loadMissing(['recaps.allocations', 'recaps.sessionReport.cabang', 'recaps.sessionReport.crews', 'invoices', 'auditLogs.user']);
         $hppService = app(\App\Services\ExpressEventHppService::class);
         $preview = $hppService->calculatePreview($record);
         $allocationService = app(\App\Services\ExpressEventAllocationService::class);
@@ -11,20 +11,24 @@
 @endphp
 
 <div class="space-y-6">
-    {{-- 0. Invoice Terkait (Khusus Express Self Run & Express Sewa) --}}
-    @if ($record && $record->requiresInvoice())
-        @livewire('express-event-invoice-manager', ['eventId' => $record->id], key('express-event-invoice-manager-' . $record->id))
+    @if ($record && $record->needs_admin_verification)
+        <div class="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-700/70 dark:bg-amber-950/30 dark:text-amber-200">
+            <div class="font-bold">⚠️ Perlu Verifikasi Admin</div>
+            <p class="mt-1 text-xs text-amber-800 dark:text-amber-300">
+                {{ $record->verification_note ?: 'Data historis event ini belum memiliki identitas event operasional unik yang cukup. Sistem tidak melakukan penggabungan otomatis — silakan periksa rekap sesi terkait lalu klik "Tandai Terverifikasi" atau sesuaikan melalui Edit Event.' }}
+            </p>
+        </div>
     @endif
 
-    {{-- 1. Rekap Terhubung & Rincian Alokasi --}}
+    {{-- A. Alokasi Rekap Sesi Express --}}
     <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
         <div class="mb-4 flex items-center justify-between">
             <div>
-                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Rekap Sesi Terhubung & Rincian Alokasi</h3>
-                <p class="text-xs text-gray-500">Daftar rekap sesi operasional Express yang dialokasikan ke event ini</p>
+                <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Alokasi Rekap Sesi Express</h3>
+                <p class="text-xs text-gray-500">Daftar seluruh rekap sesi operasional yang terhubung secara individual (hanya rekap berstatus Approved yang masuk ke perhitungan HPP)</p>
             </div>
             <span class="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                {{ $record->recaps->count() }} Rekap Terhubung
+                {{ $record->recaps->where('status', 'active')->count() }} Rekap Terhubung
             </span>
         </div>
 
@@ -32,58 +36,64 @@
             <table class="w-full text-left text-sm text-gray-600 dark:text-gray-300">
                 <thead class="border-b border-gray-200 bg-gray-50 text-xs uppercase text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
                     <tr>
-                        <th class="px-4 py-3">Rekap & Cabang</th>
-                        <th class="px-4 py-3">Tanggal & Crew</th>
-                        <th class="px-4 py-3 text-right">Kapasitas Sumber</th>
-                        <th class="px-4 py-3 text-right">Alokasi Sesi</th>
-                        <th class="px-4 py-3 text-right">Alokasi Lembar</th>
+                        <th class="px-4 py-3">Nomor Rekap</th>
+                        <th class="px-4 py-3">Tanggal Operasional</th>
+                        <th class="px-4 py-3">Jenis Express</th>
+                        <th class="px-4 py-3">Status Approval</th>
+                        <th class="px-4 py-3 text-right">Jumlah Sesi</th>
+                        <th class="px-4 py-3 text-right">Jumlah Lembar</th>
                         <th class="px-4 py-3 text-right">Alokasi Omzet</th>
-                        <th class="px-4 py-3 text-right">Sisa di Sumber</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
-                    @forelse ($record->recaps as $recap)
+                    @forelse ($record->recaps->where('status', 'active') as $recap)
                         @php
                             $report = $recap->sessionReport;
                             $alloc = $recap->latestAllocation;
-                            $source = $report ? $allocationService->getSourceTotals($report) : ['sessions' => 0, 'sheets' => 0, 'revenue' => 0];
-                            $remaining = $report ? $allocationService->getRemainingTotals($report) : ['sessions' => 0, 'sheets' => 0, 'revenue' => 0];
-                            $allocatedElsewhere = $report ? $allocationService->getAllocatedTotals($report, $record->id) : ['sessions' => 0, 'sheets' => 0, 'revenue' => 0];
+                            $isApproved = $report && $report->status === \App\Models\SessionReport::STATUS_APPROVED;
+                            $branchLabel = $report?->cabang?->nama_cabang ?? '-';
                         @endphp
-                        <tr class="hover:bg-gray-50/50 dark:hover:bg-gray-800/50">
+                        <tr class="{{ $isApproved ? 'hover:bg-gray-50/50 dark:hover:bg-gray-800/50' : 'opacity-65 bg-amber-50/30 dark:bg-amber-950/10' }}">
                             <td class="px-4 py-3">
-                                <div class="font-medium text-gray-900 dark:text-gray-100">{{ $report?->report_number ?? '-' }}</div>
-                                <div class="text-xs text-gray-500">{{ $report?->cabang?->nama_cabang ?? '-' }}</div>
+                                <div class="font-mono font-semibold text-gray-900 dark:text-gray-100">{{ $report?->report_number ?? '-' }}</div>
+                                <div class="text-xs text-gray-500">Crew: {{ $report?->crew_names ?? '-' }}</div>
                             </td>
                             <td class="px-4 py-3">
-                                @if ($report?->event_date)
-                                    <div class="text-xs font-medium text-gray-900 dark:text-gray-100">Event: {{ $report->event_date->format('d/m/Y') }}</div>
-                                    <div class="text-[11px] text-gray-500">Sesi: {{ $report?->report_date?->format('d/m/Y') ?? '-' }}</div>
-                                @else
-                                    <div class="text-xs text-gray-900 dark:text-gray-100">{{ $report?->report_date?->format('d/m/Y') ?? '-' }}</div>
+                                <div class="text-xs font-medium text-gray-900 dark:text-gray-100">
+                                    {{ $report?->report_date?->format('d/m/Y') ?? '-' }}
+                                </div>
+                                @if ($report?->event_date && $report->event_date->toDateString() !== $report?->report_date?->toDateString())
+                                    <div class="text-[11px] text-gray-500">Tgl Event: {{ $report->event_date->format('d/m/Y') }}</div>
                                 @endif
-                                <div class="text-xs text-gray-500">{{ $report?->crew_names ?? '-' }}</div>
                             </td>
-                            <td class="px-4 py-3 text-right text-xs">
-                                <div>{{ $source['sessions'] }} sesi · {{ $source['sheets'] }} lbr</div>
-                                <div class="font-medium text-gray-800 dark:text-gray-200">{{ \App\Utils\RupiahHelper::format($source['revenue']) }}</div>
+                            <td class="px-4 py-3">
+                                <span class="inline-flex items-center rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                    {{ $branchLabel }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                @if ($isApproved)
+                                    <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                                        Approved
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                        {{ $report?->status_label ?? 'Belum Approved' }} (Tidak Dihitung)
+                                    </span>
+                                @endif
                             </td>
                             <td class="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">
-                                {{ (int) ($alloc?->allocated_sessions ?? 0) }} sesi
+                                {{ $isApproved ? (int) ($alloc?->allocated_sessions ?? 0) : 0 }} sesi
                             </td>
                             <td class="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">
-                                {{ (int) ($alloc?->allocated_sheets ?? 0) }} lbr
+                                {{ $isApproved ? (int) ($alloc?->allocated_sheets ?? 0) : 0 }} lbr
                             </td>
                             <td class="px-4 py-3 text-right font-medium text-blue-600 dark:text-blue-400">
-                                {{ \App\Utils\RupiahHelper::format((int) ($alloc?->allocated_revenue ?? 0)) }}
-                            </td>
-                            <td class="px-4 py-3 text-right text-xs">
-                                <div class="{{ $remaining['sheets'] > 0 ? 'text-amber-600 font-semibold' : 'text-gray-400' }}">
-                                    {{ $remaining['sheets'] }} lbr tersisa
-                                </div>
-                                <div class="text-gray-500">
-                                    {{ \App\Utils\RupiahHelper::format($remaining['revenue']) }}
-                                </div>
+                                @if ($record->requiresInvoice())
+                                    <span class="text-xs font-normal text-gray-500">Dari Invoice Event</span>
+                                @else
+                                    {{ \App\Utils\RupiahHelper::format($isApproved ? (int) ($alloc?->allocated_revenue ?? 0) : 0) }}
+                                @endif
                             </td>
                         </tr>
                     @empty
@@ -96,18 +106,28 @@
                 </tbody>
                 <tfoot class="border-t-2 border-gray-300 bg-gray-50 font-semibold text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
                     <tr>
-                        <td colspan="3" class="px-4 py-3 uppercase text-xs">Total Alokasi Event</td>
+                        <td colspan="4" class="px-4 py-3 text-xs uppercase">Total Akumulasi Rekap Approved</td>
                         <td class="px-4 py-3 text-right">{{ $record->total_allocated_sessions }} sesi</td>
                         <td class="px-4 py-3 text-right">{{ $record->total_allocated_sheets }} lbr</td>
-                        <td class="px-4 py-3 text-right text-blue-600 dark:text-blue-400">{{ \App\Utils\RupiahHelper::format($record->total_allocated_revenue) }}</td>
-                        <td class="px-4 py-3"></td>
+                        <td class="px-4 py-3 text-right text-blue-600 dark:text-blue-400">
+                            @if ($record->requiresInvoice())
+                                {{ \App\Utils\RupiahHelper::format($record->total_invoice_amount) }}
+                            @else
+                                {{ \App\Utils\RupiahHelper::format($record->total_allocated_revenue) }}
+                            @endif
+                        </td>
                     </tr>
                 </tfoot>
             </table>
         </div>
     </div>
 
-    {{-- 2. Rincian Perhitungan Per Periode (Bila Event Lintas Bulan) --}}
+    {{-- B. Alokasi Invoice Event --}}
+    @if ($record && $record->requiresInvoice())
+        @livewire('express-event-invoice-manager', ['eventId' => $record->id], key('express-event-invoice-manager-' . $record->id))
+    @endif
+
+    {{-- C. Rincian Perhitungan Per Periode (Bila Event Lintas Bulan) --}}
     @if (!empty($preview['period_breakdown']) && count($preview['period_breakdown']) > 1)
         <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
             <div class="mb-3">
@@ -148,7 +168,7 @@
         </div>
     @endif
 
-    {{-- 3. Riwayat Perubahan & Audit Trail --}}
+    {{-- D. Riwayat Perubahan & Audit Trail --}}
     <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900">
         <div class="mb-4">
             <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Riwayat Perubahan & Audit Trail</h3>
@@ -159,29 +179,27 @@
             <ul role="list" class="-mb-8">
                 @forelse ($record->auditLogs as $idx => $log)
                     <li>
-                        <div class="relative pb-8">
-                            @if (!$loop->last)
-                                <span class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200 dark:bg-gray-700" aria-hidden="true"></span>
+                        <div class="relative pb-6">
+                            @if (! $loop->last)
+                                <span class="absolute left-3.5 top-4 -ml-px h-full w-0.5 bg-gray-200 dark:bg-gray-700" aria-hidden="true"></span>
                             @endif
                             <div class="relative flex space-x-3">
                                 <div>
-                                    <span class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 ring-8 ring-white dark:bg-blue-900 dark:ring-gray-900">
-                                        <svg class="h-4 w-4 text-blue-600 dark:text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                        </svg>
+                                    <span class="flex h-7 w-7 items-center justify-center rounded-full bg-primary-50 ring-4 ring-white dark:bg-primary-950 dark:ring-gray-900">
+                                        <x-heroicon-m-clock class="h-4 w-4 text-primary-600 dark:text-primary-400" />
                                     </span>
                                 </div>
-                                <div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                                <div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1">
                                     <div>
-                                        <p class="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                        <p class="text-xs font-semibold text-gray-900 dark:text-gray-100">
                                             {{ $log->action }}
                                             <span class="font-normal text-gray-500">oleh {{ $log->user?->nama_lengkap ?? 'Sistem' }}</span>
                                         </p>
                                         @if ($log->notes)
-                                            <p class="mt-1 text-xs text-gray-600 dark:text-gray-400">{{ $log->notes }}</p>
+                                            <p class="mt-0.5 text-xs text-gray-600 dark:text-gray-400">{{ $log->notes }}</p>
                                         @endif
                                     </div>
-                                    <div class="whitespace-nowrap text-right text-xs text-gray-500">
+                                    <div class="whitespace-nowrap text-right text-xs text-gray-400">
                                         {{ $log->created_at?->format('d/m/Y H:i') }}
                                     </div>
                                 </div>
@@ -189,7 +207,7 @@
                         </div>
                     </li>
                 @empty
-                    <li class="py-4 text-center text-xs text-gray-400">Belum ada catatan log aktivitas.</li>
+                    <li class="py-4 text-center text-xs text-gray-400">Belum ada riwayat perubahan.</li>
                 @endforelse
             </ul>
         </div>

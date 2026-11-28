@@ -118,13 +118,20 @@ class ListExpressEvents extends ListRecords
         $expressStats = app(ExpressEventSyncService::class)->syncAllApprovedRecaps(auth()->user());
         $boothStats = app(BoothHppService::class)->syncApprovedRecaps();
 
-        $expressNew = $expressStats['events_created'] + $expressStats['recaps_attached'];
         $expressUpdated = $expressStats['events_updated'];
+        $extraNotes = [];
+        if (($expressStats['events_consolidated'] ?? 0) > 0) {
+            $extraNotes[] = "{$expressStats['events_consolidated']} duplikat historis dikonsolidasikan";
+        }
+        if (($expressStats['flagged_for_verification'] ?? 0) > 0) {
+            $extraNotes[] = "{$expressStats['flagged_for_verification']} event perlu verifikasi admin";
+        }
+        $extraText = $extraNotes !== [] ? ' (' . implode(', ', $extraNotes) . ').' : '.';
 
         Notification::make()
             ->title('Sinkronisasi Selesai')
             ->body(
-                "Express: {$expressStats['events_created']} event baru, {$expressStats['recaps_attached']} rekap digabungkan, {$expressUpdated} diperbarui. "
+                "Express: {$expressStats['events_created']} event baru, {$expressStats['recaps_attached']} rekap digabungkan, {$expressUpdated} diperbarui{$extraText} "
                 . "Booth Janus & Golio: {$boothStats['created']} rekap baru dan {$boothStats['updated']} diperbarui."
             )
             ->success()
@@ -176,7 +183,7 @@ class ListExpressEvents extends ListRecords
             $items->push([
                 'type' => 'Express',
                 'title' => $ev->event_name,
-                'date' => $ev->start_date ? Carbon::parse($ev->start_date)->format('d M Y') : '-',
+                'date' => $ev->period_range_label,
                 'sheets' => $latestHpp ? (int) $latestHpp->total_sheets : $ev->total_allocated_sheets,
                 'rate' => $ev->hpp_rate_per_sheet !== null ? RupiahHelper::format($ev->hpp_rate_per_sheet) : '-',
                 'total_hpp' => $latestHpp ? RupiahHelper::format($latestHpp->total_hpp) : '-',

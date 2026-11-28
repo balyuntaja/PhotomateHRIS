@@ -398,14 +398,129 @@ class SessionReport extends Model
             return trim((string) $this->event_note);
         }
 
-        $invoiceEventName = $this->invoice?->event_name;
+        $operationalEventName = $this->relationLoaded('event')
+            ? $this->event?->name
+            : ($this->event_id ? Event::find($this->event_id)?->name : null);
+
+        if (filled($operationalEventName)) {
+            return trim((string) $operationalEventName);
+        }
+
+        $invoiceEventName = $this->relationLoaded('invoice')
+            ? $this->invoice?->event_name
+            : ($this->invoice_id ? Invoice::find($this->invoice_id)?->event_name : null);
 
         return filled($invoiceEventName) ? trim((string) $invoiceEventName) : null;
     }
 
+    public function getOperationalEventDateAttribute(): ?Carbon
+    {
+        if ($this->event_date !== null) {
+            return $this->event_date;
+        }
+
+        if ($this->event_id) {
+            $evDate = $this->relationLoaded('event')
+                ? $this->event?->date
+                : Event::find($this->event_id)?->date;
+            if ($evDate !== null) {
+                return $evDate;
+            }
+        }
+
+        if ($this->invoice_id) {
+            $invDate = $this->relationLoaded('invoice')
+                ? $this->invoice?->event_date
+                : Invoice::find($this->invoice_id)?->event_date;
+            if ($invDate !== null) {
+                return $invDate;
+            }
+        }
+
+        return null;
+    }
+
     public function hasCompleteEventDetail(): bool
     {
-        return filled($this->resolved_event_name) && $this->event_date !== null;
+        return filled($this->resolved_event_name) && $this->operational_event_date !== null;
+    }
+
+    /**
+     * Resolusi identitas unik Event Operasional untuk pengelompokan HPP:
+     * 1. event_id (relasi ke tabel events) -> "event:{event_id}"
+     * 2. invoice_id (relasi kontrak invoice unik saat event_id kosong) -> "invoice:{invoice_id}"
+     * 3. Manual lengkap (Sharing Profit / historis lengkap) -> "manual:{op_type}:{date}:{hash}"
+     * 4. Data historis belum lengkap -> "unverified:report:{id}"
+     *
+     * @return array{
+     *     key: string,
+     *     source: string,
+     *     has_explicit_id: bool,
+     *     event_id: int|null,
+     *     invoice_id: int|null,
+     *     operational_type: string,
+     *     normalized_name: string
+     * }
+     */
+    public function resolveOperationalEventIdentity(): array
+    {
+        $cabangName = $this->resolveCabangWithTrashed()?->nama_cabang;
+        $opType = ExpressEvent::classifyBranchOperationalType($cabangName) ?? ExpressEvent::TYPE_EXPRESS_GENERAL;
+        $eventName = trim((string) ($this->resolved_event_name ?? ''));
+        $normalizedName = preg_replace('/\s+/', ' ', strtolower($eventName)) ?? '';
+
+        if ($this->event_id !== null && (int) $this->event_id > 0) {
+            $evId = (int) $this->event_id;
+
+            return [
+                'key' => "event:{$evId}",
+                'source' => 'event_id',
+                'has_explicit_id' => true,
+                'event_id' => $evId,
+                'invoice_id' => $this->invoice_id ? (int) $this->invoice_id : null,
+                'operational_type' => $opType,
+                'normalized_name' => $normalizedName,
+            ];
+        }
+
+        if ($this->invoice_id !== null && (int) $this->invoice_id > 0) {
+            $invId = (int) $this->invoice_id;
+
+            return [
+                'key' => "invoice:{$invId}",
+                'source' => 'invoice_id',
+                'has_explicit_id' => true,
+                'event_id' => null,
+                'invoice_id' => $invId,
+                'operational_type' => $opType,
+                'normalized_name' => $normalizedName,
+            ];
+        }
+
+        $opDate = $this->operational_event_date?->toDateString();
+        if ($normalizedName !== '' && $opDate !== null) {
+            $hash = substr(sha1($normalizedName), 0, 16);
+
+            return [
+                'key' => "manual:{$opType}:{$opDate}:{$hash}",
+                'source' => 'manual_detail',
+                'has_explicit_id' => false,
+                'event_id' => null,
+                'invoice_id' => null,
+                'operational_type' => $opType,
+                'normalized_name' => $normalizedName,
+            ];
+        }
+
+        return [
+            'key' => 'unverified:report:' . ($this->id ?? uniqid()),
+            'source' => 'unverified',
+            'has_explicit_id' => false,
+            'event_id' => null,
+            'invoice_id' => null,
+            'operational_type' => $opType,
+            'normalized_name' => $normalizedName,
+        ];
     }
 
     public function hasAnyEventDetail(): bool

@@ -221,9 +221,16 @@ class SessionReportResource extends Resource
                                         if ($inv->event_date) {
                                             $set('event_date', $inv->event_date->format('Y-m-d'));
                                         }
-                                        $matchingEvent = \App\Models\Event::where('name', $inv->event_name)->first();
+                                        $matchingEventQuery = \App\Models\Event::query()
+                                            ->where('name', $inv->event_name);
+                                        if ($inv->event_date) {
+                                            $matchingEventQuery->whereDate('date', $inv->event_date->toDateString());
+                                        }
+                                        $matchingEvent = $matchingEventQuery->first();
                                         if ($matchingEvent) {
                                             $set('event_id', $matchingEvent->id);
+                                        } else {
+                                            $set('event_id', null);
                                         }
                                     }
                                 }

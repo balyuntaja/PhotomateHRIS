@@ -69,22 +69,29 @@ class ExpressEventResource extends Resource
                             ->live()
                             ->afterStateUpdated(function ($state, Set $set, ?ExpressEvent $record, Get $get) {
                                 if (blank($state)) {
+                                    $set('operational_identity_selection', null);
                                     $set('allocations_data', []);
                                     return;
                                 }
 
                                 $service = app(ExpressEventAllocationService::class);
-                                $matchingRecaps = $service->getEligibleRecapsForEventName($state, $record?->id);
+                                $groups = $service->getOperationalIdentityGroupsForEventName($state, $record?->id);
 
-                                if ($matchingRecaps->isEmpty()) {
+                                if ($groups === []) {
                                     Notification::make()
                                         ->title('Rekap Sesi Belum Tersedia')
                                         ->body("Belum ada rekap sesi berstatus Approved yang tersedia untuk event '{$state}'.")
                                         ->warning()
                                         ->send();
+                                    $set('operational_identity_selection', null);
                                     $set('allocations_data', []);
                                     return;
                                 }
+
+                                // Pilih grup identitas operasional pertama saja agar event berbeda bernama sama TIDAK pernah tergabung otomatis!
+                                $firstGroupKey = (string) array_key_first($groups);
+                                $set('operational_identity_selection', $firstGroupKey);
+                                $matchingRecaps = $groups[$firstGroupKey]['recaps'];
 
                                 $newAllocations = [];
                                 $candidateInvoiceIds = [];
@@ -152,13 +159,117 @@ class ExpressEventResource extends Resource
                                 $set('allocations_data', $newAllocations);
 
                                 // Auto-fill start_date and end_date from recap operational dates
-                                $dates = $matchingRecaps->pluck('raw_date')->filter()->sort()->values();
-                                if ($dates->isNotEmpty()) {
-                                    $set('start_date', $dates->first());
-                                    $set('end_date', $dates->last());
-                                }
+                                $set('start_date', $groups[$firstGroupKey]['start_date']);
+                                $set('end_date', $groups[$firstGroupKey]['end_date']);
                             })
                             ->columnSpan(2),
+
+                        Forms\Components\Select::make('operational_identity_selection')
+                            ->label('Pilih Jadwal / Identitas Event Operasional')
+                            ->dehydrated(false)
+                            ->options(function (Get $get, ?ExpressEvent $record): array {
+                                $eventName = $get('event_name');
+                                if (blank($eventName)) {
+                                    return [];
+                                }
+                                $groups = app(ExpressEventAllocationService::class)
+                                    ->getOperationalIdentityGroupsForEventName($eventName, $record?->id);
+
+                                $opts = [];
+                                foreach ($groups as $key => $g) {
+                                    $opts[$key] = $g['label'];
+                                }
+
+                                return $opts;
+                            })
+                            ->visible(function (Get $get, ?ExpressEvent $record): bool {
+                                $eventName = $get('event_name');
+                                if (blank($eventName)) {
+                                    return false;
+                                }
+
+                                return count(
+                                    app(ExpressEventAllocationService::class)
+                                        ->getOperationalIdentityGroupsForEventName($eventName, $record?->id)
+                                ) > 1;
+                            })
+                            ->helperText('Terdapat beberapa event operasional berbeda dengan nama yang sama. Pilih jadwal/identitas yang sesuai.')
+                            ->live()
+                            ->afterStateUpdated(function ($state, Set $set, Get $get, ?ExpressEvent $record) {
+                                $eventName = $get('event_name');
+                                if (blank($eventName) || blank($state)) {
+                                    return;
+                                }
+
+                                $groups = app(ExpressEventAllocationService::class)
+                                    ->getOperationalIdentityGroupsForEventName($eventName, $record?->id);
+
+                                if (! isset($groups[$state])) {
+                                    return;
+                                }
+
+                                $matchingRecaps = $groups[$state]['recaps'];
+                                $newAllocations = [];
+                                $candidateInvoiceIds = [];
+                                $selectedReportModels = SessionReport::with('cabang')
+                                    ->whereIn('id', $matchingRecaps->pluck('id')->all())
+                                    ->get()
+                                    ->keyBy('id');
+
+                                foreach ($matchingRecaps as $recap) {
+                                    $repModel = $selectedReportModels->get($recap['id']);
+                                    if ($repModel && $repModel->invoice_id) {
+                                        $isUsedElsewhere = ExpressEventInvoice::query()
+                                            ->where('invoice_id', $repModel->invoice_id)
+                                            ->whereHas('expressEvent')
+                                            ->when($record !== null, fn ($q) => $q->where('express_event_id', '!=', $record->id))
+                                            ->exists();
+
+                                        if (! $isUsedElsewhere) {
+                                            $candidateInvoiceIds[] = (int) $repModel->invoice_id;
+                                        }
+                                    }
+
+                                    $newAllocations[] = [
+                                        'session_report_id' => $recap['id'],
+                                        'allocated_sessions' => $recap['remaining_sessions'],
+                                        'allocated_sheets' => $recap['remaining_sheets'],
+                                        'allocated_revenue' => $recap['remaining_revenue'],
+                                        'notes' => null,
+                                    ];
+                                }
+
+                                $context = ExpressEvent::resolveFormContext($newAllocations, $candidateInvoiceIds, $record);
+                                if ($context['is_sharing_profit']) {
+                                    $set('linked_invoice_ids', []);
+                                } else {
+                                    $set('linked_invoice_ids', array_values(array_unique($candidateInvoiceIds)));
+                                    if ($context['requires_invoice']) {
+                                        $totalContract = (int) $context['invoice_total_revenue'];
+                                        $totalSheets = array_sum(array_map(fn ($r): int => (int) $r['allocated_sheets'], $newAllocations));
+                                        $count = count($newAllocations);
+                                        $distributed = 0;
+
+                                        foreach ($newAllocations as $idx => $row) {
+                                            if ($idx === $count - 1) {
+                                                $share = max(0, $totalContract - $distributed);
+                                            } elseif ($totalSheets > 0) {
+                                                $share = (int) floor(($totalContract * (int) $row['allocated_sheets']) / $totalSheets);
+                                                $distributed += $share;
+                                            } else {
+                                                $share = (int) floor($totalContract / max(1, $count));
+                                                $distributed += $share;
+                                            }
+                                            $newAllocations[$idx]['allocated_revenue'] = $share;
+                                        }
+                                    }
+                                }
+
+                                $set('allocations_data', $newAllocations);
+                                $set('start_date', $groups[$state]['start_date']);
+                                $set('end_date', $groups[$state]['end_date']);
+                            })
+                            ->columnSpanFull(),
 
                         Forms\Components\DatePicker::make('start_date')
                             ->label('Tanggal Mulai')
@@ -477,37 +588,44 @@ class ExpressEventResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->weight('bold')
-                    ->description(fn (ExpressEvent $record): string => $record->start_date?->format('d/m/Y') . ' - ' . $record->end_date?->format('d/m/Y')),
+                    ->description(fn (ExpressEvent $record): ?string => $record->needs_admin_verification
+                        ? '⚠️ Perlu Verifikasi Admin'
+                        : null),
+
+                Tables\Columns\TextColumn::make('period_range')
+                    ->label('Rentang Tanggal')
+                    ->state(fn (ExpressEvent $record): string => $record->period_range_label)
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('start_date', $direction)),
 
                 Tables\Columns\TextColumn::make('operational_type_label')
-                    ->label('Jenis Operasional')
+                    ->label('Jenis Express')
                     ->badge()
                     ->state(fn (ExpressEvent $record): string => $record->operational_type_label)
                     ->color(fn (ExpressEvent $record): string => $record->isSharingProfit() ? 'success' : 'info'),
 
                 Tables\Columns\TextColumn::make('total_sessions')
-                    ->label('Sesi')
+                    ->label('Total Sesi')
                     ->state(fn (ExpressEvent $record): int => $record->total_allocated_sessions)
                     ->alignEnd()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('total_sheets')
-                    ->label('Lembar')
+                    ->label('Total Lembar')
                     ->state(fn (ExpressEvent $record): int => $record->total_allocated_sheets)
                     ->alignEnd()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('total_revenue')
-                    ->label('Omzet / Kontrak')
+                    ->label('Total Omzet')
                     ->state(fn (ExpressEvent $record): string => RupiahHelper::format($record->effective_revenue))
-                    ->description(fn (ExpressEvent $record): ?string => $record->requiresInvoice() ? $record->invoice_connection_status_label : null)
                     ->alignEnd()
                     ->weight('medium'),
 
                 Tables\Columns\TextColumn::make('hpp_rate_per_sheet')
                     ->label('Tarif HPP')
                     ->formatStateUsing(fn ($state) => $state !== null ? RupiahHelper::format($state) : '-')
-                    ->alignEnd(),
+                    ->alignEnd()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('calculated_hpp')
                     ->label('Total HPP')
@@ -522,17 +640,18 @@ class ExpressEventResource extends Resource
                     ->color(fn (ExpressEvent $record): string => ! $record->isReadyForHppCalculation() ? 'gray' : ($record->gross_profit >= 0 ? 'success' : 'danger'))
                     ->weight('semibold'),
 
+                Tables\Columns\TextColumn::make('invoice_status')
+                    ->label('Status Invoice')
+                    ->badge()
+                    ->state(fn (ExpressEvent $record): string => $record->invoice_connection_status_label)
+                    ->color(fn (ExpressEvent $record): string => $record->invoice_connection_status_color),
+
                 Tables\Columns\TextColumn::make('completeness_status')
-                    ->label('Kelengkapan Data')
+                    ->label('Status Pengelolaan HPP')
                     ->badge()
                     ->state(fn (ExpressEvent $record): string => $record->completeness_status_label)
+                    ->description(fn (ExpressEvent $record): string => $record->hpp_status_label)
                     ->color(fn (ExpressEvent $record): string => $record->completeness_status_color),
-
-                Tables\Columns\TextColumn::make('hpp_status')
-                    ->label('Status HPP')
-                    ->badge()
-                    ->formatStateUsing(fn (ExpressEvent $record): string => $record->hpp_status_label)
-                    ->color(fn (ExpressEvent $record): string => $record->hpp_status_color),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('tahun')
@@ -569,6 +688,12 @@ class ExpressEventResource extends Resource
                 Tables\Filters\SelectFilter::make('hpp_status')
                     ->label('Status HPP')
                     ->options(ExpressEvent::HPP_LABELS),
+
+                Tables\Filters\TernaryFilter::make('needs_admin_verification')
+                    ->label('Verifikasi Identitas')
+                    ->placeholder('Semua Event')
+                    ->trueLabel('Perlu Verifikasi Admin')
+                    ->falseLabel('Sudah Jelas / Terverifikasi'),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

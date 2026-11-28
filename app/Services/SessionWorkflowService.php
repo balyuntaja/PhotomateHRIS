@@ -449,6 +449,7 @@ class SessionWorkflowService
                 : sprintf('perubahan %d ke %d lembar', $previousSheets, $newTotalSheets);
 
             app(SessionReportInventoryService::class)->syncForReport($lockedReport, $actor, $reasonContext);
+            app(ExpressEventSyncService::class)->reconcileEventsForReport($lockedReport);
 
             return $lockedReport->fresh(['cabang', 'crews', 'transactions', 'inventoryTransactions', 'approvalLogs']);
         });
@@ -502,6 +503,7 @@ class SessionWorkflowService
             $this->logAction($lockedReport, $actor, 'APPROVAL_CANCELLED', $trimmedReason);
 
             app(SessionReportInventoryService::class)->reverseForReport($lockedReport, $actor, $trimmedReason);
+            app(ExpressEventSyncService::class)->reconcileEventsForReport($lockedReport);
 
             return $lockedReport->fresh(['cabang', 'crews', 'transactions', 'inventoryTransactions', 'approvalLogs']);
         });

@@ -70,6 +70,13 @@ class ViewExpressEvent extends ViewRecord
                             ->label('Catatan Event')
                             ->placeholder('Tidak ada catatan.')
                             ->columnSpan(3),
+
+                        Infolists\Components\TextEntry::make('verification_note')
+                            ->label('Catatan Verifikasi Identitas Historis')
+                            ->badge()
+                            ->color('warning')
+                            ->visible(fn (ExpressEvent $record): bool => (bool) $record->needs_admin_verification)
+                            ->columnSpanFull(),
                     ])
                     ->columns(4),
 
@@ -192,6 +199,27 @@ class ViewExpressEvent extends ViewRecord
         $record = $this->record;
 
         return [
+            Actions\Action::make('mark_verified')
+                ->label('Tandai Terverifikasi')
+                ->icon('heroicon-o-shield-check')
+                ->color('warning')
+                ->visible(fn (): bool => (bool) $this->record->needs_admin_verification && (auth()->user()?->can('update', $this->record) ?? false))
+                ->requiresConfirmation()
+                ->modalHeading('Verifikasi Identitas Event Historis')
+                ->modalDescription('Pastikan pengelompokan rekap sesi pada event ini sudah benar dan tidak tercampur dengan event lain.')
+                ->action(function (): void {
+                    app(\App\Services\ExpressEventConsolidationService::class)
+                        ->markVerifiedByAdmin($this->record, auth()->user());
+
+                    $this->record->refresh();
+
+                    Notification::make()
+                        ->title('Event Diverifikasi')
+                        ->body('Status verifikasi identitas event historis telah diselesaikan.')
+                        ->success()
+                        ->send();
+                }),
+
             Actions\EditAction::make()
                 ->visible(fn (): bool => ! $this->record->isFinalized()),
 

@@ -4,7 +4,7 @@
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <div class="flex items-center gap-2 flex-wrap">
-                        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Invoice Terkait</h3>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">Alokasi Invoice Event (Invoice Terkait)</h3>
                         @if ($linkedInvoices->isNotEmpty())
                             <span class="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
                                 Invoice Terhubung ({{ $linkedInvoices->count() }})

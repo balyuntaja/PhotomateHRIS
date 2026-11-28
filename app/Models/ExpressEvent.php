@@ -77,6 +77,7 @@ class ExpressEvent extends Model
     ];
 
     public const COMPLETENESS_INCOMPLETE_EVENT = 'incomplete_event';
+    public const COMPLETENESS_NEEDS_VERIFICATION = 'needs_verification';
     public const COMPLETENESS_INVOICE_UNLINKED = 'invoice_unlinked';
     public const COMPLETENESS_WAITING_HPP = 'waiting_hpp';
     public const COMPLETENESS_WAITING_CONFIRMATION = 'waiting_confirmation';
@@ -84,6 +85,7 @@ class ExpressEvent extends Model
 
     public const COMPLETENESS_LABELS = [
         self::COMPLETENESS_INCOMPLETE_EVENT => 'Data event belum lengkap',
+        self::COMPLETENESS_NEEDS_VERIFICATION => 'Perlu Verifikasi Admin',
         self::COMPLETENESS_INVOICE_UNLINKED => 'Invoice Belum Terhubung',
         self::COMPLETENESS_WAITING_HPP => 'Menunggu pengelolaan HPP',
         self::COMPLETENESS_WAITING_CONFIRMATION => 'Menunggu konfirmasi',
@@ -92,6 +94,7 @@ class ExpressEvent extends Model
 
     public const COMPLETENESS_COLORS = [
         self::COMPLETENESS_INCOMPLETE_EVENT => 'danger',
+        self::COMPLETENESS_NEEDS_VERIFICATION => 'warning',
         self::COMPLETENESS_INVOICE_UNLINKED => 'warning',
         self::COMPLETENESS_WAITING_HPP => 'info',
         self::COMPLETENESS_WAITING_CONFIRMATION => 'warning',
@@ -101,11 +104,15 @@ class ExpressEvent extends Model
     protected $fillable = [
         'event_name',
         'operational_type',
+        'event_id',
+        'operational_identity_key',
         'start_date',
         'end_date',
         'hpp_rate_per_sheet',
         'reconciliation_status',
         'hpp_status',
+        'needs_admin_verification',
+        'verification_note',
         'notes',
         'created_by',
         'confirmed_by',
@@ -114,9 +121,11 @@ class ExpressEvent extends Model
     ];
 
     protected $casts = [
+        'event_id' => 'integer',
         'start_date' => 'date',
         'end_date' => 'date',
         'hpp_rate_per_sheet' => 'integer',
+        'needs_admin_verification' => 'boolean',
         'confirmed_at' => 'datetime',
         'finalized_at' => 'datetime',
     ];
@@ -135,6 +144,11 @@ class ExpressEvent extends Model
     public function recaps(): HasMany
     {
         return $this->hasMany(ExpressEventRecap::class, 'express_event_id');
+    }
+
+    public function operationalEvent(): BelongsTo
+    {
+        return $this->belongsTo(Event::class, 'event_id');
     }
 
     public function eventInvoices(): HasMany
@@ -217,19 +231,46 @@ class ExpressEvent extends Model
         return !is_null($this->hpp_rate_per_sheet);
     }
 
+    /**
+     * Query alokasi rekap yang hanya menghitung rekap aktif dengan status SessionReport = APPROVED.
+     */
+    public function approvedAllocationsQuery()
+    {
+        return $this->allocations()
+            ->where('express_event_recaps.status', ExpressEventRecap::STATUS_ACTIVE)
+            ->join('session_reports', 'session_reports.id', '=', 'express_event_recaps.session_report_id')
+            ->where('session_reports.status', SessionReport::STATUS_APPROVED);
+    }
+
     public function getTotalAllocatedSessionsAttribute(): int
     {
-        return (int) $this->allocations()->sum('allocated_sessions');
+        return (int) $this->approvedAllocationsQuery()->sum('express_event_recap_allocations.allocated_sessions');
     }
 
     public function getTotalAllocatedSheetsAttribute(): int
     {
-        return (int) $this->allocations()->sum('allocated_sheets');
+        return (int) $this->approvedAllocationsQuery()->sum('express_event_recap_allocations.allocated_sheets');
     }
 
     public function getTotalAllocatedRevenueAttribute(): int
     {
-        return (int) $this->allocations()->sum('allocated_revenue');
+        return (int) $this->approvedAllocationsQuery()->sum('express_event_recap_allocations.allocated_revenue');
+    }
+
+    public function getPeriodRangeLabelAttribute(): string
+    {
+        $start = $this->start_date?->format('d/m/Y');
+        $end = $this->end_date?->format('d/m/Y');
+
+        if (! $start && ! $end) {
+            return '-';
+        }
+
+        if (! $end || $start === $end) {
+            return $start ?? $end ?? '-';
+        }
+
+        return "{$start} - {$end}";
     }
 
     public function getCalculatedHppAttribute(): int
@@ -349,32 +390,47 @@ class ExpressEvent extends Model
         $totalSheets = 0;
         $recapAllocatedRevenue = 0;
         $reportIds = [];
-
         foreach ($allocationsData as $alloc) {
             if (! is_array($alloc)) {
                 continue;
             }
-            $totalSessions += max(0, (int) ($alloc['allocated_sessions'] ?? 0));
-            $totalSheets += max(0, (int) ($alloc['allocated_sheets'] ?? 0));
-            $recapAllocatedRevenue += max(0, RupiahHelper::toInt($alloc['allocated_revenue'] ?? 0));
-
             $repId = (int) ($alloc['session_report_id'] ?? 0);
             if ($repId > 0) {
                 $reportIds[] = $repId;
             }
         }
 
-        $detectedTypes = [];
-        if ($reportIds !== []) {
-            $reports = SessionReport::with('cabang')
+        $reportsById = $reportIds !== []
+            ? SessionReport::with('cabang')
                 ->whereIn('id', array_values(array_unique($reportIds)))
-                ->get();
+                ->get()
+                ->keyBy('id')
+            : collect();
 
-            foreach ($reports as $report) {
-                $type = static::classifyBranchOperationalType($report->resolveCabangWithTrashed()?->nama_cabang);
-                if ($type !== null) {
-                    $detectedTypes[] = $type;
+        foreach ($allocationsData as $alloc) {
+            if (! is_array($alloc)) {
+                continue;
+            }
+
+            $repId = (int) ($alloc['session_report_id'] ?? 0);
+            if ($repId > 0) {
+                $rep = $reportsById->get($repId);
+                // Hanya rekap berstatus APPROVED yang dihitung dalam preview HPP
+                if ($rep && $rep->status !== SessionReport::STATUS_APPROVED) {
+                    continue;
                 }
+            }
+
+            $totalSessions += max(0, (int) ($alloc['allocated_sessions'] ?? 0));
+            $totalSheets += max(0, (int) ($alloc['allocated_sheets'] ?? 0));
+            $recapAllocatedRevenue += max(0, RupiahHelper::toInt($alloc['allocated_revenue'] ?? 0));
+        }
+
+        $detectedTypes = [];
+        foreach ($reportsById as $report) {
+            $type = static::classifyBranchOperationalType($report->resolveCabangWithTrashed()?->nama_cabang);
+            if ($type !== null) {
+                $detectedTypes[] = $type;
             }
         }
 
@@ -545,7 +601,7 @@ class ExpressEvent extends Model
             return $this->total_allocated_revenue;
         }
 
-        if ($this->requiresInvoice() && $this->hasLinkedInvoices()) {
+        if ($this->requiresInvoice()) {
             return $this->total_invoice_amount;
         }
 
@@ -554,14 +610,20 @@ class ExpressEvent extends Model
 
     public function hasCompleteEventData(): bool
     {
-        $hasRecap = $this->relationLoaded('recaps')
-            ? $this->recaps->where('status', ExpressEventRecap::STATUS_ACTIVE)->isNotEmpty()
-            : $this->recaps()->where('status', ExpressEventRecap::STATUS_ACTIVE)->exists();
+        $hasApprovedRecap = $this->relationLoaded('recaps')
+            ? $this->recaps
+                ->where('status', ExpressEventRecap::STATUS_ACTIVE)
+                ->filter(fn (ExpressEventRecap $r): bool => $r->sessionReport?->status === SessionReport::STATUS_APPROVED)
+                ->isNotEmpty()
+            : $this->recaps()
+                ->where('status', ExpressEventRecap::STATUS_ACTIVE)
+                ->whereHas('sessionReport', fn ($q) => $q->where('status', SessionReport::STATUS_APPROVED))
+                ->exists();
 
         return filled($this->event_name)
             && $this->start_date !== null
             && $this->end_date !== null
-            && $hasRecap;
+            && $hasApprovedRecap;
     }
 
     public function isReadyForHppCalculation(): bool
@@ -597,6 +659,10 @@ class ExpressEvent extends Model
 
     public function getCompletenessStatusKeyAttribute(): string
     {
+        if ($this->needs_admin_verification) {
+            return self::COMPLETENESS_NEEDS_VERIFICATION;
+        }
+
         if (! $this->hasCompleteEventData()) {
             return self::COMPLETENESS_INCOMPLETE_EVENT;
         }

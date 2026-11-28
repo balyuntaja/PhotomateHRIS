@@ -44,8 +44,16 @@ class ExpressEventHppService
         $periodBreakdown = [];
 
         foreach ($event->recaps as $recap) {
+            if ($recap->status !== \App\Models\ExpressEventRecap::STATUS_ACTIVE) {
+                continue;
+            }
+
             $report = $recap->sessionReport;
-            $reportDate = $report?->report_date ?? $event->start_date ?? now();
+            if (! $report || $report->status !== SessionReport::STATUS_APPROVED) {
+                continue;
+            }
+
+            $reportDate = $report->report_date ?? $event->start_date ?? now();
             $periodKey = $reportDate->format('Y-m');
 
             if (! isset($periodBreakdown[$periodKey])) {
@@ -76,8 +84,8 @@ class ExpressEventHppService
             }
         }
 
-        // Untuk Express Self Run & Express Sewa dengan invoice terhubung, sumber omzet selalu nilai kontrak invoice
-        if (! $event->isSharingProfit() && $event->requiresInvoice() && $event->hasLinkedInvoices()) {
+        // Untuk Express Self Run & Express Sewa, sumber omzet selalu total nilai kontrak invoice yang terhubung (0 bila belum ada invoice)
+        if ($event->requiresInvoice()) {
             $totalRevenue = $event->total_invoice_amount;
         }
 

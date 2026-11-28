@@ -273,19 +273,51 @@ class ExpressEventAllocationService
             }
         }
 
-        // Event yang sudah pernah dibuat Event HPP-nya tidak boleh muncul lagi saat membuat event baru
-        $alreadyCreatedEventNames = ExpressEvent::query()
+        $alreadyCreatedEvents = ExpressEvent::query()
             ->when($currentEventId !== null, fn ($q) => $q->where('id', '!=', $currentEventId))
             ->whereNotNull('event_name')
-            ->pluck('event_name')
-            ->map(fn ($n) => trim($n))
-            ->all();
+            ->get(['id', 'event_name', 'event_id', 'operational_identity_key', 'start_date', 'end_date']);
 
-        foreach ($alreadyCreatedEventNames as $createdName) {
-            foreach (array_keys($names) as $existingKey) {
-                if (strcasecmp($existingKey, $createdName) === 0) {
-                    unset($names[$existingKey]);
+        // Hanya sembunyikan nama event jika TIDAK ADA lagi rekap/invoice unallocated yang berasal dari identitas event berbeda
+        foreach (array_keys($names) as $candidateName) {
+            $matchingExisting = $alreadyCreatedEvents->filter(
+                fn (ExpressEvent $ev): bool => strcasecmp(trim((string) $ev->event_name), $candidateName) === 0
+            );
+
+            if ($matchingExisting->isEmpty()) {
+                continue;
+            }
+
+            // Cek apakah masih ada grup identitas operasional yang belum terwakili oleh ExpressEvent existing
+            $groupsForName = $this->getOperationalIdentityGroupsForEventName($candidateName, $currentEventId);
+            $hasUncreatedGroup = false;
+
+            foreach ($groupsForName as $group) {
+                $coveredByExisting = $matchingExisting->contains(function (ExpressEvent $ev) use ($group): bool {
+                    if ($group['event_id'] !== null && $ev->event_id !== null) {
+                        return (int) $ev->event_id === (int) $group['event_id'];
+                    }
+                    if ($group['identity_key'] !== null && filled($ev->operational_identity_key)) {
+                        return $ev->operational_identity_key === $group['identity_key'];
+                    }
+
+                    $evStart = $ev->start_date?->toDateString();
+                    $evEnd = $ev->end_date?->toDateString();
+
+                    return $evStart !== null
+                        && $evEnd !== null
+                        && $group['start_date'] <= $evEnd
+                        && $group['end_date'] >= $evStart;
+                });
+
+                if (! $coveredByExisting) {
+                    $hasUncreatedGroup = true;
+                    break;
                 }
+            }
+
+            if (! $hasUncreatedGroup) {
+                unset($names[$candidateName]);
             }
         }
 
@@ -300,6 +332,102 @@ class ExpressEventAllocationService
         ksort($names, SORT_NATURAL | SORT_FLAG_CASE);
 
         return $names;
+    }
+
+    /**
+     * Kelompokkan rekap sesi unallocated dengan nama event tertentu ke dalam bucket
+     * identitas event operasional yang terpisah (mencegah penggabungan event berbeda bernama sama).
+     *
+     * @return array<string, array{
+     *     identity_key: string,
+     *     label: string,
+     *     event_id: int|null,
+     *     invoice_id: int|null,
+     *     start_date: string,
+     *     end_date: string,
+     *     recaps: Collection<int, array<string, mixed>>
+     * }>
+     */
+    public function getOperationalIdentityGroupsForEventName(?string $eventName, ?int $currentEventId = null): array
+    {
+        if (blank($eventName)) {
+            return [];
+        }
+
+        $recaps = $this->getEligibleRecapsForEventName($eventName, $currentEventId);
+        if ($recaps->isEmpty()) {
+            return [];
+        }
+
+        $reportModels = SessionReport::with(['cabang', 'event', 'invoice'])
+            ->whereIn('id', $recaps->pluck('id')->all())
+            ->get()
+            ->keyBy('id');
+
+        $buckets = [];
+
+        foreach ($recaps as $recapItem) {
+            /** @var SessionReport|null $model */
+            $model = $reportModels->get($recapItem['id']);
+            if (! $model) {
+                continue;
+            }
+
+            $identity = $model->resolveOperationalEventIdentity();
+            $rawDate = $recapItem['raw_date'] ?? now()->toDateString();
+
+            $matchedBucketKey = null;
+
+            if ($identity['has_explicit_id']) {
+                $matchedBucketKey = isset($buckets[$identity['key']]) ? $identity['key'] : null;
+                $bucketKey = $matchedBucketKey ?? $identity['key'];
+            } else {
+                // Untuk manual Sharing Profit tanpa ID eksplisit, hanya gabungkan bila tanggal berurutan langsung (H-1 s/d H+1)
+                foreach ($buckets as $bKey => $bucket) {
+                    if ($bucket['has_explicit_id'] || $bucket['operational_type'] !== $identity['operational_type']) {
+                        continue;
+                    }
+                    $minAllowed = \Carbon\Carbon::parse($bucket['start_date'])->subDay()->toDateString();
+                    $maxAllowed = \Carbon\Carbon::parse($bucket['end_date'])->addDay()->toDateString();
+                    if ($rawDate >= $minAllowed && $rawDate <= $maxAllowed) {
+                        $matchedBucketKey = $bKey;
+                        break;
+                    }
+                }
+                $bucketKey = $matchedBucketKey ?? $identity['key'];
+            }
+
+            if (! isset($buckets[$bucketKey])) {
+                $buckets[$bucketKey] = [
+                    'identity_key' => $bucketKey,
+                    'has_explicit_id' => $identity['has_explicit_id'],
+                    'operational_type' => $identity['operational_type'],
+                    'event_id' => $identity['event_id'],
+                    'invoice_id' => $identity['invoice_id'],
+                    'start_date' => $rawDate,
+                    'end_date' => $rawDate,
+                    'recaps' => collect([$recapItem]),
+                ];
+            } else {
+                $buckets[$bucketKey]['start_date'] = min($buckets[$bucketKey]['start_date'], $rawDate);
+                $buckets[$bucketKey]['end_date'] = max($buckets[$bucketKey]['end_date'], $rawDate);
+                $buckets[$bucketKey]['recaps']->push($recapItem);
+            }
+        }
+
+        foreach ($buckets as $k => $b) {
+            $startFmt = \Carbon\Carbon::parse($b['start_date'])->format('d/m/Y');
+            $endFmt = \Carbon\Carbon::parse($b['end_date'])->format('d/m/Y');
+            $rangeStr = $startFmt === $endFmt ? $startFmt : "{$startFmt} - {$endFmt}";
+            $recapCount = $b['recaps']->count();
+            $idBadge = $b['event_id']
+                ? "Event ID #{$b['event_id']}"
+                : ($b['invoice_id'] ? "Invoice ID #{$b['invoice_id']}" : 'Operasional');
+
+            $buckets[$k]['label'] = "{$eventName} · {$rangeStr} ({$recapCount} rekap · {$idBadge})";
+        }
+
+        return $buckets;
     }
 
     /**
@@ -500,6 +628,7 @@ class ExpressEventAllocationService
             ];
 
             $seenReportIds = [];
+            $seenExplicitEventIds = [];
             $allRecapsComplete = true;
             $hasAnyAllocation = false;
 
@@ -522,6 +651,13 @@ class ExpressEventAllocationService
 
                 if ($report->status !== SessionReport::STATUS_APPROVED) {
                     throw new RuntimeException("Rekap {$report->report_number} belum berstatus APPROVED dan tidak dapat dialokasikan.");
+                }
+
+                if ($report->event_id !== null && (int) $report->event_id > 0) {
+                    $seenExplicitEventIds[] = (int) $report->event_id;
+                    if (count(array_unique($seenExplicitEventIds)) > 1) {
+                        throw new RuntimeException("Rekap {$report->report_number} memiliki ID Event Operasional berbeda. Dua event berbeda tidak boleh digabungkan dalam satu Event HPP.");
+                    }
                 }
 
                 if (! $this->isExpressBranch($report->cabang?->nama_cabang)) {
@@ -632,14 +768,39 @@ class ExpressEventAllocationService
                 $newReconStatus = ExpressEvent::RECON_NEEDS_REVIEW;
             }
 
-            $lockedEvent->update([
+            $eventUpdatePayload = [
                 'operational_type' => $lockedEvent->resolved_operational_type,
                 'reconciliation_status' => $newReconStatus,
                 'hpp_status' => $newHppStatus,
-            ]);
+            ];
+
+            $uniqueExplicitEventIds = array_values(array_unique($seenExplicitEventIds));
+            if (count($uniqueExplicitEventIds) === 1 && \Illuminate\Support\Facades\Schema::hasColumn('express_events', 'event_id')) {
+                $eventUpdatePayload['event_id'] = $uniqueExplicitEventIds[0];
+                $eventUpdatePayload['operational_identity_key'] = 'event:' . $uniqueExplicitEventIds[0];
+            }
+
+            $lockedEvent->update($eventUpdatePayload);
+
+            // Selaraskan start_date & end_date dengan seluruh rekap sesi APPROVED yang aktif
+            app(ExpressEventSyncService::class)->recalculateEventDatesAndMetadata($lockedEvent);
 
             if ($lockedEvent->requiresInvoice() && $lockedEvent->hasLinkedInvoices()) {
                 app(ExpressEventInvoiceService::class)->syncEventInvoiceAllocations($lockedEvent);
+            }
+
+            $lockedEvent->unsetRelation('latestHpp');
+            $lockedEvent->load('latestHpp');
+            if ($lockedEvent->latestHpp && ! $lockedEvent->isPosted() && $lockedEvent->hpp_rate_per_sheet !== null) {
+                $preview = app(ExpressEventHppService::class)->calculatePreview($lockedEvent);
+                $lockedEvent->latestHpp->update([
+                    'total_sessions' => $preview['total_sessions'],
+                    'total_sheets' => $preview['total_sheets'],
+                    'total_revenue' => $preview['total_revenue'],
+                    'total_hpp' => $preview['total_hpp'],
+                    'gross_profit' => $preview['gross_profit'],
+                    'calculated_at' => now(),
+                ]);
             }
 
             // Audit log

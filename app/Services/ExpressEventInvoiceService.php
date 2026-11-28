@@ -623,6 +623,7 @@ class ExpressEventInvoiceService
 
                 $oldRevenue = $lockedEvent->total_allocated_revenue;
                 $this->syncEventInvoiceAllocations($lockedEvent);
+                $this->refreshHppAfterInvoiceChange($lockedEvent);
                 $lockedEvent->unsetRelation('allocations');
                 $lockedEvent->unsetRelation('invoices');
                 $newRevenue = $lockedEvent->total_invoice_amount;
@@ -669,6 +670,7 @@ class ExpressEventInvoiceService
 
                 if ($lockedEvent) {
                     $this->syncEventInvoiceAllocations($lockedEvent);
+                    $this->refreshHppAfterInvoiceChange($lockedEvent);
 
                     ExpressEventAuditLog::record(
                         $lockedEvent,
