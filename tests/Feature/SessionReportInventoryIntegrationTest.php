@@ -456,6 +456,102 @@ class SessionReportInventoryIntegrationTest extends TestCase
             ->assertSee('Penggunaan kertas foto otomatis dari rekap sesi');
     }
 
+    public function test_pre_existing_approved_reports_backfill_via_ui_button_and_artisan_command_without_duplication(): void
+    {
+        // Simulasikan data Rekap Sesi yang sudah berstatus APPROVED sebelum fitur rilis di production
+        SessionReport::withoutEvents(function (): void {
+            SessionReport::create([
+                'report_number' => 'SR-HIST-BEFORE-06',
+                'report_date' => '2026-11-06',
+                'cabang_id' => $this->expressSharingProfit->cabang_id,
+                'status' => SessionReport::STATUS_APPROVED,
+                'total_transactions' => 10,
+                'total_sessions' => 18,
+                'submitted_by' => $this->crew->karyawan_id,
+                'approved_by' => $this->supervisor->karyawan_id,
+                'approved_at' => '2026-11-06 21:00:00',
+            ]);
+
+            SessionReport::create([
+                'report_number' => 'SR-HIST-EXP-08',
+                'report_date' => '2026-11-08',
+                'cabang_id' => $this->expressSelfRun->cabang_id,
+                'status' => SessionReport::STATUS_APPROVED,
+                'wedding_total_sessions' => 15,
+                'wedding_total_sheets' => 30,
+                'total_transactions' => 15,
+                'total_sessions' => 30,
+                'submitted_by' => $this->crew->karyawan_id,
+                'approved_by' => $this->supervisor->karyawan_id,
+                'approved_at' => '2026-11-08 22:00:00',
+            ]);
+
+            SessionReport::create([
+                'report_number' => 'SR-HIST-JNS-10',
+                'report_date' => '2026-11-10',
+                'cabang_id' => $this->janus->cabang_id,
+                'status' => SessionReport::STATUS_APPROVED,
+                'total_transactions' => 25,
+                'total_sessions' => 45,
+                'submitted_by' => $this->crew->karyawan_id,
+                'approved_by' => $this->supervisor->karyawan_id,
+                'approved_at' => '2026-11-10 22:00:00',
+            ]);
+
+            SessionReport::create([
+                'report_number' => 'SR-HIST-GOL-12',
+                'report_date' => '2026-11-12',
+                'cabang_id' => $this->golio->cabang_id,
+                'status' => SessionReport::STATUS_APPROVED,
+                'total_transactions' => 30,
+                'total_sessions' => 50,
+                'submitted_by' => $this->crew->karyawan_id,
+                'approved_by' => $this->supervisor->karyawan_id,
+                'approved_at' => '2026-11-12 22:00:00',
+            ]);
+        });
+
+        $this->assertSame(0, InventoryTransaction::query()->count());
+
+        // 1. Dry-run via Artisan command tidak mengubah stok
+        $this->artisan('inventory:sync-rekap-sesi', ['--dry-run' => true])
+            ->assertExitCode(0);
+
+        $this->assertSame(500, $this->branchStock($this->expressCanonical));
+        $this->assertSame(300, $this->branchStock($this->janus));
+        $this->assertSame(200, $this->branchStock($this->golio));
+        $this->assertSame(0, InventoryTransaction::query()->count());
+
+        // 2. Klik tombol "Sinkronkan Rekap Sesi" pada halaman Riwayat Stok
+        $this->actingAs($this->superAdmin);
+
+        Livewire::test(ListInventoryTransactions::class)
+            ->assertActionVisible('sync_session_reports')
+            ->callAction('sync_session_reports');
+
+        $this->assertSame(470, $this->branchStock($this->expressCanonical));
+        $this->assertSame(255, $this->branchStock($this->janus));
+        $this->assertSame(200, $this->branchStock($this->golio));
+        $this->assertSame(2, InventoryTransaction::query()->count());
+
+        $syncedRefs = InventoryTransaction::query()->orderBy('id')->pluck('reference_number')->all();
+        $this->assertSame(['SR-HIST-EXP-08', 'SR-HIST-JNS-10'], $syncedRefs);
+
+        // Identitas pengguna mengambil approver asli rekap sesi walaupun tombol diklik oleh Super Admin
+        $firstSynced = InventoryTransaction::query()->where('reference_number', 'SR-HIST-EXP-08')->firstOrFail();
+        $this->assertSame($this->supervisor->karyawan_id, $firstSynced->user_id);
+        $this->assertSame($this->supervisor->nama_lengkap, $firstSynced->user_name);
+
+        // 3. Menjalankan Artisan command tanpa --dry-run setelahnya tetap idempoten (tidak menggandakan)
+        $this->artisan('inventory:sync-rekap-sesi')
+            ->assertExitCode(0);
+
+        $this->assertSame(470, $this->branchStock($this->expressCanonical));
+        $this->assertSame(255, $this->branchStock($this->janus));
+        $this->assertSame(200, $this->branchStock($this->golio));
+        $this->assertSame(2, InventoryTransaction::query()->count());
+    }
+
     private function makeBranch(string $id, string $name): Cabang
     {
         return Cabang::create([

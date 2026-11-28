@@ -106,7 +106,7 @@ class SessionReportInventoryService
      */
     public function isEligibleForAutoDeduction(SessionReport $report): bool
     {
-        return $report->status === SessionReport::STATUS_APPROVED
+        return strtoupper(trim((string) $report->status)) === SessionReport::STATUS_APPROVED
             && $this->resolveTargetCabangId($report) !== null
             && $this->isWithinInventoryPeriod($report)
             && $report->totalSheetCount() > 0;
@@ -366,44 +366,55 @@ class SessionReportInventoryService
     /**
      * Sinkronisasi massal seluruh Rekap Sesi Approved yang memenuhi syarat sejak 7 November 2026.
      *
-     * @return array{processed: int, created: int}
+     * @return array{processed: int, created: int, already_synced: int}
      */
     public function syncEligibleReports(?Karyawan $actor = null): array
     {
         if (! $this->hasReferenceColumns()) {
-            return ['processed' => 0, 'created' => 0];
+            return ['processed' => 0, 'created' => 0, 'already_synced' => 0];
         }
 
+        $groups = InventoryBranches::groups(true);
         $eligibleCabangIds = array_values(array_unique(array_merge(
-            InventoryBranches::expandCabangIds(InventoryBranches::canonicalIds()[InventoryBranches::EXPRESS] ?? null) ?? [],
-            InventoryBranches::expandCabangIds(InventoryBranches::canonicalIds()[InventoryBranches::JANUS] ?? null) ?? [],
+            $groups[InventoryBranches::EXPRESS] ?? [],
+            $groups[InventoryBranches::JANUS] ?? [],
         )));
 
         if ($eligibleCabangIds === []) {
-            return ['processed' => 0, 'created' => 0];
+            return ['processed' => 0, 'created' => 0, 'already_synced' => 0];
         }
 
         $reports = SessionReport::query()
-            ->where('status', SessionReport::STATUS_APPROVED)
+            ->with(['cabang', 'approver', 'transactions'])
+            ->whereIn('status', [SessionReport::STATUS_APPROVED, strtolower(SessionReport::STATUS_APPROVED)])
             ->whereIn('cabang_id', $eligibleCabangIds)
             ->whereDate('report_date', '>=', self::CUTOFF_DATE)
             ->orderBy('report_date')
+            ->orderBy('approved_at')
             ->orderBy('id')
             ->get();
 
         $processed = 0;
         $created = 0;
+        $alreadySynced = 0;
 
         foreach ($reports as $report) {
+            if (! $this->isEligibleForAutoDeduction($report)) {
+                continue;
+            }
+
             $processed++;
             if ($this->syncForReport($report, $actor) !== null) {
                 $created++;
+            } else {
+                $alreadySynced++;
             }
         }
 
         return [
             'processed' => $processed,
             'created' => $created,
+            'already_synced' => $alreadySynced,
         ];
     }
 
@@ -606,14 +617,14 @@ class SessionReportInventoryService
     {
         $resolvedUser = $actor;
 
-        if (! $resolvedUser && auth()->user() instanceof Karyawan) {
-            $resolvedUser = auth()->user();
-        }
-
         if (! $resolvedUser && filled($report->approved_by)) {
             $resolvedUser = $report->relationLoaded('approver') && $report->approver
                 ? $report->approver
                 : Karyawan::withTrashed()->find($report->approved_by);
+        }
+
+        if (! $resolvedUser && auth()->user() instanceof Karyawan) {
+            $resolvedUser = auth()->user();
         }
 
         if ($resolvedUser instanceof Karyawan) {
